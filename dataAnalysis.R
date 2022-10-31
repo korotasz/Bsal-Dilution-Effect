@@ -1,3 +1,4 @@
+library(dplyr)
 library(tidyverse)      
 library(reshape2)       
 library(corrplot)
@@ -13,40 +14,9 @@ library(car)
 library(sjPlot)
 
 
-# library(bblme) not availble for this version of R
-
 setwd('C:/Users/alexi/OneDrive/Documents/01_GradSchool/_Dissertation work/Chapter4/03_code')
 
 d <- read.csv("bsalprev_final.csv", header = T, encoding = "UTF-8")
-
-
-########################
-## Variable selection ##
-########################
-## Subset climate vars from larger dataset
-climatevars <- d %>%
-  dplyr::select(tmin, tmax, prec, bio1, bio2, bio3, bio4, bio5, bio6, bio7, bio8, bio9, 
-                bio10, bio11, bio12, bio13, bio14, bio15, bio16, bio17, bio18, bio19) 
-
-## Rescale climate vars between 0 and 1 to test for collinearity
-climatevars <- apply(climatevars, MARGIN = 2, rescale)
-
-cor <- cor(climatevars, method = "pearson")
-corrplot(cor, method = "circle", type = "lower",
-         tl.col = "black", tl.srt = 45,
-         cl.ratio = 0.2, col = COL2("BrBG"))
-
-testcor <- cor.mtest(cor, conf.level = 0.95) # include p-value
-posCor <- corrplot(cor, p.mat = testcor$p, sig.level = 0.05, insig = "blank",
-                   method = "circle", type = "lower",
-                   tl.col = "black", tl.srt = 45,
-                   addCoef.col = "black", number.cex = 0.8,
-                   cl.ratio = 0.2, col = COL2("BrBG"))
-
-## As you can see, there are many highly correlated vars.
-## I plan to drop anything correlated above a 0.8 rsq value when 
-## I can get my model to run without convergence issues.
-
 
 #################################
 ## Model fitting and selection ##
@@ -139,76 +109,50 @@ p4 <- rankabunplot(xr, addit=F, labels="", scale = "logabun", scaledx = T,
 ## Model for Bsal presence
 d$logsppAbun <- log(d$sppAbun)
 d$logsiteAbun <- log(d$siteAbun)
+d$diseaseDetected <- as.factor(d$diseaseDetected)
 d$susceptibility <- as.factor(d$susceptibility)
 d$yearCollected <- as.factor(d$yearCollected)
 
 
 
-m1 <- glmmTMB(diseaseDetected ~ logsppAbun*richness + susceptibility +
+m1a <- glmmTMB(diseaseDetected ~ logsiteAbun*richness + susceptibility +
                (1|Site) + (1|scientific),
                family = "binomial",
                data = d,
                control = glmmTMBControl(optimizer = optim,
                                         optArgs = list(method = "BFGS")))
 
-summary(m1)
-Anova(m1)
-plot_model(m1, type = "int")
+summary(m1a)
+Anova(m1a)
+plot_model(m1a, type = "int")
 plot_model(
-  m1, 
+  m1a, 
   type = "pred", 
-  terms = c("richness", "logabun"), 
+  terms = c("richness", "logsiteAbun"), 
   colors = "bw",
   ci.lvl = NA
 )
 
-m1.diag <- glm.diag(m1) ##?? not working
-glm.diag.plots(m1, m1.diag)
+m1b <- glmmTMB(diseaseDetected ~ logsppAbun*richness + susceptibility +
+                 (1|Site) + (1|scientific),
+               family = "binomial",
+               data = d,
+               control = glmmTMBControl(optimizer = optim,
+                                        optArgs = list(method = "BFGS")))
 
-
-m2 <- glmmTMB(diseaseDetected ~ logsppAbun*richness + susceptibility +
-                (1|Site) + (1|scientific),
-              family = "binomial",
-              data = subset(d, species!="marmoratus"),
-              control = glmmTMBControl(optimizer = optim,
-                                       optArgs = list(method = "BFGS")))
-
-summary(m2)
-Anova(m2)
+summary(m1b)
+Anova(m1b)
+plot_model(m1b, type = "int")
 plot_model(
-  m2, 
+  m1b, 
   type = "pred", 
-  terms = c("richness", "logabun"), 
+  terms = c("richness", "logsiteAbun"), 
   colors = "bw",
   ci.lvl = NA
 )
 
-plot_model(
-  m2, 
-  type = "pred", 
-  terms = c("susceptibility", "logabun"), 
-  colors = "bw",
-  ci.lvl = NA
-)
 
-m2a <- glmmTMB(diseaseDetected ~ species +
-                (1|Site) + (1|scientific),
-              family = "binomial",
-              data = d,
-              control = glmmTMBControl(optimizer = optim,
-                                       optArgs = list(method = "BFGS")))
-
-summary(m2a)
-Anova(m2a)
-plot_model(
-  m2a, 
-  type = "pred", 
-  terms = c("species"), 
-  colors = "bw",
-  ci.lvl = NA
-)
-
-######################################################################
+################################################################################
 # See how many T. marmoratus there are and where they're from
 temp <- d %>%
   group_by(scientific, country) %>%
@@ -220,149 +164,148 @@ d2 <- d %>%
 
 
 
-m3 <- glmmTMB(diseaseDetected ~ siteAbun*richness + bio1 + bio12 + susceptibility +
+m2a <- glmmTMB(diseaseDetected ~ logsiteAbun*richness + susceptibility +
                 (1|Site) + (1|scientific),
               family = "binomial",
-              data = d2,
+              data = subset(d2),
               control = glmmTMBControl(optimizer = optim,
                                        optArgs = list(method = "BFGS")))
 
-summary(m3)
-Anova(m3)
+summary(m2a)
+Anova(m2a)
 plot_model(
-  m3, 
+  m2a, 
   type = "pred", 
-  terms = c("richness", "logsiteAbun"),
-  ci.lvl = NA
-)
-
-m3a <- glmmTMB(diseaseDetected ~ logsiteAbun*richness + bio1 + bio12 + susceptibility +
-                (1|Site) + (1|scientific),
-              family = "binomial",
-              data = d,
-              control = glmmTMBControl(optimizer = optim,
-                                       optArgs = list(method = "BFGS")))
-
-summary(m3a)
-Anova(m3a)
-plot_model(
-  m3a, 
-  type = "pred", 
-  terms = c("richness", "logsiteAbun"),
-  ci.lvl = NA
-)
-
-m3b <- glmmTMB(diseaseDetected ~ logsiteAbun*richness + bio1 + bio12 + susceptibility +
-                 (1|scientific),
-              family = "binomial",
-              data = subset(d, Site_marmoratus==0),
-              control = glmmTMBControl(optimizer = optim,
-                                       optArgs = list(method = "BFGS")))
-
-summary(m3b)
-Anova(m3b)
-plot_model(
-  m3b, 
-  type = "pred", 
-  terms = c("richness", "logsiteAbun")
-)
-
-m3a <- glmmTMB(diseaseDetected ~ logsppAbun*richness + bio1 + bio12 + susceptibility +
-                (1|Site) + (1|scientific),
-              family = "binomial",
-              data = subset(d, Site_marmoratus==0),
-              control = glmmTMBControl(optimizer = optim,
-                                       optArgs = list(method = "BFGS")))
-
-summary(m3a)
-Anova(m3a)
-plot_model(
-  m3a, 
-  type = "pred", 
-  terms = c("richness", "logsppAbun"),
-  ci.lvl = NA
-)
-
-summary(m3)
-Anova(m3)
-plot_model(
-  m3, 
-  type = "pred", 
-  terms = c("richness", "logabun[1.43]"), 
-  colors = "bw",
-  ci.lvl = NA
-)
-
-m4 <- glmmTMB(diseaseDetected ~ logabun*richness + susceptibility+
-                (1|Site) + (1|scientific),
-              family = "binomial",
-              data = d,
-              control = glmmTMBControl(optimizer = optim,
-                                       optArgs = list(method = "BFGS")))
-
-summary(m4)
-Anova(m4)
-plot_model(
-  m4, 
-  type = "pred", 
-  terms = c("richness", "logabun"), 
+  terms = c("richness", "logsiteAbun"), 
   colors = "bw",
   ci.lvl = NA
 )
 
 
 
-m4a <- glmmTMB(diseaseDetected ~ logabun*richness + susceptibility+
-                (1|Site) + (1|scientific),
-              family = "binomial",
-              data = subset(d, logabun<3.3),
-              control = glmmTMBControl(optimizer = optim,
-                                       optArgs = list(method = "BFGS")))
-
-summary(m4a)
-Anova(m4a)
-plot_model(
-  m4a, 
-  type = "pred", 
-  terms = c("richness", "logabun"), 
-  colors = "bw",
-  ci.lvl = NA
-)
-
-m4a <- glmmTMB(diseaseDetected ~ logabun*richness + susceptibility+
+m2b <- glmmTMB(diseaseDetected ~ logsppAbun*richness + susceptibility +
                  (1|Site) + (1|scientific),
                family = "binomial",
-               data = subset(d, logabun<3.3),
+               data = subset(d2),
                control = glmmTMBControl(optimizer = optim,
                                         optArgs = list(method = "BFGS")))
 
-summary(m4a)
-Anova(m4a)
+summary(m2b)
+Anova(m2b)
 plot_model(
-  m4a, 
+  m2b, 
   type = "pred", 
-  terms = c("richness", "logabun"), 
+  terms = c("richness", "logsiteAbun"), 
   colors = "bw",
   ci.lvl = NA
 )
 
 
-m5 <- glmmTMB(quantityDetected ~ logabun*richness + susceptibility +
+plot_model(
+  m2b, 
+  type = "pred", 
+  terms = c("susceptibility", "logsppAbun"), 
+  colors = "bw",
+  ci.lvl = NA
+)
+
+################################################################################
+## Table showing species at each site -- some sites could be biased towards 
+## more susceptible species
+siterich <- d2 %>%
+  group_by(Site, richness, scientific, diseaseDetected) %>%
+  dplyr::summarize(count = n()) %>%
+  filter(scientific == "Ichthyosaura alpestris") # Is categorized as "tolerant" (2)
+View(siterich)
+
+test <- glmmTMB(diseaseDetected ~ logsppAbun*richness + susceptibility +
+               family = "binomial",
+               data = subset(d, species!="alpestris"),
+               control = glmmTMBControl(optimizer = optim,
+                                        optArgs = list(method = "BFGS")))
+
+summary(test)
+Anova(test)
+plot_model(
+  test, 
+  type = "pred", 
+  terms = c("richness", "logsppAbun"), 
+  colors = "bw",
+  ci.lvl = NA
+)
+
+
+m5 <- glmmTMB(diseaseDetected ~ logsppAbun*richness + susceptibility,
+                family = "binomial",
+                data = subset(d, species!="alpestris"),
+                control = glmmTMBControl(optimizer = optim,
+                                         optArgs = list(method = "BFGS")))
+
+summary(test)
+Anova(test)
+plot_model(
+  test, 
+  type = "pred", 
+  terms = c("richness", "logsppAbun"), 
+  colors = "bw",
+  ci.lvl = NA
+)
+
+
+
+# Confidence bands are still wildly large
+# backtransform model
+# subset to center 80th percentile; clip bottom&top 5/10%
+
+
+# Including some climatic variables
+m3 <- glmmTMB(diseaseDetected ~ logsiteAbun*richness + bio1 + bio12 + susceptibility +
                 (1|Site) + (1|scientific),
-              family = "nbinom2", ziformula=~1,
-              data = d,
+              family = "binomial",
+              data = subset(d2, species!="alpestris"),
               control = glmmTMBControl(optimizer = optim,
                                        optArgs = list(method = "BFGS")))
 
-summary(m5)
-Anova(m5)
+summary(m3)
+Anova(m3)
 plot_model(
-  m5, 
+  m3, 
   type = "pred", 
-  terms = c("richness", "logabun"), 
+  terms = c("richness", "logsiteAbun"),
   colors = "bw",
   ci.lvl = NA
 )
+
+
+
+########################
+## Variable selection ##
+########################
+## Subset climate vars from larger dataset
+climatevars <- d %>%
+  dplyr::select(tmin, tmax, prec, bio1, bio2, bio3, bio4, bio5, bio6, bio7, bio8, bio9, 
+                bio10, bio11, bio12, bio13, bio14, bio15, bio16, bio17, bio18, bio19) 
+
+## Rescale climate vars between 0 and 1 to test for collinearity
+climatevars <- apply(climatevars, MARGIN = 2, rescale)
+
+cor <- cor(climatevars, method = "pearson")
+corrplot(cor, method = "circle", type = "lower",
+         tl.col = "black", tl.srt = 45,
+         cl.ratio = 0.2, col = COL2("BrBG"))
+
+testcor <- cor.mtest(cor, conf.level = 0.95) # include p-value
+posCor <- corrplot(cor, p.mat = testcor$p, sig.level = 0.05, insig = "blank",
+                   method = "circle", type = "lower",
+                   tl.col = "black", tl.srt = 45,
+                   addCoef.col = "black", number.cex = 0.8,
+                   cl.ratio = 0.2, col = COL2("BrBG"))
+
+## As you can see, there are many highly correlated vars.
+## I plan to drop anything correlated above a 0.8 rsq value when 
+## I can get my model to run without convergence issues.
+
+
 
 ## Model for Bsal load data (Spain only)
 #spain <- d[which(d$country == "Spain"),]
