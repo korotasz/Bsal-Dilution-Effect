@@ -1,6 +1,5 @@
 library(tidyverse)      
 library(reshape2)       
-library(plyr)
 library(corrplot)
 library(glmmTMB)
 library(boot)
@@ -10,11 +9,13 @@ library(ggplot2)
 library(viridis)        
 library(hrbrthemes)
 library(extrafont)
+library(car)
+library(sjPlot)
 
 
 # library(bblme) not availble for this version of R
 
-setwd('C:/Users/alexi/OneDrive/Documents/01_Grad.School/_Dissertation work/BsalData/03_code')
+setwd('C:/Users/alexi/OneDrive/Documents/01_GradSchool/_Dissertation work/Chapter4/03_code')
 
 d <- read.csv("bsalprev_final.csv", header = T, encoding = "UTF-8")
 
@@ -136,23 +137,232 @@ p4 <- rankabunplot(xr, addit=F, labels="", scale = "logabun", scaledx = T,
 
 
 ## Model for Bsal presence
-d$logabun <- log(d$abundance)
-d$logrich <- log(d$richness)
+d$logsppAbun <- log(d$sppAbun)
+d$logsiteAbun <- log(d$siteAbun)
 d$susceptibility <- as.factor(d$susceptibility)
+d$yearCollected <- as.factor(d$yearCollected)
 
 
-m1 <- glmmTMB(diseaseDetected ~ logabun*richness + susceptibility +
+
+m1 <- glmmTMB(diseaseDetected ~ logsppAbun*richness + susceptibility +
                (1|Site) + (1|scientific),
-               family = "nbinom2", ziformula=~1,
+               family = "binomial",
                data = d,
                control = glmmTMBControl(optimizer = optim,
                                         optArgs = list(method = "BFGS")))
 
 summary(m1)
+Anova(m1)
+plot_model(m1, type = "int")
+plot_model(
+  m1, 
+  type = "pred", 
+  terms = c("richness", "logabun"), 
+  colors = "bw",
+  ci.lvl = NA
+)
 
 m1.diag <- glm.diag(m1) ##?? not working
 glm.diag.plots(m1, m1.diag)
 
+
+m2 <- glmmTMB(diseaseDetected ~ logsppAbun*richness + susceptibility +
+                (1|Site) + (1|scientific),
+              family = "binomial",
+              data = subset(d, species!="marmoratus"),
+              control = glmmTMBControl(optimizer = optim,
+                                       optArgs = list(method = "BFGS")))
+
+summary(m2)
+Anova(m2)
+plot_model(
+  m2, 
+  type = "pred", 
+  terms = c("richness", "logabun"), 
+  colors = "bw",
+  ci.lvl = NA
+)
+
+plot_model(
+  m2, 
+  type = "pred", 
+  terms = c("susceptibility", "logabun"), 
+  colors = "bw",
+  ci.lvl = NA
+)
+
+m2a <- glmmTMB(diseaseDetected ~ species +
+                (1|Site) + (1|scientific),
+              family = "binomial",
+              data = d,
+              control = glmmTMBControl(optimizer = optim,
+                                       optArgs = list(method = "BFGS")))
+
+summary(m2a)
+Anova(m2a)
+plot_model(
+  m2a, 
+  type = "pred", 
+  terms = c("species"), 
+  colors = "bw",
+  ci.lvl = NA
+)
+
+######################################################################
+# See how many T. marmoratus there are and where they're from
+temp <- d %>%
+  group_by(scientific, country) %>%
+  dplyr::summarize(count = n())
+
+# new df without T. marmoratus from Spain
+d2 <- d %>%
+  dplyr::filter(scientific != "Triturus marmoratus" | country != "Spain") 
+
+
+
+m3 <- glmmTMB(diseaseDetected ~ siteAbun*richness + bio1 + bio12 + susceptibility +
+                (1|Site) + (1|scientific),
+              family = "binomial",
+              data = d2,
+              control = glmmTMBControl(optimizer = optim,
+                                       optArgs = list(method = "BFGS")))
+
+summary(m3)
+Anova(m3)
+plot_model(
+  m3, 
+  type = "pred", 
+  terms = c("richness", "logsiteAbun"),
+  ci.lvl = NA
+)
+
+m3a <- glmmTMB(diseaseDetected ~ logsiteAbun*richness + bio1 + bio12 + susceptibility +
+                (1|Site) + (1|scientific),
+              family = "binomial",
+              data = d,
+              control = glmmTMBControl(optimizer = optim,
+                                       optArgs = list(method = "BFGS")))
+
+summary(m3a)
+Anova(m3a)
+plot_model(
+  m3a, 
+  type = "pred", 
+  terms = c("richness", "logsiteAbun"),
+  ci.lvl = NA
+)
+
+m3b <- glmmTMB(diseaseDetected ~ logsiteAbun*richness + bio1 + bio12 + susceptibility +
+                 (1|scientific),
+              family = "binomial",
+              data = subset(d, Site_marmoratus==0),
+              control = glmmTMBControl(optimizer = optim,
+                                       optArgs = list(method = "BFGS")))
+
+summary(m3b)
+Anova(m3b)
+plot_model(
+  m3b, 
+  type = "pred", 
+  terms = c("richness", "logsiteAbun")
+)
+
+m3a <- glmmTMB(diseaseDetected ~ logsppAbun*richness + bio1 + bio12 + susceptibility +
+                (1|Site) + (1|scientific),
+              family = "binomial",
+              data = subset(d, Site_marmoratus==0),
+              control = glmmTMBControl(optimizer = optim,
+                                       optArgs = list(method = "BFGS")))
+
+summary(m3a)
+Anova(m3a)
+plot_model(
+  m3a, 
+  type = "pred", 
+  terms = c("richness", "logsppAbun"),
+  ci.lvl = NA
+)
+
+summary(m3)
+Anova(m3)
+plot_model(
+  m3, 
+  type = "pred", 
+  terms = c("richness", "logabun[1.43]"), 
+  colors = "bw",
+  ci.lvl = NA
+)
+
+m4 <- glmmTMB(diseaseDetected ~ logabun*richness + susceptibility+
+                (1|Site) + (1|scientific),
+              family = "binomial",
+              data = d,
+              control = glmmTMBControl(optimizer = optim,
+                                       optArgs = list(method = "BFGS")))
+
+summary(m4)
+Anova(m4)
+plot_model(
+  m4, 
+  type = "pred", 
+  terms = c("richness", "logabun"), 
+  colors = "bw",
+  ci.lvl = NA
+)
+
+
+
+m4a <- glmmTMB(diseaseDetected ~ logabun*richness + susceptibility+
+                (1|Site) + (1|scientific),
+              family = "binomial",
+              data = subset(d, logabun<3.3),
+              control = glmmTMBControl(optimizer = optim,
+                                       optArgs = list(method = "BFGS")))
+
+summary(m4a)
+Anova(m4a)
+plot_model(
+  m4a, 
+  type = "pred", 
+  terms = c("richness", "logabun"), 
+  colors = "bw",
+  ci.lvl = NA
+)
+
+m4a <- glmmTMB(diseaseDetected ~ logabun*richness + susceptibility+
+                 (1|Site) + (1|scientific),
+               family = "binomial",
+               data = subset(d, logabun<3.3),
+               control = glmmTMBControl(optimizer = optim,
+                                        optArgs = list(method = "BFGS")))
+
+summary(m4a)
+Anova(m4a)
+plot_model(
+  m4a, 
+  type = "pred", 
+  terms = c("richness", "logabun"), 
+  colors = "bw",
+  ci.lvl = NA
+)
+
+
+m5 <- glmmTMB(quantityDetected ~ logabun*richness + susceptibility +
+                (1|Site) + (1|scientific),
+              family = "nbinom2", ziformula=~1,
+              data = d,
+              control = glmmTMBControl(optimizer = optim,
+                                       optArgs = list(method = "BFGS")))
+
+summary(m5)
+Anova(m5)
+plot_model(
+  m5, 
+  type = "pred", 
+  terms = c("richness", "logabun"), 
+  colors = "bw",
+  ci.lvl = NA
+)
 
 ## Model for Bsal load data (Spain only)
 #spain <- d[which(d$country == "Spain"),]
