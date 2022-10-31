@@ -5,50 +5,14 @@ library(car) # Anova()
 library(DHARMa) # simulateResiduals(), testZeroInflation(), testDispersion()
 library(sjPlot) # plot_model()
 library(ggplot2)
+library(lme4)
 
 
+setwd('E:/01_GradSchool/_DissertationWork/Chapter4/03_code')
 
-setwd('C:/Users/alexi/OneDrive/Documents/01_GradSchool/_Dissertation work/Chapter4/03_code')
+d <- read.csv('bsal_analysis.csv', header = T, encoding = 'UTF-8')
 
-d <- read.csv("bsalprev_final.csv", header = T, encoding = "UTF-8")
-
-
-
-## Include Pelophylax perezi data  (5 rows) into Pelophylax sp.
-d$scientific <- gsub(d$scientific, pattern = "Pelophylax perezi",
-                     replacement = "Pelophylax sp.")
-
-# log transform vars
-d$logsppAbun <- log(d$sppAbun)
-d$logsiteAbun <- log(d$siteAbun)
-
-# make disease a factor
-d$diseaseDetected <- as.factor(d$diseaseDetected)
-
-
-## model
-## bio1 = mean annual temp (C) 
-## bio12 = mean annual precip (cm)
-model1 <- glmmTMB(diseaseDetected ~ logsiteAbun*richness + bio1*bio12 +
-                   (1|Site) + (1|scientific),
-                 family = "binomial",
-                 data = subset(d, species!="alpestris"),
-                 control = glmmTMBControl(optimizer = optim,
-                                          optArgs = list(method = "BFGS")))
-
-summary(model1)
-Anova(model1)
-tab_model(model1)
-
-
-
-## Check for zero-inflation and overdispersion
-simulationOutput <- simulateResiduals(fittedModel = model1)
-plot(simulationOutput)
-testZeroInflation(simulationOutput)
-testDispersion(simulationOutput)
-
-## Define theme
+## Define plot theme
 ak_theme <- theme_minimal() +
   theme(axis.text.x = element_text(size = 20),
         axis.title.x = element_text(margin = margin(t = 15, r = 0, b = 0, l = 0)),
@@ -63,85 +27,180 @@ ak_theme <- theme_minimal() +
         axis.line = element_line(color = 'black'))
 
 
-## mean annual temp & mean annual precip
+## Include Pelophylax perezi data  (5 rows) into Pelophylax sp.
+d$scientific <- gsub(d$scientific, pattern = "Pelophylax perezi",
+                     replacement = "Pelophylax sp.")
+
+# log transform vars
+d$logsppAbun <- log(d$sppAbun)
+d$logsiteAbun <- log(d$siteAbun)
+
+# Exclude non-native spp.
+dcbind_alpestris<-subset(d, species!="alpestris")
+d_alpestris<-subset(d, species!="alpestris")
+
+
+# Model for how host susceptibility is impacted by species abundance
+m1 <- glmmTMB(logsppAbun ~  as.factor(susceptibility) + (temp)*(soilmoist) + (1|Site),
+                  data = d, control = glmmTMBControl(optimizer = optim,
+                                                     optArgs = list(method = "BFGS")))
+summary(model1)
+Anova(model1)
+
+# plot
 p1 <- plot_model(
   model1, 
   type = "pred", 
-  terms = c("bio1", "bio12"),
+  terms = c("susceptibility"),
+  axis.title = c("Bsal susceptibility score", "Natural log of host abundance"),
+  title = "",
   colors = "bw",
-  ci.lvl = NA
+  ci.lvl = 0.95,
 )
 p1
 
-plot1 <- p1 + geom_line(aes(x = x, y = predicted, color = group, linetype = group), size = 1.5) +
-  scale_color_manual(labels = c("74.63", "87.29", "99.95"),
-                     values = c("#b8bea3","#677f6e", "#193840")) +
-  labs(x = expression(paste("Annual mean temperature", " (°C)")), 
-       y = expression(paste(italic("Bsal"), " prevalence (%)")), 
-       title = NULL) +
-#  scale_y_continuous(labels = scales::percent) +
-  guides(color = guide_legend('Annual mean precipitation (cm)'), 
-         linetype = guide_legend('Annual mean precipitation (cm)')) +
-  ak_theme
+# including random effects
+m2 <- glmmTMB(diseaseDetected ~ logsiteAbun*richness + (temp)*(precip) + 
+                (1|Site) + (1|scientific),
+                  family = "binomial",
+                  data = d_alpestris,
+                  control = glmmTMBControl(optimizer = optim,
+                                           optArgs = list(method = "BFGS")))
 
-plot1
+summary(model2)
+Anova(model2)
 
-
-
-## Richness and log(site abundance)
+# plot
 p2 <-plot_model(
-  model1, 
+  model2, 
   type = "pred", 
   terms = c("richness", "logsiteAbun"),
+  axis.title = c("Host richness", "Bsal prevalence across all salamander species"),
+  legend.title = c("Ln site-level host abundance"),
+  title = "",
   colors = "bw",
   ci.lvl = NA
 )
 p2
 
-#scientific_10 <- function(x) {ifelse(x==0, "0", parse(text=gsub("[+]", "", 
-#                                                      gsub("e", " %*% 10^", 
-#                                                      scales::scientific_format()(x)))))}
+p3 <- plot_model(
+  model2, 
+  type = "pred", 
+  terms = c("bio1", "bio12cm"),
+  axis.title = c("Temperature (C)", "Bsal prevalence across all salamander species"),
+  legend.title=c("Annual precip. (cm)"),
+  title = "",
+  show.data=FALSE,
+  colors = "bw",
+  ci.lvl = NA
+)
+p3
 
-plot2 <- p2 + geom_line(aes(x = x, y = predicted, color = group, linetype = group), size = 1.5) +
-  scale_color_manual(labels = c("1.8", "2.87", "3.93"),
-                     values = c("#f9c459","#ff9265", "#c8355e")) +
-  labs(x = "Richness", y = expression(paste(italic("Bsal"), " prevalence (%)")), title = NULL) +
-#  scale_y_continuous(labels = scales::percent) +
-  guides(color = guide_legend('Log(site abundance)'), linetype = guide_legend('Log(site abundance)')) +
-  ak_theme
-
-plot2
-
-
-ggsave(file = "climaticVars.png", plot = plot1, dpi = 300, path = 'C:/Users/alexi/OneDrive/Documents/01_GradSchool/_Dissertation work/Chapter1/03_output')
-ggsave(file = "sppRichness.png", plot = plot2, dpi = 300, path = 'C:/Users/alexi/OneDrive/Documents/01_GradSchool/_Dissertation work/Chapter1/03_output')
-
-
-
-
-## Print Anova table
-Anovatable <- Anova(model1)
-Anovatable
+# Only spp. with Bsal
+bsalOnly <- d %>%
+  dplyr::select(BsalDetected == TRUE)
 
 
 
 
 
 
+# preferred model
+model2cz <- glmmTMB(diseaseDetected ~ logsiteAbun*richness + scale(bio1)*scale(bio12cm) +                    (1|scientific),
+                    family = "binomial",
+                    data = d_alpestris,
+                    control = glmmTMBControl(optimizer = optim,
+                                             optArgs = list(method = "BFGS")))
+
+summary(model2cz)
+Anova(model2cz)
+
+p2cz <-plot_model(
+  model2cz, 
+  type = "pred", 
+  terms = c("richness", "logsiteAbun"),
+  axis.title = c("Host richness", "Bsal prevalence across all salamander species"),
+  legend.title = c("Ln site-level host abundance"),
+  title = "",
+  colors = "bw",
+  ci.lvl = NA
+)
+p2cz
+
+p3cz <- plot_model(
+  model2cz, 
+  type = "pred", 
+  terms = c("bio1", "bio12cm"),
+  axis.title = c("Temperature (C)", "Bsal prevalence across all salamander species"),
+  legend.title=c("Annual precip. (cm)"),
+  title = "",
+  show.data=FALSE,
+  colors = "bw",
+  ci.lvl = NA
+)
+p3cz
 
 
+## preferred model 2
+model2ecbind <- glmmTMB(cbind(YesBsal, NoBsal) ~ logsiteAbun*richness + (bio1)*(bio12cm) +                                                  (1|scientific),
+                        family = "binomial",
+                        data = dcbind_alpestris,
+                        control = glmmTMBControl(optimizer = optim,
+                                                 optArgs = list(method = "BFGS")))
+
+summary(model2ecbind)
+Anova(model2ecbind)
+
+p2ecbind <-plot_model(
+  model2ecbind, 
+  type = "pred", 
+  terms = c("richness", "logsiteAbun"),
+  axis.title = c("Host richness", "Bsal prevalence across all salamander species"),
+  legend.title = c("Ln site-level host abundance"),
+  title = "",
+  show.data =FALSE,
+  colors = "bw",
+  ci.lvl = NA
+)
+p2ecbind
+
+p3ecbind <- plot_model(
+  model2ecbind, 
+  type = "pred", 
+  terms = c("bio1", "bio12cm"),
+  axis.title = c("Temperature (C)", "Bsal prevalence across all salamander species"),
+  legend.title=c("Annual precip. (cm)"),
+  title = "",
+  show.data=FALSE,
+  colors = "bw",
+  ci.lvl = NA
+)
+p3ecbind
 
 
+## Fire salamanders only
+model3.salamandra <- glmmTMB(cbind(YesBsal, NoBsal) ~ logsiteAbun*richness + scale(bio1)*scale(bio12cm),
+                             family = "binomial",
+                             data = subset(dcbind, species=="salamandra"),
+                             control = glmmTMBControl(optimizer = optim,
+                                                      optArgs = list(method = "BFGS")))
+
+summary(model3.salamandra)
+Anova(model3.salamandra)
 
 
-
-
-
-
-# new df with only fire salamanders
-fs <- d %>%
-  dplyr::filter(scientific == "Salamandra salamandra")
-
+p1.salamandra <- plot_model(
+  model3.salamandra, 
+  type = "pred", 
+  terms = c("bio1", "bio12cm"),
+  axis.title = c("Temperature (C)", "Bsal prevalence in fire salamanders"),
+  legend.title=c("Annual precip.(cm)"),
+  title = "",
+  show.data=FALSE,
+  colors = "bw",
+  ci.lvl = NA
+)
+p1.salamandra
 
 
 
