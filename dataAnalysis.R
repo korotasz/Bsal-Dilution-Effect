@@ -205,3 +205,26 @@ p1.salamandra
 
 
 
+
+
+
+
+
+
+summary(model3.salamandra)
+Anova(model3.salamandra)
+
+
+p1.salamandra <- plot_model(
+  model3.salamandra, 
+  type = "pred", 
+  terms = c("bio1", "bio12cm"),
+  axis.title = c("Temperature (C)", "Bsal prevalence in fire salamanders"),
+  legend.title=c("Annual precip.(cm)"),
+  title = "",
+  show.data=FALSE,
+  colors = "bw",
+  ci.lvl = NA
+)
+p1.salamandra
+
