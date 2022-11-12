@@ -1,97 +1,86 @@
 library(tidyverse)
 library(devtools)
 library(reshape2)
-<<<<<<< HEAD
-library(janitor) # for reviewing duplicates
-=======
->>>>>>> 79e488be6a96ab3ae9b29dd5b99fa4f4e4207cf5
 library(codyn) # species synchrony
 library(lubridate)
 library(ncdf4) # package for netcdf manipulation
 library(rgdal) # package for geospatial analysis
-<<<<<<< HEAD
 library(raster) # package for raster manipulation
 library(maptools) # package to create maps
 library(geodata) # cmip6; projected climate data
-library(gstat) 
-=======
+library(gstat)
 library(raster)
 library(maptools)
 library(geodata) # cmip6
 library(gstat)
->>>>>>> 79e488be6a96ab3ae9b29dd5b99fa4f4e4207cf5
 library(sp)
 library(fs) # construct relative paths to files/directories
 
 
-<<<<<<< HEAD
+
 setwd('C:/Users/alexi/OneDrive/Documents/01_GradSchool/_DissertationWork/Chapter4/03_code')
 euram <- read.csv("euram.csv", header = T, encoding = "UTF-8")
 germany <- read.csv("germany.csv", header = T, encoding = "UTF-8")
 uk <- read.csv("uk.csv", header = T, encoding = "UTF-8")
 spain <- read.csv("spain.csv", header = T, encoding = "UTF-8")
-=======
-setwd('C:/Users/alexi/OneDrive/Documents/01_GradSchool/_Dissertation work/Chapter4/03_code')
-euram <- read.csv("euramv2.csv", header = T, encoding = "UTF-8")
-germany <- read.csv("germanyv2.csv", header = T, encoding = "UTF-8")
-uk <- read.csv("ukv2.csv", header = T, encoding = "UTF-8")
-spain <- read.csv("spainv2.csv", header = T, encoding = "UTF-8")
->>>>>>> 79e488be6a96ab3ae9b29dd5b99fa4f4e4207cf5
 belgium <- read.csv("belgium.csv", header = T, encoding = "UTF-8")
 
-## combine dataframes
+## Combine dataframes
 prev <- rbind(belgium, euram, germany, uk)
 
-## remove empty columns & delete irrelevant columns
-data.frame(colnames(prev))
+## Remove empty columns
 prev <- Filter(function(x)!all(is.na(x)), prev)
-prev <- prev[-c(3, 21, 24, 27, 30:31, 36, 38:42)]
 
-## Rename countries in the "countries" column based on lat/long coords
-prev$country <- gsub(prev$country, pattern = "USA",
-                     replacement = "United States")
-prev$country <- gsub(prev$country, pattern = "Italy", 
-                     replacement = "Switzerland")
+prev <- prev %>%
+  mutate_all(na_if, "") %>%
+  # fieldNumber and lifeStage both have life stage data -- combine
+  unite(., col = "lifeStage_merged", c("fieldNumber", "lifeStage"), 
+        sep = "/", remove = TRUE, na.rm = TRUE) %>%
+  rename(lifeStage = lifeStage_merged) %>%
+  # taxonRemarks and sex both have life stage data -- combine
+  unite(., col = "sex_merged", c("taxonRemarks", "sex"),
+        sep = "/", remove = TRUE, na.rm = TRUE) %>%
+  rename(sex = sex_merged) %>%
+  # Rename countries in the "countries" column based on lat/long coords
+  mutate(country = dplyr::recode(country,
+                          USA = "United States",
+                          Italy = "Switzerland")) %>%
+  # Change name of these columns
+  rename(species = specificEpithet,
+         sampleRemarks = eventRemarks,
+         specimenFate = specimenDisposition) %>%
+  # Combine genus & species into one new column 
+  unite(., col = "scientific", c("genus", "species"),
+        sep = " ", remove = FALSE) %>%
+  relocate(scientific, .after = species) %>%
+  # Add empty columns for new variables 
+  mutate(ADM0 = NA, ADM1 = NA, ADM2 = NA, susceptibility = NA, nativeStatus = NA)
 
-
-## Add empty columns for climactic variables/clean up the df a bit
-newcols <- c("ADM0", "ADM1", "ADM2", "susceptibility", "scientific", "nativeStatus",
-<<<<<<< HEAD
-             "tmin", "tmax", "prec", "bio1", "bio2", "bio3", "bio4", 
-=======
-             "soilMoisture", "tmin", "tmax", "prec", "bio1", "bio2", "bio3", "bio4", 
->>>>>>> 79e488be6a96ab3ae9b29dd5b99fa4f4e4207cf5
-             "bio5", "bio6", "bio7", "bio8", "bio9", "bio10", "bio11", "bio12", 
-             "bio13", "bio14", "bio15","bio16", "bio17", "bio18", "bio19")
-prev[newcols] <- NA 
-names(prev)[names(prev) == 'specificEpithet'] <- 'species' # change name of this column
-prev$scientific <- paste(prev$genus, prev$species) # combine genus & species 
+## Delete irrelevant columns
 data.frame(colnames(prev)) # returns indexed data frame 
-<<<<<<< HEAD
-prev <- prev[, c(2, 34:36, 4:5, 21:23, 6, 3, 18:19, 8:9, 38, 37, 39,  # reorder columns to make more intuitive
-                 26:30, 20, 10:17, 7, 24, 40:61, 25, 1, 31:33)] 
-=======
-prev <- prev[, c(2, 34:36, 4:5, 21:23, 40, 6, 3, 18:19, 8:9, 38, 37, 39,  # reorder columns to make more intuitive
-                 26:30, 20, 10:17, 7, 24, 41:62, 25, 1, 31:33)] 
->>>>>>> 79e488be6a96ab3ae9b29dd5b99fa4f4e4207cf5
+prev <- prev[-c(3, 22, 24:25, 26:28, 33, 35, 37:42)]
 
-## Add missing columns  
-spain_cols <- c("locationRemarks", "occurrenceRemarks", "principalInvestigator",
-                "eventRemarks", "expeditionCode", "projectId")
-spain[spain_cols] <- NA
-<<<<<<< HEAD
-=======
+## Rearrange dataframe
+data.frame(colnames(prev)) 
+prev <- prev[, c(2, 30:32, 4:5, 3, 19:20, 6, 8:10, 33:34, 24:26, 
+                 13:18, 27, 7, 11:12, 21:22, 1, 23, 28:29)]
 
-## Rearrange columns to match main df
-spain <- spain[, c(2:7, 59, 8:9, 32, 1, 10:15, 17, 16, 30:31, 60, 28:29, 27, 
-                   19, 21, 20, 22:26, 18, 62, 33:55, 61, 56, 57:58)]
->>>>>>> 79e488be6a96ab3ae9b29dd5b99fa4f4e4207cf5
 
-## Rearrange columns to match main df
-spain <- spain[, c(2:7, 59, 8:9, 32, 1, 10:15, 17, 16, 30:31, 60, 28:29, 27, 
-                   19, 21, 20, 22:26, 18, 62, 33:55, 61, 56, 57:58)]
-spain <- spain[, -10]
-## Add Spain
+## Remove columns from Spain
+data.frame(colnames(spain)) 
+spain <- spain[, -c(8:9, 32:54, 56)]
+
+
+## Rearrange & Add missing columns
+spain <- spain[, c(2, 3:10, 1, 11:13, 15, 14, 27:29, 26, 18, 
+                   20:24, 16, 17, 19, 25, 30:32)]
+spain <- spain %>%
+  mutate_all(na_if, "") %>%
+  rename(specimenFate = specimenDisposition) %>%
+  mutate(sampleRemarks = NA, principalInvestigator = "An Martel") %>%
+  relocate(c("sampleRemarks", "principalInvestigator"), .after = "diagnosticLab")
+  
+## Join Spain to main df
 prev <- rbind(prev, spain)
 
 prev <- prev %>%
@@ -105,20 +94,14 @@ prev <- prev %>%
   dplyr::filter(!(materialSampleID=="")) %>%
   # drop rows that include sampling from Peru or the US (imported with euram df)
   dplyr::filter(!(country == "Peru")) %>%
-  dplyr::filter(!(country == "United States")) %>%
-    # rename elevation column
-  rename(Elevation = minimumElevationInMeters)
+  dplyr::filter(!(country == "United States"))
 
 ## Export data frame to work with in QGIS
 #write.csv(prev, 'C:/Users/alexi/OneDrive/Documents/01_GradSchool/_Dissertation work/Chapter4/03_code/locations.csv',
 #          row.names = FALSE)
 
 ## Read in attribute table with ADM data and case match ADM levels in prev
-<<<<<<< HEAD
 a <- read.csv("locations_with_ADMs.csv", header = T, encoding = "UTF-8")
-=======
-a <- read.csv("location_ADMs.csv", header = T, encoding = "UTF-8")
->>>>>>> 79e488be6a96ab3ae9b29dd5b99fa4f4e4207cf5
 
 a2 <- a %>%
   dplyr::select(COUNTRY_2, GID_0, NAME_1, NAME_2, materialSampleID)
@@ -230,7 +213,7 @@ prev <- prev %>%
 
 
 prev$fatal <- toupper(prev$fatal)
-prev$specimenDisposition <- toupper(prev$specimenDisposition)
+prev$specimenFate <- toupper(prev$specimenFate)
 
 ## Convert factors with two levels to binary integers
 levels(prev$BdDetected) <- c(0,1) #0 = F, 1 = T
@@ -249,21 +232,14 @@ weather <- prev %>%
   unite(decimalLatitude, decimalLongitude, sep = ", ", col = "LatLon", remove = F) %>%
   relocate(LatLon, .after = decimalLongitude) %>%
   dplyr::filter(!(dayCollected == "NA")) %>%
-<<<<<<< HEAD
   mutate(temp = NA, soilMoisture = NA) %>%
   group_by(LatLon, date) %>%
   unique() %>%
   ungroup()
 
-=======
-  mutate(t0_temp = NA, t0_soilMoisture = NA, t0_precip = NA,
-         t1_temp = NA, t1_soilMoisture = NA, t1_precip = NA,
-         t2_temp = NA, t2_soilMoisture = NA, t2_precip = NA) %>%
-  group_by(LatLon, date)
-
+  
 weather <- unique(weather)
->>>>>>> 79e488be6a96ab3ae9b29dd5b99fa4f4e4207cf5
-weather$date <- as.Date(weather$date, format = "%Y-%m-%d")
+weather$date <- base::as.Date(weather$date, format = "%Y-%m-%d")
 
 ## get dates for 1 month prior to sample date
 for(i in 1:nrow(weather)){
@@ -273,7 +249,7 @@ for(i in 1:nrow(weather)){
   weather[i,6] <- as.Date(weather$date[i], format = "%Y-%m-%d") - days(60)
 }
 
-<<<<<<< HEAD
+
 # Add dates t-1 and t-2 back into prev dataframe
 prev <- prev %>%
   mutate(date = base::as.Date(date, "%Y-%m-%d")) %>%
@@ -294,32 +270,11 @@ weather2 <- weather %>%
 
 ## Export to use in Python and PyQGIS to obtain weather data
 #write.csv(weather2, 'C:/Users/alexi/OneDrive/Documents/01_GradSchool/_Dissertation work/Chapter4/03_code/weather.csv',
-=======
 
-sum(is.na(weather$date)) # 0
-sum(is.na(weather$date_t1)) # 0
-sum(is.na(weather$date_t2)) # 0
-
-weather <- weather %>%
-  group_by(decimalLatitude, decimalLongitude) %>%
-  pivot_longer(cols = c(date, date_t1, date_t2),
-               names_to = "timepoint",
-               values_to = "sampledate") %>%
-  ungroup() %>%
-  dplyr::select(-c("LatLon", "yearCollected", "monthCollected", "dayCollected")) %>%
-  relocate(c("timepoint", "sampledate"), .after = "decimalLongitude") %>%
-  separate(sampledate, sep="-", into = c("yearCollected", "monthCollected", "dayCollected"))
-
-
-## Export for weather data
-#write.csv(weather, 'C:/Users/alexi/OneDrive/Documents/01_GradSchool/_Dissertation work/Chapter4/03_code/weather.csv',
->>>>>>> 79e488be6a96ab3ae9b29dd5b99fa4f4e4207cf5
-#          row.names = FALSE)
 
 ## Python 3.9.4 used to download .nc4 files from NASA's EarthData data repository for each date and location.
 
 ## Import temperature & soil moisture data from NASA's EarthData website (citation below)
-<<<<<<< HEAD
    ## Li, B., H. Beaudoing, and M. Rodell, NASA/GSFC/HSL (2020), GLDAS Catchment Land Surface Model L4 daily 0.25 x 0.25 degree GRACE-DA1 V2.2, 
    ## Greenbelt, Maryland, USA, Goddard Earth Sciences Data and Information Services Center (GES DISC), Accessed: 2022-09-08.
 gldas <- read.csv("weather_merged.csv", header = T, encoding = "UTF-8")
@@ -382,38 +337,14 @@ weather$temp_date_t2 = gldas_date_t2$temp[base::match(paste(weather$LatLon, weat
                                       paste(gldas_date_t2$LatLon, gldas_date_t2$date_t2))]
 
 
-## gldas missing timepoints w/ same lat/lon/date -- issue with datasetFetcher.py?
-## Subset missing data
-#SM_date <- weather[is.na(c(weather$soilMoisture_date)),]
-#SM_date_t1 <- weather[is.na(c(weather$soilMoisture_date_t1)),]
-#SM_date_t2 <- weather[is.na(c(weather$soilMoisture_date_t2)),]
 
-#T_date <- weather[is.na(c(weather$temp_date)),]
-#T_date_t1 <- weather[is.na(c(weather$temp_date_t1)),]
-#T_date_t2 <- weather[is.na(c(weather$temp_date_t2)),]
-
-#View(SM_date)
-#View(SM_date_t1)
-#View(SM_date_t2)
-#View(T_date)
-#View(T_date_t1)
-#View(T_date_t2)
-=======
-## Li, B., H. Beaudoing, and M. Rodell, NASA/GSFC/HSL (2020), GLDAS Catchment Land Surface Model L4 daily 0.25 x 0.25 degree GRACE-DA1 V2.2, 
-## Greenbelt, Maryland, USA, Goddard Earth Sciences Data and Information Services Center (GES DISC), Accessed: 2022-09-08.
-
-
-
-
-
->>>>>>> 79e488be6a96ab3ae9b29dd5b99fa4f4e4207cf5
 
 ## Import precip data from NASA's EarthData website (citation below)
 ## Huffman, G.J., E.F. Stocker, D.T. Bolvin, E.J. Nelkin, Jackson Tan (2019), GPM IMERG Late Precipitation L3 1 day 0.1 degree x 0.1 degree V06, 
 ## Edited by Andrey Savtchenko, Greenbelt, MD, Goddard Earth Sciences Data and Information Services Center (GES DISC), Accessed: 2022-09-08, 
 ##10.5067/GPM/IMERGDL/DAY/06
 
-<<<<<<< HEAD
+
 # Create file path to where nc4 files are at (Work in progress)
 #imerg_path <- path('E:/', '01_GradSchool', '_DissertationWork', 'Chapter4', '03_code', 'Weather','sample_data')
 
@@ -443,30 +374,13 @@ prev$temp_date_t1 = weather$temp_date_t1[base::match(paste(prev$decimalLatitude,
 prev$temp_date_t2 = weather$temp_date_t2[base::match(paste(prev$decimalLatitude, prev$decimalLongitude, prev$date_t2),
                                                                      paste(weather$decimalLatitude, weather$decimalLongitude, weather$date_t2))]
 
-
-prev <- prev[, -c(7:9, 24, 37)]
-prev <- prev[, c(1:6, 60, 11:13, 8:10, 7, 14:32, 61:70, 33:59)]
+prev <- prev[, c(1:6, 38, 10:12, 7:9, 13:29, 39:48, 30:37)]
 
 # Convert temp from K to C
 prev$temp_date <- prev$temp_date - 273.15
 prev$temp_date_t1 <- prev$temp_date_t1 - 273.15
 prev$temp_date_t2 <- prev$temp_date_t2 - 273.15
 
-
-# Get rid of climate data for now
-#prev <- prev[, -c(46:66)]
-=======
-
-
-
-
-
-
-
-
-
-
->>>>>>> 79e488be6a96ab3ae9b29dd5b99fa4f4e4207cf5
 
 #### cbind model df
 ## Create two new columns for Bsal detection successes/failures at each site, 
@@ -476,11 +390,15 @@ prev$genus <- gsub("[[:space:]]", "", prev$genus) # get rid of weird spaces in t
 disease <- prev %>%
   dplyr::select(country, decimalLatitude, decimalLongitude, Site, yearCollected, 
                 monthCollected, dayCollected, date, date_t1, date_t2,  
-                genus, species, scientific, susceptibility, BdDetected, BsalDetected, fatal, 
-                sppAbun, siteAbun, richness, alphadiv, 
+                genus, species, scientific, susceptibility, lifeStage, sex, individualCount, 
+                BdDetected, BsalDetected, fatal, sppAbun, siteAbun, richness, alphadiv, 
                 soilMoisture_date, soilMoisture_date_t1, soilMoisture_date_t2, 
-                temp_date, temp_date_t1, temp_date_t2) %>%
+                temp_date, temp_date_t1, temp_date_t2, collectorList) %>%
   group_by(Site, date, scientific) %>%
+  mutate(NoBsal = sum(BsalDetected == 0)) %>%
+  mutate(YesBsal = sum(BsalDetected == 1)) %>%
+  mutate(NoBd = sum(BdDetected == 0)) %>%
+  mutate(YesBd = sum(BdDetected == 1)) %>%
   distinct()
 
 
@@ -496,15 +414,3 @@ data.frame(colnames(disease))
 
 
 
-
-<<<<<<< HEAD
-
-
-
-
-
-
-
-
-=======
->>>>>>> 79e488be6a96ab3ae9b29dd5b99fa4f4e4207cf5

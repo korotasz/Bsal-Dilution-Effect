@@ -184,7 +184,6 @@ model3.salamandra <- glmmTMB(cbind(YesBsal, NoBsal) ~ logsiteAbun*richness + sca
                              data = subset(dcbind, species=="salamandra"),
                              control = glmmTMBControl(optimizer = optim,
                                                       optArgs = list(method = "BFGS")))
-<<<<<<< HEAD
 
 summary(model3.salamandra)
 Anova(model3.salamandra)
@@ -210,8 +209,6 @@ p1.salamandra
 
 
 
-=======
-
 summary(model3.salamandra)
 Anova(model3.salamandra)
 
@@ -231,5 +228,4 @@ p1.salamandra
 
 
 
->>>>>>> 79e488be6a96ab3ae9b29dd5b99fa4f4e4207cf5
 
