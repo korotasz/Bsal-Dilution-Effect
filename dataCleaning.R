@@ -10,6 +10,7 @@ library(maptools) # package to create maps
 library(geodata) # cmip6; projected climate data
 library(gstat)
 library(sp)
+library(fs) # construct relative paths to files/directories
 
 
 
