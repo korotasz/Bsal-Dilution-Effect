@@ -9,12 +9,7 @@ library(raster) # package for raster manipulation
 library(maptools) # package to create maps
 library(geodata) # cmip6; projected climate data
 library(gstat)
-library(raster)
-library(maptools)
-library(geodata) # cmip6
-library(gstat)
 library(sp)
-library(fs) # construct relative paths to files/directories
 
 
 
@@ -381,6 +376,20 @@ prev$temp_date <- prev$temp_date - 273.15
 prev$temp_date_t1 <- prev$temp_date_t1 - 273.15
 prev$temp_date_t2 <- prev$temp_date_t2 - 273.15
 
+# Combine BdDetected and BsalDetected into one "diseaseDetected" column
+prev <- prev %>%
+  unite(., col = "diseaseDetected", c("BdDetected", "BsalDetected"),
+        sep = "/", remove = FALSE, na.rm = TRUE) %>%
+  relocate(diseaseDetected, .before = fatal) %>%
+  mutate(diseaseDetected = dplyr::recode(diseaseDetected,
+                               "0/0" = "0",
+                               "0/1" = "1",
+                               "1/0" = "1",
+                               "1/1" = "1"))
+
+## Convert characters to factors with two levels to binary integers
+prev$diseaseDetected <- as.factor(prev$diseaseDetected)
+levels(prev$diseaseDetected) <- c(0,1) #0 = F, 1 = T
 
 #### cbind model df
 ## Create two new columns for Bsal detection successes/failures at each site, 
@@ -391,14 +400,16 @@ disease <- prev %>%
   dplyr::select(country, decimalLatitude, decimalLongitude, Site, yearCollected, 
                 monthCollected, dayCollected, date, date_t1, date_t2,  
                 genus, species, scientific, susceptibility, lifeStage, sex, individualCount, 
-                BdDetected, BsalDetected, fatal, sppAbun, siteAbun, richness, alphadiv, 
-                soilMoisture_date, soilMoisture_date_t1, soilMoisture_date_t2, 
+                BdDetected, BsalDetected, diseaseDetected, fatal, sppAbun, siteAbun, richness, 
+                alphadiv, soilMoisture_date, soilMoisture_date_t1, soilMoisture_date_t2, 
                 temp_date, temp_date_t1, temp_date_t2, collectorList) %>%
   group_by(Site, date, scientific) %>%
   mutate(NoBsal = sum(BsalDetected == 0)) %>%
   mutate(YesBsal = sum(BsalDetected == 1)) %>%
   mutate(NoBd = sum(BdDetected == 0)) %>%
   mutate(YesBd = sum(BdDetected == 1)) %>%
+  mutate(NoDisease = sum(diseaseDetected == 0)) %>%
+  mutate(YesDisease = sum(diseaseDetected ==1)) %>%
   distinct()
 
 
