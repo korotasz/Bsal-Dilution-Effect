@@ -1,0 +1,12 @@
+CSVs/*
+code/temp2.R
+.Rhistory
+.vscode/
+QGISFiles/
+Temp_dataAnalysis.Rmd
+WorldClimVars/
+bsal_analysis.csv
+dataAnalysis.Rmd
+dataCleaning_init.R
+renv/
+wc2-5/
