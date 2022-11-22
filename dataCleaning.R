@@ -1020,7 +1020,7 @@ rsp_bio5$ADM2 <- toupper(rsp_bio5$ADM2)
 head(rsp_bio5)
 
 rsp_bio <- rbind(rsp_bio1, rsp_bio2, rsp_bio3, rsp_bio4, rsp_bio5)
-
+rsp_bio[, c(16:18, 20:23)] = rsp_bio[, c(16:18, 20:23)]*0.1
 
 
 #### Merge extracted data to original dataframe ####
