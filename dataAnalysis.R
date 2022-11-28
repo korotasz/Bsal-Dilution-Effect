@@ -431,6 +431,19 @@ model2
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
 # preferred model
 model2cz <- glmmTMB(diseaseDetected ~ logsiteAbun*richness + scale(bio1)*scale(bio12cm) +                    (1|scientific),
                     family = "binomial",
