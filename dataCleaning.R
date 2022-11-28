@@ -6,6 +6,7 @@ library(ncdf4) # package for netcdf manipulation
 library(rgdal) # package for geospatial analysis
 library(lubridate)
 library(raster) # package for raster manipulation
+library(ncdf4) # for IMERG satellite data
 library(maptools) # package to create maps
 library(geodata) # cmip6; projected climate data
 library(gstat)
@@ -334,12 +335,14 @@ weather$temp_date_t2 = gldas_date_t2$temp[base::match(paste(weather$LatLon, weat
                                       paste(gldas_date_t2$LatLon, gldas_date_t2$date_t2))]
 
 
-
-
 ## Import precip data from NASA's EarthData website (citation below)
 ## Huffman, G.J., E.F. Stocker, D.T. Bolvin, E.J. Nelkin, Jackson Tan (2019), GPM IMERG Late Precipitation L3 1 day 0.1 degree x 0.1 degree V06, 
 ## Edited by Andrey Savtchenko, Greenbelt, MD, Goddard Earth Sciences Data and Information Services Center (GES DISC), Accessed: 2022-09-08, 
 ##10.5067/GPM/IMERGDL/DAY/06
+# Write function for processing multiple .nc4 files
+
+
+
 
 
 # Create file path to where nc4 files are at (Work in progress)
@@ -383,15 +386,25 @@ prev <- prev %>%
   unite(., col = "diseaseDetected", c("BdDetected", "BsalDetected"),
         sep = "/", remove = FALSE, na.rm = TRUE) %>%
   relocate(diseaseDetected, .before = fatal) %>%
-  mutate(diseaseDetected = dplyr::recode(diseaseDetected,
-                               "0/0" = "0",
-                               "0/1" = "1",
-                               "1/0" = "1",
-                               "1/1" = "1"))
+  drop_na(diseaseDetected) %>%
+  mutate(whichDisease = diseaseDetected,
+         whichDisease = dplyr::recode(whichDisease,
+                                      "0/0" = "None",
+                                      "0/1" = "Bsal",
+                                      "1/0" = "Bd",
+                                      "1/1" = "Both"),
+         diseaseDetected = dplyr::recode(diseaseDetected,
+                                         "0/0" = "0",
+                                         "0/1" = "1",
+                                         "1/0" = "1",
+                                         "1/1" = "1"),
+         diseaseDetected = as.factor(diseaseDetected)) %>%
+  relocate(whichDisease, .after = diseaseDetected)
+
 
 ## Convert characters to factors with two levels to binary integers
 prev$diseaseDetected <- as.factor(prev$diseaseDetected)
-levels(prev$diseaseDetected) <- c(0,1) #0 = F, 1 = T
+#levels(prev$diseaseDetected) <- c(0,1) #0 = F, 1 = T
 
 
 ## Climate data from geodata package
@@ -1055,33 +1068,42 @@ prev$bio19 = rsp_bio$bio19[base::match(paste(prev$ADM2), paste(rsp_bio$ADM2))]
 
 data.frame(colnames(prev))
 
-prev <- prev[, c(1:41, 50:72, 42:49)]
+prev <- prev[, c(1:42, 51:73, 43:50)]
 
-#### cbind model df
+#### cbind model df ####
 ## Create two new columns for Bsal detection successes/failures at each site, 
 ## for each species, during each sampling event
 prev$genus <- gsub("[[:space:]]", "", prev$genus) # get rid of weird spaces in this column
 
 disease <- prev %>%
-  dplyr::select(country, decimalLatitude, decimalLongitude, Site, yearCollected, 
-                monthCollected, dayCollected, date, date_t1, date_t2,  
-                genus, species, scientific, susceptibility, lifeStage, sex, individualCount, 
-                BdDetected, BsalDetected, diseaseDetected, fatal, sppAbun, siteAbun, richness, 
-                alphadiv, soilMoisture_date, soilMoisture_date_t1, soilMoisture_date_t2, 
+  dplyr::select(country, decimalLatitude, decimalLongitude, Site, date, date_t1, date_t2,  
+                scientific, susceptibility, BdDetected, BsalDetected, diseaseDetected, whichDisease, 
+                fatal, sppAbun, siteAbun, richness, alphadiv, soilMoisture_date, soilMoisture_date_t1, soilMoisture_date_t2, 
                 temp_date, temp_date_t1, temp_date_t2, tmin, tmax, tavg, prec, bio1, bio2, bio3,
                 bio4, bio5, bio6, bio7, bio8, bio9, bio10, bio11, bio12, bio13, bio14, bio15, 
                 bio16, bio17, bio18, bio19, collectorList) %>%
   group_by(Site, date, scientific) %>%
-  mutate(NoBsal = sum(BsalDetected == 0)) %>%
-  mutate(YesBsal = sum(BsalDetected == 1)) %>%
-  mutate(NoBd = sum(BdDetected == 0)) %>%
-  mutate(YesBd = sum(BdDetected == 1)) %>%
-  mutate(NoDisease = sum(diseaseDetected == 0)) %>%
-  mutate(YesDisease = sum(diseaseDetected ==1)) %>%
-  distinct()
-
-
-data.frame(colnames(disease))
+  mutate(YesBsal = sum(BsalDetected == 1),
+         YesBd = sum(BdDetected == 1),
+         YesDisease = sum(diseaseDetected == 1),
+         NoBsal = sum((BsalDetected == 0)),
+         NoBd = sum(BdDetected == 0),
+         NoDisease = sum(diseaseDetected == 0)) %>%
+  drop_na(date) %>%
+  ungroup() %>%
+  dplyr::group_by(Site, date, scientific, diseaseDetected, fatal) %>%
+  mutate(fatalDisease = sum(ifelse(diseaseDetected == 1 & fatal == 1, diseaseDetected, NA), na.rm = T),
+         fatalNoDisease = sum(ifelse(diseaseDetected == 0 & fatal == 1, diseaseDetected, NA), na.rm = T),
+         aliveDisease = sum(ifelse(diseaseDetected == 1 & fatal == 0, diseaseDetected, NA), na.rm = T),
+         aliveNoDisease = sum(ifelse(diseaseDetected == 0 & fatal == 0, diseaseDetected, NA), na.rm = T))  %>%
+  ungroup() %>%
+  relocate(c(YesBsal, NoBsal), .after = BsalDetected) %>%
+  relocate(c(YesBd, NoBd), .after = BdDetected) %>%
+  relocate(c(YesDisease, NoDisease), .after = diseaseDetected) %>%
+  relocate(c(fatalDisease, fatalNoDisease, aliveDisease, aliveNoDisease), .after = fatal) %>%
+  distinct() 
+  
+disease <- with(disease, disease[order(Site, scientific), ])
 
 ## File for final prev dataframe:
 #write.csv(prev, 'C:/Users/alexi/OneDrive/Documents/01_GradSchool/_DissertationWork/Chapter4/03_code/bsalData_clean.csv',
