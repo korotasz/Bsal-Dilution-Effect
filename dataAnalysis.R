@@ -17,6 +17,7 @@ pacman::p_load(tidyverse,
                stars, # spatiotemporal data handling
                raster, # raster data handling
                sf, # vector data handling
+               leaflet, # making interactive maps
                data.table, # data wrangling
                patchwork, # arranging figures
                ggsignif, # adds labels to significant groups
@@ -71,7 +72,8 @@ d <- d %>%
          soilMoisture_t2_scaled = scale(soilMoisture_date_t2),
          bio1_scaled = scale(bio1),
          bio12_scaled = scale(bio12),
-         scientific = as.factor(scientific))
+         scientific = as.factor(scientific),
+         susceptibility = as.factor(susceptibility))
 
 dcbind <- dcbind %>%
   mutate(logsppAbun = log(sppAbun),
@@ -84,7 +86,8 @@ dcbind <- dcbind %>%
          soilMoisture_t2_scaled = scale(soilMoisture_date_t2),
          bio1_scaled = scale(bio1),
          bio12_scaled = scale(bio12),
-         scientific = as.factor(scientific))
+         scientific = as.factor(scientific),
+         susceptibility = as.factor(susceptibility))
 
 
 
@@ -95,6 +98,88 @@ d_alpestris <- subset(d, scientific != "Ichthyosaura alpestris")
 # Remove Jaime's data 
 d_noJB <- subset(d, collectorList != "Jaime Bosch")
 dcbind_noJB <- subset(dcbind, collectorList != "Jaime Bosch")
+
+
+##### Interactive map showing sampling locations, susceptibility level of each observed animal, ####
+##    and whether or not that animal was infected
+d <- d %>%
+  mutate(color = case_when(
+    susceptibility == "1" ~ "Resistant",
+    susceptibility == "2" ~ "Tolerant",
+    susceptibility == "3" ~ "Susceptible"
+  ),
+  fatalStatus = case_when(
+    fatal == "1" ~ "Dead",
+    fatal == "0" ~ "Alive",
+    is.na(fatal) == T ~ "Unk")
+  )
+
+getColor <- function(susc) 
+{
+  if(!is.na(susc))
+  {
+    if(susc == "3") 
+    {
+        "#b30000"
+    } 
+    else if(susc == "2")
+    {
+        "#f8ae5d"
+    } 
+    else if(susc == "1") 
+    {
+        "#8bd3c7"
+    }
+  }
+  else
+  {
+    "gray"
+  }
+}
+
+getIcon <- function(fatalStatus, susceptibility){
+  mapply(function(status, susc){
+    color <- getColor(susc)
+    
+    print(color)
+    if(!is.na(status))
+    {
+      if(status == "Alive")
+      {
+        aliveIcon <- awesomeIcons(icon = "face-smile", iconColor = "black", library = "fa", markerColor = color)
+        return(makeIcon(aliveIcon, 18,18))
+      }
+      else if(status == "Dead")
+      {
+        deadIcon <- awesomeIcons(icon = "skull", iconColor = "black", library = "fa", markerColor = color)
+        return(makeIcon(deadIcon, 18,18))
+      }
+    }
+    else
+    {
+      return(color)
+    }
+  }, fatalStatus, susceptibility)
+}
+
+
+
+map <- d %>%
+  leaflet() %>%
+  addProviderTiles(provider = "Stamen.TonerLite", group = "Basic Map") %>%
+  addProviderTiles(provider = "Esri.WorldImagery", group = "World Imagery") %>%
+  addLayersControl(baseGroups = c("Basic Map", "World Imagery")) %>%
+  addMarkers(lng = d$decimalLongitude, lat = d$decimalLatitude,
+             label = d$scientific,
+             clusterOptions = markerClusterOptions(),
+             popup = ifelse(d$BsalDetected == 1,
+                            "Bsal Positive", "Bsal Negative")) %>%
+  addAwesomeMarkers(lng = d$decimalLongitude, lat = d$decimalLatitude,
+                    icon = getIcon(d$fatalStatus, d$susceptibility)) %>%
+  setView(lat = 47.81757743622691, lng = 6.5171597480332135, zoom = 4)
+
+map
+
 
 
 ##### Mean species abundance by site; susceptibility of each spp. is noted as well. ####

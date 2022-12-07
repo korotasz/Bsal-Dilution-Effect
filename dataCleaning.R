@@ -2,7 +2,6 @@ library(tidyverse)
 library(devtools)
 library(reshape2)
 library(codyn) # species synchrony
-library(ncdf4) # package for netcdf manipulation
 library(rgdal) # package for geospatial analysis
 library(lubridate)
 library(raster) # package for raster manipulation
