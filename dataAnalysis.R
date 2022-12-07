@@ -4,7 +4,8 @@ require(extrafont)
 require(Rttf2pt1)
 #extrafont::font_import() # load fonts before ggplot2
 extrafont::loadfonts(device = "win", quiet = T) # plot fonts
-pacman::p_load(tidyverse,
+pacman::p_load(rstudioapi, # Set working directory to current file location
+               tidyverse,
                glmmTMB, # glmmTMB()
                car, # Anova()
                DHARMa, # simulateResiduals(), testZeroInflation(), testDispersion()
@@ -28,7 +29,7 @@ pacman::p_load(tidyverse,
 )
 
 ## Set working directory
-setwd('C:/Users/alexi/OneDrive/Documents/01_GradSchool/_DissertationWork/Chapter4/03_code')
+dir <- setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
 
 ## Load csv files
 d <- read.csv("bsalData_clean.csv", header = T, encoding = "UTF-8")
@@ -164,8 +165,7 @@ getIcon <- function(fatalStatus, susceptibility){
 
 
 
-map <- d %>%
-  leaflet() %>%
+map <- leaflet(data = d) %>%
   addProviderTiles(provider = "Stamen.TonerLite", group = "Basic Map") %>%
   addProviderTiles(provider = "Esri.WorldImagery", group = "World Imagery") %>%
   addLayersControl(baseGroups = c("Basic Map", "World Imagery")) %>%
@@ -178,7 +178,10 @@ map <- d %>%
                     icon = getIcon(d$fatalStatus, d$susceptibility)) %>%
   setView(lat = 47.81757743622691, lng = 6.5171597480332135, zoom = 4)
 
-map
+
+
+
+browseurl(map)
 
 
 
