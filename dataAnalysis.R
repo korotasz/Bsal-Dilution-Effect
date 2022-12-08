@@ -1,35 +1,60 @@
-require(pacman)
-require(extrafont)
 #remotes::install_version("Rttf2pt1", version = "1.3.8") # install this version, latest ver. not compatible
-require(Rttf2pt1)
-#extrafont::font_import() # load fonts before ggplot2
+#extrafont::font_import() # load fonts before ggplot2; only need to do this once
+require(pacman)
+require(rstudioapi) # Set working directory to current file location
+require(extrafont) 
 extrafont::loadfonts(device = "win", quiet = T) # plot fonts
-pacman::p_load(rstudioapi, # Set working directory to current file location
-               tidyverse,
-               glmmTMB, # glmmTMB()
-               car, # Anova()
-               DHARMa, # simulateResiduals(), testZeroInflation(), testDispersion()
-               lme4, # lm()
-               MASS, # negative binomial models
-               sjPlot, # plot_model()
-               ggeffects,
-               ggtext,
-               hrbrthemes, # plot colors
-               stars, # spatiotemporal data handling
-               raster, # raster data handling
-               sf, # vector data handling
-               leaflet, # making interactive maps
-               data.table, # data wrangling
-               patchwork, # arranging figures
-               ggsignif, # adds labels to significant groups
-               tigris, # county border
-               colorspace, # color scale
-               viridis, # arranging figures
-               ggspatial # north arrow and scale bar
+#### Plot Specific Packages ####
+plot_pckgs <- c("tidyverse",
+                "sjPlot",
+                "ggeffects",
+                "Rttf2pt1", # to use with the extrafont package
+                "ggtext", # for text type/arrangements w/ ggplot2
+                "hrbrthemes", # plot colors
+                "patchwork", # arranging figures
+                "ggsignif", # adds labels to significant groups
+                "RColorBrewer",
+                "colorspace", # color scale
+                "viridis", # arranging figures
+                "plotly" # interactive plots
 )
 
+#### Map Specific Packages ####
+map_pckgs <- c("tidyverse",
+               "htmltools",
+               "stars", # spatiotemporal data handling
+               "RColorBrewer",
+               "ggspatial", # north arrow and scale bar,
+               "raster", # raster data handling
+               "sf", # vector data handling
+               "sp", 
+               "leaflet", # making interactive maps
+               "leaftime", # add time scale to map
+               "geojsonio",
+               "geojsonlint" # validate GeoJSON and display it on a map
+)
+
+#### Analysis Specific Packages ####
+analysis_pckgs <- c("tidyverse",
+                    "data.table", # data wrangling
+                    "glmmTMB", # glmmTMB()
+                    "car", # Anova()
+                    "DHARMa", # simulateResiduals(), testZeroInflation(), testDispersion()
+                    "lme4", # lm()
+                    "MASS", # negative binomial models
+                    "sjPlot" # plot_model()
+)
+
+
+
+
+#### ####
 ## Set working directory
-dir <- setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
+dir <- dirname(rstudioapi::getActiveDocumentContext()$path)
+setwd(dir)
+
+## Load analysis packages
+pacman::p_load(analysis_pckgs, character.only = T)
 
 ## Load csv files
 d <- read.csv("bsalData_clean.csv", header = T, encoding = "UTF-8")
@@ -38,10 +63,9 @@ dcbind <- read.csv("bsalData_cbind.csv", header = T, encoding = "UTF-8")
 ## Set plot theme
 ak_theme <- theme_ipsum() +
   theme(axis.text.x = element_text(size = 18),
-        axis.title.x = element_text(size = 24, hjust = 0.5, margin = margin(t = 15, r = 0, b = 0, l = 0)),
+        axis.title.x = element_text(size = 24, hjust = 0.5, margin = margin(t = 15, r = 0, b = 0, l = 0), face = "plain"),
         axis.text.y = element_text(size = 18),
-        axis.title.y = element_text(size = 24,hjust = 0.5, margin = margin(t = 0, r = 15, b = 0, l = 5)),
-        axis.title = element_text(size = 28, face = "plain"),
+        axis.title.y = element_text(size = 24, hjust = 0.5, margin = margin(t = 0, r = 15, b = 0, l = 5), face = "plain"),
         plot.title = element_markdown(hjust = c(0, -1), size = 32, face = "plain"),
         plot.subtitle = element_markdown(size = 12, face = "plain"),
         plot.margin = margin(6, 12, 2, 2, "pt"), 
@@ -102,7 +126,9 @@ dcbind_noJB <- subset(dcbind, collectorList != "Jaime Bosch")
 
 
 ##### Interactive map showing sampling locations, susceptibility level of each observed animal, ####
-##    and whether or not that animal was infected
+##### and whether or not that animal was infected
+pacman::p_load(map_pckgs, character.only = T)
+
 d <- d %>%
   mutate(color = case_when(
     susceptibility == "1" ~ "Resistant",
@@ -115,79 +141,58 @@ d <- d %>%
     is.na(fatal) == T ~ "Unk")
   )
 
-getColor <- function(susc) 
-{
-  if(!is.na(susc))
-  {
-    if(susc == "3") 
-    {
-        "#b30000"
-    } 
-    else if(susc == "2")
-    {
-        "#f8ae5d"
-    } 
-    else if(susc == "1") 
-    {
-        "#8bd3c7"
-    }
-  }
-  else
-  {
-    "gray"
-  }
-}
 
-getIcon <- function(fatalStatus, susceptibility){
-  mapply(function(status, susc){
-    color <- getColor(susc)
-    
-    print(color)
-    if(!is.na(status))
-    {
-      if(status == "Alive")
-      {
-        aliveIcon <- awesomeIcons(icon = "face-smile", iconColor = "black", library = "fa", markerColor = color)
-        return(makeIcon(aliveIcon, 18,18))
-      }
-      else if(status == "Dead")
-      {
-        deadIcon <- awesomeIcons(icon = "skull", iconColor = "black", library = "fa", markerColor = color)
-        return(makeIcon(deadIcon, 18,18))
-      }
-    }
-    else
-    {
-      return(color)
-    }
-  }, fatalStatus, susceptibility)
-}
-
-
+pal <- colorFactor(c("#b30000", "#f8ae5d", "#8bd3c7"), domain = c("Susceptible", "Resistant", "Tolerant")) # marker colors
+cols <- c("#b30000", "#f8ae5d", "#8bd3c7") # legend
+labs <- c("Susceptible", "Resistant", "Tolerant") # legend
+d_geo <- geojsonio::geojson_json(d, lat = "decimalLatitude", lon = "decimalLongitude")
 
 map <- leaflet(data = d) %>%
   addProviderTiles(provider = "Stamen.TonerLite", group = "Basic Map") %>%
   addProviderTiles(provider = "Esri.WorldImagery", group = "World Imagery") %>%
   addLayersControl(baseGroups = c("Basic Map", "World Imagery")) %>%
-  addMarkers(lng = d$decimalLongitude, lat = d$decimalLatitude,
-             label = d$scientific,
-             clusterOptions = markerClusterOptions(),
-             popup = ifelse(d$BsalDetected == 1,
-                            "Bsal Positive", "Bsal Negative")) %>%
-  addAwesomeMarkers(lng = d$decimalLongitude, lat = d$decimalLatitude,
-                    icon = getIcon(d$fatalStatus, d$susceptibility)) %>%
-  setView(lat = 47.81757743622691, lng = 6.5171597480332135, zoom = 4)
+  addCircleMarkers(lng = d$decimalLongitude, lat = d$decimalLatitude,
+    radius = 10,
+    color = ~pal(d$color),
+    fillOpacity = ifelse(d$fatalStatus == "Alive", 1, 0.5),
+    stroke = FALSE,
+    clusterOptions = markerClusterOptions(),
+    label = d$scientific,
+    labelOptions = labelOptions(direction = "auto", offset = c(0,0),
+                                style = list("color" = "black",
+                                             "font-family" = "sans-serif",
+                                             "font-style" = "italic",
+                                             "font-weight" = "bold",
+                                             "box-shadow" = "1px 1px rgba(0,0,0,0.25)",
+                                             "font-size" = "12px",
+                                             "padding" = "4px"
+                                             )),
+    popup = paste("<b>Site:</b>", d$Site, "<br>",
+                  "<b>Bsal Detected:</b>", ifelse(d$BsalDetected == 1, "Yes", "No"), "<br>",
+                  "<b>Bd Detected:</b>", ifelse(d$BdDetected == 1, "Yes", "No"), "<br>",
+                  "<b>Status:</b>", d$fatalStatus)) %>%
+  setView(lat = 47.81757743622691, lng = 6.5171597480332135, zoom = 4) %>%
+  addLegend(position = "bottomleft",
+            colors = ~cols,
+            labels = ~labs,
+            title = paste("Bsal Susceptibility"),
+            opacity = 0.75) %>%
+  addScaleBar(position = "bottomleft",
+              options = scaleBarOptions(maxWidth = 100,
+                              metric = TRUE,
+                              updateWhenIdle = TRUE))
+
+map
 
 
-
-
-browseurl(map)
-
+pacman::p_unload(map_pckgs, character.only = T)
 
 
 ##### Mean species abundance by site; susceptibility of each spp. is noted as well. ####
 ##    This figure is based on the raw data, not based on any model. (Not sure how 
 ##    useful this figure actually is)
+pacman::p_load(analysis_pckgs, character.only = T)
+pacman::p_load(plot_pckgs, character.only = T)
 # mean spp. abundance by site
 mean_sppAbun <- aggregate(individualCount ~ scientific+Site, d, mean)
 names(mean_sppAbun)[names(mean_sppAbun) == 'individualCount'] <- 'meanSppAbun'
@@ -202,24 +207,35 @@ descriptive <-d %>%
   arrange(Site) %>%
   subset(individualCount != 208 & individualCount != 72)
 
-
 abun <-ggplot(descriptive, aes(x = Site, y = scientific, size = meanSppAbun, colour = susceptibility)) +
-  geom_point(alpha=0.5) +
-  scale_size_area(name = "Mean Species Abundance", limits = c(1,36), breaks = seq(0, 30, 10)) +
+  geom_point(aes(size = meanSppAbun), alpha=0.5) +
+  scale_size_continuous(name = "Mean Species Abundance", range = c(3, 10)) +
   scale_colour_manual(name = "Susceptibility",values = c("#8bd3c7", "#f8ae5d", "#b30000"),
                       labels = c("Resistant", "Tolerant", "Susceptible")) +
   scale_x_discrete(limits = factor(c(0:400)), breaks = c(0, 25, 50, 75, 100, 125, 150, 175, 200, 
                                                          225, 250, 275, 300, 325, 350, 375, 400),
                    labels = c("0", "", "", "", "100", "", "", "", "200", "", "", "", "300", "", "", "", "400")) +
   ylab("Species") +
-  xlab("Site #") +
-  guides(color = guide_legend(override.aes = list(size = 12))) + # increase size of 'susceptibility' legend icons
+  xlab("Site #") + guides(color = guide_legend(override.aes = list(size = 10))) + # increase size of 'susceptibility' legend icons
+  ak_theme + 
   labs(caption = c("Abundance of individual species at each site. Outliers (*e.g.*, instances of a single mass die-off) were removed to better highlight data. 
   Size of each point indicates the site abundance (*i.e.*, how many species total there are at a site for all sampling occurrences). 
   Color indicates the<br>susceptibility level of each species: Resistant (blue) = No to low infection and no clinical signs of disease; Tolerant (orange) = low infection loads with 
-  low or variable mortality; and Susceptible (red) = High infection loads resulting in consistently high mortality.")) + 
-  ak_theme
-abun  
+  low or variable mortality; and Susceptible (red) = High infection loads resulting in consistently high mortality."))
+
+abun
+
+# abun_gp <- ggplotly(abun) %>%
+#  layout(margin = list(l = 0, t = 0, r = 0, b = 0), 
+#         annotations = list(x = -0.5),
+#         showlegend = T,
+#         legend = list(
+#           orientation = "h",
+#           x = -0.5,
+#           y = -1,
+#           side = "top"
+#                      )
+#         )
 
 
 #### Simple model using all data to see how abundant each species is at each site. ####
