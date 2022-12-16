@@ -53,8 +53,9 @@ analysis_pckgs <- c("tidyverse",
 dir <- dirname(rstudioapi::getActiveDocumentContext()$path)
 setwd(dir)
 
-## Load analysis packages
+## Load relevant packages
 pacman::p_load(analysis_pckgs, character.only = T)
+pacman::p_load(plot_pckgs, character.only = T)
 
 ## Load csv files
 d <- read.csv("bsalData_clean.csv", header = T, encoding = "UTF-8")
@@ -89,30 +90,24 @@ d$scientific <- gsub(d$scientific, pattern = "Pelophylax perezi",
 d <- d %>%
   mutate(logsppAbun = log(sppAbun),
          logsiteAbun = log(siteAbun),
-         temp_t0_scaled = scale(temp_date),
-         temp_t1_scaled = scale(temp_date_t1),
-         temp_t2_scaled = scale(temp_date_t2),
-         soilMoisture_t0_scaled = scale(soilMoisture_date),
-         soilMoisture_t1_scaled = scale(soilMoisture_date_t1),
-         soilMoisture_t2_scaled = scale(soilMoisture_date_t2),
-         bio1_scaled = scale(bio1),
-         bio12_scaled = scale(bio12),
          scientific = as.factor(scientific),
-         susceptibility = as.factor(susceptibility))
+         susceptibility = as.factor(susceptibility)) %>%
+  mutate_at(c("temp_date", "temp_date_t1", "temp_date_t2", 
+              "soilMoisture_date", "soilMoisture_date_t1", "soilMoisture_date_t2",
+              "bio1", "bio12", "tavg", "prec"), ~(as.numeric(.) %>% scale(.) %>% as.vector))
+  
+
+
 
 dcbind <- dcbind %>%
   mutate(logsppAbun = log(sppAbun),
          logsiteAbun = log(siteAbun),
-         temp_t0_scaled = scale(temp_date),
-         temp_t1_scaled = scale(temp_date_t1),
-         temp_t2_scaled = scale(temp_date_t2),
-         soilMoisture_t0_scaled = scale(soilMoisture_date),
-         soilMoisture_t1_scaled = scale(soilMoisture_date_t1),
-         soilMoisture_t2_scaled = scale(soilMoisture_date_t2),
-         bio1_scaled = scale(bio1),
-         bio12_scaled = scale(bio12),
          scientific = as.factor(scientific),
-         susceptibility = as.factor(susceptibility))
+         susceptibility = as.factor(susceptibility)) %>%
+  mutate_at(c("temp_date", "temp_date_t1", "temp_date_t2", 
+              "soilMoisture_date", "soilMoisture_date_t1", "soilMoisture_date_t2",
+              "bio1", "bio12", "tavg", "prec"), ~(as.numeric(.) %>% scale(.) %>% as.vector))
+
 
 
 
@@ -145,7 +140,7 @@ d <- d %>%
 pal <- colorFactor(c("#b30000", "#f8ae5d", "#8bd3c7"), domain = c("Susceptible", "Resistant", "Tolerant")) # marker colors
 cols <- c("#b30000", "#f8ae5d", "#8bd3c7") # legend
 labs <- c("Susceptible", "Resistant", "Tolerant") # legend
-d_geo <- geojsonio::geojson_json(d, lat = "decimalLatitude", lon = "decimalLongitude")
+#d_geo <- geojsonio::geojson_json(d, lat = "decimalLatitude", lon = "decimalLongitude")
 
 map <- leaflet(data = d) %>%
   addProviderTiles(provider = "Stamen.TonerLite", group = "Basic Map") %>%
@@ -191,8 +186,6 @@ pacman::p_unload(map_pckgs, character.only = T)
 ##### Mean species abundance by site; susceptibility of each spp. is noted as well. ####
 ##    This figure is based on the raw data, not based on any model. (Not sure how 
 ##    useful this figure actually is)
-pacman::p_load(analysis_pckgs, character.only = T)
-pacman::p_load(plot_pckgs, character.only = T)
 # mean spp. abundance by site
 mean_sppAbun <- aggregate(individualCount ~ scientific+Site, d, mean)
 names(mean_sppAbun)[names(mean_sppAbun) == 'individualCount'] <- 'meanSppAbun'
@@ -225,71 +218,66 @@ abun <-ggplot(descriptive, aes(x = Site, y = scientific, size = meanSppAbun, col
 
 abun
 
-# abun_gp <- ggplotly(abun) %>%
-#  layout(margin = list(l = 0, t = 0, r = 0, b = 0), 
-#         annotations = list(x = -0.5),
-#         showlegend = T,
-#         legend = list(
-#           orientation = "h",
-#           x = -0.5,
-#           y = -1,
-#           side = "top"
-#                      )
-#         )
 
-
-#### Simple model using all data to see how abundant each species is at each site. ####
+#### Simple model using all data to predict species abundance at a given site.####
 ## log Spp Abundance ~ Scientific + (1|Site)
-model1a <- glmmTMB(logsppAbun ~  scientific + (1|Site),
+model1a <- glmmTMB(logsppAbun ~ scientific + (1|Site),
                    data = d,
                    control = glmmTMBControl(optimizer = optim,
                                             optArgs = list(method = "BFGS")))
 summary(model1a)
 Anova(model1a)
 
-m1a <- ggpredict(model1a, terms = "scientific")
 
-p1a <-ggplot(m1a, aes(x , predicted)) +
+m1a <- ggpredict(model1a, terms = "scientific")
+m1a_sim <- simulateResiduals(model1a)
+testResiduals(m1a_sim, plot = T)
+
+p1a <-ggplot(m1a, aes(x , exp(predicted))) +
   geom_point() +
-  geom_errorbar(aes(ymin = conf.low, ymax = conf.high)) +
+  geom_errorbar(aes(ymin = exp(conf.low), ymax = exp(conf.high))) +
   coord_flip() +
-  ylab("Predicted ln(Species Abundance)") +
+  ylab("Predicted Species Abundance") +
   xlab("Species") + scale_x_discrete(expand = expansion(mult = c(0, 0.1), add = c(1, 0))) +
   ak_theme 
 p1a
 
-
+# Simple model to predict species richness at a given site 
 model1b <- glmmTMB(richness ~  scientific + (1|Site),
-                   data = d,
+                   data = d, family = nbinom1,
                    control = glmmTMBControl(optimizer = optim,
                                             optArgs = list(method = "BFGS")))
 summary(model1b)
 Anova(model1b)
 
 m1b <- ggpredict(model1b, terms = "scientific")
+m1b_sim <- simulateResiduals(model1b)
+testResiduals(m1b_sim, plot = T)
 
 p1b <-ggplot(m1b, aes(x , predicted)) +
   geom_point() +
   geom_errorbar(aes(ymin = conf.low, ymax = conf.high)) +
   coord_flip() +
   ylab("Predicted Species Richness") + 
-  xlab("") + scale_x_discrete(labels = NULL) +
+  xlab("")  + 
   ak_theme
 p1b
 
-p1combined <- (p1a|p1b) + plot_layout(guides = "collect")
+p1combined <- (p1a|p1b) + plot_layout(guides = "collect") + 
+  labs(caption = c(""))
+
 p1combined
 
 #### Model to see how disease prevalence (both Bd and Bsal) at each site is influenced by species presence. ####
 ## Bsal only model had issues converging
-model2 <- glmmTMB(cbind(YesDisease, NoDisease) ~  scientific + whichDisease + (1|Site),
+model2 <- glmmTMB(cbind(YesDisease, NoDisease) ~  scientific + (1|Site),
                   data = dcbind, family = "binomial",
                   control = glmmTMBControl(optimizer = optim,
                                            optArgs = list(method = "BFGS")))
 summary(model2)
 Anova(model2)
 
-m2 <- ggpredict(model2, terms = c("scientific", "whichDisease"))
+m2 <- ggpredict(model2, terms = c("scientific"))
 
 ## Check model residuals
 m2_sim <- simulateResiduals(model2)
@@ -299,122 +287,131 @@ testZeroInflation(m2_sim, plot = T)
 testOutliers(m2_sim, type = "bootstrap", plot = T)
 plot(m2_sim)
 
+# Remove species with insane confidence intervals for better plot visualization
+m2_filtered <- m2 %>%
+  dplyr::mutate(x = as.character(x)) %>%
+  dplyr::filter(!(x == "Triturus anatolicus x marmoratus") &
+                !(x == "Pleurodeles waltl") &
+                !(x == "Pelophylax perezi") &
+                !(x == "Pelobates cultripes") &
+                !(x == "Lissotriton boscai") &
+                !(x == "Hyla meridionalis") &
+                !(x == "Discoglossus pictus") &
+                !(x == "Bufo spinosus") &
+                !(x == "Bufo bufo") &
+                !(x == "Alytes obstetricans"))
+
+
 p2 <- ggplot(m2, aes(x , (predicted*100))) +
-  geom_point() +
-  #  geom_errorbar(aes(ymin = conf.low, ymax = conf.high)) +
+  geom_jitter(size = 3, position = position_dodge(width = 0.5)) +
+  geom_errorbar(aes(ymin = (conf.low*100), ymax = (conf.high*100)), 
+                position = position_dodge(width = 0.5),
+                width = 2) +
   coord_flip() +
   ylab("Disease Prevalence (%)") +
-  xlab("Species") + ak_theme + theme(axis.title.x = element_text(size = 24, hjust = 0.9),
-                                     axis.title.y = element_text(size = 24, hjust = 0.9))
+  xlab("Species") + ak_theme
+  
 p2
 
-
-prev <-ggplot(m2, aes(x = (predicted*100), y = x)) +
-  geom_point(alpha=0.5) +
-  ylab("Species") +
-  xlab("Disease Prevalence") +
-  ak_theme
-prev
 
 #### Models to test whether the most susceptible hosts (susceptibility score 3) are the most abundant ####
 ##   and whether the least susceptible or resistant hosts (susceptibility score 1) are rare hosts.  
 
 ## T0 (Weather data from the date of sample observation)
-model3a <- glmmTMB(logsppAbun ~  as.factor(susceptibility) + scale(temp_date)*scale(soilMoisture_date) + (1|Site),
+model3a <- glmmTMB(logsppAbun ~  susceptibility + temp_date*soilMoisture_date + (1|Site),
                    data = d,
                    control = glmmTMBControl(optimizer = optim,
                                             optArgs = list(method = "BFGS")))
 print(summary(model3a))
 print(Anova(model3a))
-m3a <- ggpredict(model3a, terms = c("susceptibility", "temp_date[5, 15, 25]", "soilMoisture_date[1, 3, 6]"))
+m3a <- ggpredict(model3a, terms = c("susceptibility", "temp_date", "soilMoisture_date"))
 
 
 ## T-1 (Weather data from one month prior (i.e., 30 days) to the date of sample observation) 
-model3b <- glmmTMB(logsppAbun ~  as.factor(susceptibility) + scale(temp_date_t1)*scale(soilMoisture_date_t1) + (1|Site),
+model3b <- glmmTMB(logsppAbun ~  susceptibility + temp_date_t1*soilMoisture_date_t1 + (1|Site),
                    data = d,
                    control = glmmTMBControl(optimizer = optim,
                                             optArgs = list(method = "BFGS")))
 print(summary(model3b))
 print(Anova(model3b))
-m3b <- ggpredict(model3b, terms = c("susceptibility", "temp_date_t1[5, 15, 25]", "soilMoisture_date_t1[1, 3, 6]"))
+m3b <- ggpredict(model3b, terms = c("susceptibility", "temp_date_t1", "soilMoisture_date_t1"))
 
 
 ## T-2 (Weather data from two months prior (i.e., 30 days) to the date of sample observation) 
-model3c <- glmmTMB(logsppAbun ~  as.factor(susceptibility) + scale(temp_date_t2)*scale(soilMoisture_date_t2) + (1|Site),
+model3c <- glmmTMB(logsppAbun ~ susceptibility + temp_date_t2*soilMoisture_date_t2 + (1|Site),
                    data = d,
                    control = glmmTMBControl(optimizer = optim,
                                             optArgs = list(method = "BFGS")))
 print(summary(model3c))
 print(Anova(model3c))
-m3c <- ggpredict(model3c, terms = c("susceptibility", "temp_date_t2[5, 15, 25]", "soilMoisture_date_t2[1, 3, 6]"))
+m3c <- ggpredict(model3c, terms = c("susceptibility", "temp_date_t2", "soilMoisture_date_t2"))
 
 
 ## Abundance ~ Susceptibility + Temp*Precip 
-model3d <- glmmTMB(logsppAbun ~  as.factor(susceptibility) + scale(tavg)*scale(prec) + (1|Site),
+model3d <- glmmTMB(logsppAbun ~ susceptibility + tavg*prec + (1|Site),
                    data = d,
                    control = glmmTMBControl(optimizer = optim,
                                             optArgs = list(method = "BFGS")))
 print(summary(model3d))
 print(Anova(model3d))
 #m3d <- ggpredict(model3d, terms = c("susceptibility", "bio1[5, 10, 15]", "bio12[70, 85, 100]"))
-m3d <- ggpredict(model3d, terms = c("susceptibility", "tavg[5, 10, 15]", "prec[5, 7, 9]"))
+m3d <- ggpredict(model3d, terms = c("susceptibility", "tavg", "prec"))
 
 
-## Model 3 Plots
-p3a <- ggplot(m3a, aes(x, predicted, colour = group, shape = facet)) +
+
+
+
+p3a <- ggplot(m3a, aes(x, exp(predicted), colour = group, shape = facet)) +
   geom_jitter(size = 4, alpha = 0.85, position = position_jitter(width = 0.2, height = 0.2, seed = 123)) +
-  geom_errorbar(aes(ymin = conf.low, ymax = conf.high),
+  geom_errorbar(aes(ymin = exp(conf.low), ymax = exp(conf.high)),
                 width = 0.1, position = position_jitter(width = 0.2, height = 0.2, seed = 123)) +
   scale_shape_manual(name = bquote("Soil Moisture (kg/m"^2~")"), 
                      values = c(15, 16, 17)) +
   scale_colour_manual(name = expression("Temperature (°C)"),
                       values = c("#032349", "#f7c331", "#c4001f")) +
-  labs(title = bquote("Time T"[(0)])) +
-  ylab("ln(Species Abundance)") +
-  ylim(-1.7, 4) +
+  labs(title = "Time T0")
+  ylab("Species Abundance") +
   xlab("Susceptibility Level") +
   scale_x_discrete(labels = c("Low","Med","High"),
                    limits = factor(c(1:3))) +
   guides(color = guide_legend(override.aes = list(size = 5))) + ak_theme 
 p3a
 
-p3b <- ggplot(m3b, aes(x, predicted, colour = group, shape = facet)) +
+p3b <- ggplot(m3b, aes(x, exp(predicted), colour = group, shape = facet)) +
   geom_jitter(size = 4, alpha = 0.85, position = position_jitter(width = 0.2, height = 0.2, seed = 123)) +
-  geom_errorbar(aes(ymin = conf.low, ymax = conf.high),
+  geom_errorbar(aes(ymin = exp(conf.low), ymax = exp(conf.high)),
                 width = 0.1, position = position_jitter(width = 0.2, height = 0.2, seed = 123)) +
   scale_shape_manual(name = bquote("Soil Moisture (kg/m"^2~")"), 
                      values = c(15, 16, 17)) +
   scale_colour_manual(name = expression("Temperature (°C)"),
                       values = c("#032349", "#f7c331", "#c4001f")) +
-  labs(title = bquote("Time T"[(-1)])) +
-  ylab("") +
-  ylim(-1.7, 4) +
+  labs(title = "Time T-1") +
+  ylab("Species Abundance") +
   xlab("Susceptibility Level") +
   scale_x_discrete(labels = c("Low","Med","High"),
                    limits = factor(c(1:3))) +
   guides(color = guide_legend(override.aes = list(size = 5))) + ak_theme
 p3b
 
-p3c <- ggplot(m3c, aes(x, predicted, colour = group, shape = facet)) +
+p3c <- ggplot(m3c, aes(x, exp(predicted), colour = group, shape = facet)) +
   geom_jitter(size = 4, alpha = 0.85, position = position_jitter(width = 0.2, height = 0.2, seed = 123)) +
-  geom_errorbar(aes(ymin = conf.low, ymax = conf.high),
+  geom_errorbar(aes(ymin = exp(conf.low), ymax = exp(conf.high)),
                 width = 0.1, position = position_jitter(width = 0.2, height = 0.2, seed = 123)) +
   scale_shape_manual(name = bquote("Soil Moisture (kg/m"^2~")"), 
                      values = c(15, 16, 17)) +
   scale_colour_manual(name = expression("Temperature (°C)"),
                       values = c("#032349", "#f7c331", "#c4001f")) +
-  labs(title = bquote("Time T"[(-2)])) +
-  ylab("") +
-  ylim(-1.7, 4) +
+  labs(title = "Time T-2") +
+  ylab("Species Abundance") +
   xlab("Susceptibility Level") +
   scale_x_discrete(labels = c("Low","Med","High"),
                    limits = factor(c(1:3))) +
   guides(color = guide_legend(override.aes = list(size = 5))) + ak_theme
 p3c
 
-p3d <- ggplot(m3d, aes(x, predicted, colour = group, shape = facet)) +
+p3d <- ggplot(m3d, aes(x, exp(predicted), colour = group, shape = facet)) +
   geom_jitter(size = 4, alpha = 1, position = position_jitter(width = 0.2, height = 0.2, seed = 123)) +
-  geom_errorbar(aes(ymin = conf.low, ymax = conf.high),
+  geom_errorbar(aes(ymin = exp(conf.low), ymax = exp(conf.high)),
                 width = 0.1, position = position_jitter(width = 0.2, height = 0.2, seed = 123)) +
   scale_shape_manual(name = expression("Precipitation (cm)"), 
                      values = c(18, 21, 22)) +
@@ -423,7 +420,7 @@ p3d <- ggplot(m3d, aes(x, predicted, colour = group, shape = facet)) +
   labs(title = "Climatic Variables (Monthly Average)") +
   scale_y_continuous(labels = c("0.5"," 1.5", "2.5"),
                      breaks = c(0.5, 1.5, 2.5))+
-  ylab("ln(Species Abundance)") +
+  ylab("Species Abundance") +
   xlab("Susceptibility Level") +
   scale_x_discrete(labels = c("Low","Med","High"),
                    limits = factor(c(1:3))) +
@@ -432,15 +429,15 @@ p3d
 
 
 
-weather_combined <- p3a|p3b|p3c
-combined <- (weather_combined + plot_layout(guides = "collect") & theme(legend.position = "bottom"))/p3d
-combined
+weather_combined <- p3a/p3b/p3c + plot_layout(guides = "collect" &
+                                              theme(legend.position = "bottom"))
+weather_combined
 
 
 
 ##### Bsal Detected Full Model (Excluding I. alpestris) #####
 ## Full model at time T0 (Weather data from the date of sample observation)
-model4a <- glmmTMB(BsalDetected ~ logsiteAbun*richness + scale(temp_date)*scale(soilMoisture_date) +
+model4a <- glmmTMB(BsalDetected ~ logsiteAbun*richness + temp_date*soilMoisture_date +
                      (1|scientific),
                    family = "binomial",
                    data = d_alpestris,
@@ -458,37 +455,30 @@ testOutliers(m4a_sim, type = "bootstrap", plot = T)
 plot(m4a_sim)
 
 ## Plot
-p4a <-plot_model(model4a, type = "eff", terms = c("richness", "logsiteAbun[1, 2, 4]"),
+p4a <-plot_model(model4a, type = "eff", terms = c("richness", "logsiteAbun"),
                  axis.title = c("Host Richness", "Bsal Prevalence (%)"),
                  legend.title = c("ln(Site Level Host Abundance)"),
-                 title = bquote("Time T"[(0)]),
+                 title = "Time T0",
                  colors = "bw",
                  ci.lvl = NA) + 
-  scale_x_continuous(labels = seq(0, 10, 1),
-                     breaks = seq(0, 10, 1)) +
   ak_theme
 p4a 
 
 p4a.2 <- plot_model(model4a, type = "eff", terms = c("temp_date", "soilMoisture_date"),
                     axis.title = c("Temperature (°C)", "Bsal prevalence (%)"),
                     legend.title = bquote("Soil Moisture (kg/m"^2~")"),
-                    title = bquote("Time T"[(0)]),
+                    title = bquote("Time T0"),
                     show.data=FALSE,
                     colors = "bw",
                     ci.lvl = NA) + 
-  scale_x_continuous(labels = seq(-10, 25, 5),
-                     breaks = seq(-10, 25, 5)) +
   scale_y_continuous(limits = c(0, 0.03),
                      breaks = seq(0, 0.03, 0.01),
                      labels = scales::percent_format(accuracy = 1)) +
   ak_theme
 p4a.2
 
-p4a_combined <- p4a/p4a.2
-p4a_combined
 
-
-model4b <- glmmTMB(BsalDetected ~ logsiteAbun*richness + scale(temp_date_t1)*scale(soilMoisture_date_t1) +
+model4b <- glmmTMB(BsalDetected ~ logsiteAbun*richness + temp_date_t1*soilMoisture_date_t1 +
                      (1|scientific),
                    family = "binomial",
                    data = d_alpestris,
@@ -509,11 +499,9 @@ plot(m4b_sim)
 p4b <-plot_model(model4b, type = "eff", terms = c("richness", "logsiteAbun[1, 2, 4]"),
                  axis.title = c("Host Richness", "Bsal Prevalence (%)"),
                  legend.title = c("ln(Site Level Host Abundance)"),
-                 title = bquote("Time T"[(-1)]),
+                 title = "Time T-1",
                  colors = "bw",
                  ci.lvl = NA) + 
-  scale_x_continuous(labels = seq(0, 10, 1),
-                     breaks = seq(0, 10, 1)) +
   scale_y_continuous(limits = c(0, 0.04),
                      breaks = seq(0, 0.04, 0.01), 
                      labels = scales::percent_format(accuracy = 1)) +
@@ -523,23 +511,18 @@ p4b
 p4b.2 <- plot_model(model4b, type = "eff", terms = c("temp_date_t1", "soilMoisture_date_t1"),
                     axis.title = c("Temperature (°C)", "Bsal prevalence (%)"),
                     legend.title = bquote("Soil Moisture (kg/m"^2~")"),
-                    title = bquote("Time T"[(-1)]),
+                    title = "Time T-1",
                     show.data=FALSE,
                     colors = "bw",
                     ci.lvl = NA) + 
-  scale_x_continuous(labels = seq(-10, 30, 10),
-                     breaks = seq(-10, 30, 10)) +
   scale_y_continuous(limits = c(0, 0.15),
                      breaks = seq(0, 0.15, 0.05),
                      labels = scales::percent_format(accuracy = 1)) +
   ak_theme
 p4b.2
 
-p4b_combined <- p4b/p4b.2
-p4b_combined
 
-
-model4c <- glmmTMB(BsalDetected ~ logsiteAbun*richness + scale(temp_date_t2)*scale(soilMoisture_date_t2) +
+model4c <- glmmTMB(BsalDetected ~ logsiteAbun*richness + temp_date_t2*soilMoisture_date_t2 +
                      (1|scientific),
                    family = "binomial",
                    data = d_alpestris,
@@ -560,77 +543,29 @@ plot(m4c_sim)
 p4c <-plot_model(model4c, type = "eff", terms = c("richness", "logsiteAbun"),
                  axis.title = c("Host Richness", "Bsal Prevalence (%)"),
                  legend.title = c("ln(Site Level Host Abundance)"),
-                 title = bquote("Time T"[(-1)]),
+                 title = "Time T -1",
                  colors = "bw",
                  ci.lvl = NA) + 
-  scale_x_continuous(labels = seq(0, 10, 1),
-                     breaks = seq(0, 10, 1)) +
-  scale_y_continuous(limits = c(0, 0.04),
-                     breaks = seq(0, 0.04, 0.01),
-                     labels = scales::percent_format(accuracy = 1)) +
   ak_theme
 p4c 
 
 p4c.2 <- plot_model(model4c, type = "eff", terms = c("temp_date_t2", "soilMoisture_date_t2"),
                     axis.title = c("Temperature (°C)", "Bsal prevalence (%)"),
                     legend.title = bquote("Soil Moisture (kg/m"^2~")"),
-                    title = bquote("Time T"[(-2)]),
+                    title = "Time T-2",
                     show.data=FALSE,
                     colors = "bw",
                     ci.lvl = NA) + 
-  scale_x_continuous(labels = seq(-10, 30, 10),
-                     breaks = seq(-10, 30, 10)) +
-  scale_y_continuous(limits = c(0.005, 0.03),
-                     breaks = seq(0.005, 0.03, 0.005),
-                     labels = scales::percent_format(accuracy = 0.1)) +
   ak_theme
+
 p4c.2
-p4c_combined <- p4c/p4c.2
-p4c_combined
 
 
-#### Only Species with Bsal* no Site as random -- Run w/ species that have ever had Bsal. ####
-model5 <- glmmTMB(BsalDetected ~ logsiteAbun*richness + scale(temp_date)*scale(soilMoisture_date) +
-                    (1|scientific),
-                  family = "binomial",
-                  data = subset(d_alpestris, BsalDetected == 1),
-                  control = glmmTMBControl(optimizer = optim,
-                                           optArgs = list(method = "BFGS")))
-
-summary(model5)
-Anova(model5)
-m5_sim <- simulateResiduals(model5)
-testResiduals(m5_sim, plot = T)
-
-p5a <-plot_model(
-  model4, 
-  type = "pred", 
-  terms = c("richness", "logsiteAbun"),
-  axis.title = c("Host richness", "Bsal prevalence across all salamander species"),
-  legend.title = c("Ln site-level host abundance"),
-  title = "",
-  colors = "bw",
-  ci.lvl = NA
-)
-p5a
-
-p5b <- plot_model(
-  modelb, 
-  type = "pred", 
-  terms = c("temp_date", "soilMoist_date"),
-  axis.title = c("Temperature (C)", "Bsal prevalence across all salamander species"),
-  legend.title=c("Soil Moisture (kg/m^2"),
-  title = "",
-  show.data=FALSE,
-  colors = "bw",
-  ci.lvl = NA
-)
-p5b
 
 
 #### Fatality models with Fire Salamanders only. ####
 # With weather data
-model6a <- glmmTMB(fatal ~ diseaseDetected*scale(temp_date),
+model6a <- glmmTMB(fatal ~ BsalDetected*temp_date,
                    family = "binomial",
                    data = subset(d, scientific =="Salamandra salamandra"),
                    control = glmmTMBControl(optimizer = optim,
@@ -642,7 +577,7 @@ m6a_sim <- simulateResiduals(model6a)
 testResiduals(m6a_sim, plot = T)
 
 # With climate data (annual trends)
-model6b <- glmmTMB(fatal ~ diseaseDetected*scale(bio1),
+model6b <- glmmTMB(fatal ~ BsalDetected*bio1,
                    family = "binomial",
                    data = subset(d, scientific =="Salamandra salamandra"),
                    control = glmmTMBControl(optimizer = optim,
@@ -654,7 +589,7 @@ m6b_sim <- simulateResiduals(model6b)
 testResiduals(m6b_sim, plot = T)
 
 # With climate data (monthly trends)
-model6c <- glmmTMB(fatal ~ diseaseDetected*scale(tavg),
+model6c <- glmmTMB(fatal ~ diseaseDetected*tavg,
                    family = "binomial",
                    data = subset(d, scientific =="Salamandra salamandra"),
                    control = glmmTMBControl(optimizer = optim,
@@ -711,7 +646,7 @@ p6b
 
 
 #### Cbind full model with "scientific" as random effect ####
-cbind_m1 <- glmmTMB(cbind(YesBsal, NoBsal) ~ logsiteAbun*richness + scale(temp_date_t1)*scale(soilMoisture_date_t1) +
+cbind_m1 <- glmmTMB(cbind(YesBsal, NoBsal) ~ logsiteAbun*richness + temp_date_t1*soilMoisture_date_t1 +
                       (1|scientific),
                     family = "binomial",
                     data = dcbind_alpestris,
@@ -738,7 +673,7 @@ cb_p1a
 cb_p1b <- plot_model(
   cbind_m1, 
   type = "pred", 
-  terms = c("temp_date_t1", "soilMoisture_date_t1"),
+  terms = c("temp_date_t1[all]", "soilMoisture_date_t1"),
   axis.title = c("Temperature (C)", "Bsal prevalence across all salamander species"),
   legend.title=c("Soil Moisture (kg/m^2)"),
   title = "",
@@ -752,7 +687,7 @@ cb_p1b
 #### Cbind model on fire salamanders only. ####
 ## With weather data
 cbind_m2a <- glmmTMB(cbind(YesBsal, NoBsal) ~ logsiteAbun*richness +
-                       scale(temp_date)*scale(soilMoisture_date),
+                       temp_date*soilMoisture_date,
                      family = "binomial",
                      data = subset(dcbind, scientific =="Salamandra salamandra"),
                      control = glmmTMBControl(optimizer = optim,
@@ -766,7 +701,7 @@ testResiduals(cbind_m2a_sim, plot = T)
 
 ## With climate data (annual trends)
 cbind_m2b <- glmmTMB(cbind(YesBsal, NoBsal) ~ logsiteAbun*richness +
-                       scale(bio1)*scale(bio12),
+                       bio1*bio12,
                      family = "binomial",
                      data = subset(dcbind, scientific =="Salamandra salamandra"),
                      control = glmmTMBControl(optimizer = optim,
@@ -779,7 +714,7 @@ testResiduals(cbind_m2b_sim, plot = T)
 
 ## With climate data (monthly trends)
 cbind_m2c <- glmmTMB(cbind(YesBsal, NoBsal) ~ logsiteAbun*richness +
-                       scale(tavg)*scale(prec),
+                       tavg*prec,
                      family = "binomial",
                      data = subset(dcbind, scientific =="Salamandra salamandra"),
                      control = glmmTMBControl(optimizer = optim,
@@ -835,7 +770,7 @@ cbp2c
 
 #### Cbind fatality models with Fire Salamanders only. ####
 # With weather data
-cbind_m3a <- glmmTMB(fatal ~ cbind(YesBsal, NoBsal)*scale(temp_date)*scale(soilMoisture_date),
+cbind_m3a <- glmmTMB(fatal ~ YesBsal*temp_date*soilMoisture_date,
                      family = "binomial",
                      data = subset(dcbind, scientific =="Salamandra salamandra"),
                      control = glmmTMBControl(optimizer = optim,
@@ -848,7 +783,7 @@ cbind_m3a_sim <- simulateResiduals(cbind_m3a)
 testResiduals(cbind_m3a_sim, plot = T)
 
 # With climate data (average annual temp)
-cbind_m3b <- glmmTMB(fatal ~ YesBsal*scale(bio1)*scale(bio12),
+cbind_m3b <- glmmTMB(fatal ~ YesBsal*bio1*bio12,
                      family = "binomial",
                      data = subset(dcbind, scientific =="Salamandra salamandra"),
                      control = glmmTMBControl(optimizer = optim,

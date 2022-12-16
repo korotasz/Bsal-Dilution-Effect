@@ -1,0 +1,268 @@
+---
+title: "Untitled"
+author: "Alexis Korotasz"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+#remotes::install_version("Rttf2pt1", version = "1.3.8") # install this version, latest ver. not compatible
+#extrafont::font_import() # load fonts before ggplot2; only need to do this once
+require(pacman)
+require(rstudioapi) # Set working directory to current file location
+require(extrafont) 
+extrafont::loadfonts(device = "win", quiet = T) # plot fonts
+#### Plot Specific Packages ####
+plot_pckgs <- c("tidyverse",
+                "sjPlot",
+                "ggeffects",
+                "Rttf2pt1", # to use with the extrafont package
+                "ggtext", # for text type/arrangements w/ ggplot2
+                "hrbrthemes", # plot colors
+                "patchwork", # arranging figures
+                "ggsignif", # adds labels to significant groups
+                "RColorBrewer",
+                "colorspace", # color scale
+                "viridis", # arranging figures
+                "plotly" # interactive plots
+)
+
+#### Map Specific Packages ####
+map_pckgs <- c("tidyverse",
+               "htmltools",
+               "stars", # spatiotemporal data handling
+               "RColorBrewer",
+               "ggspatial", # north arrow and scale bar,
+               "raster", # raster data handling
+               "sf", # vector data handling
+               "sp", 
+               "leaflet", # making interactive maps
+               "leaftime", # add time scale to map
+               "geojsonio",
+               "geojsonlint" # validate GeoJSON and display it on a map
+)
+
+#### Analysis Specific Packages ####
+analysis_pckgs <- c("tidyverse",
+                    "data.table", # data wrangling
+                    "glmmTMB", # glmmTMB()
+                    "car", # Anova()
+                    "DHARMa", # simulateResiduals(), testZeroInflation(), testDispersion()
+                    "lme4", # lm()
+                    "MASS", # negative binomial models
+                    "sjPlot" # plot_model()
+)
+
+
+
+
+#### ####
+## Set working directory
+dir <- dirname(rstudioapi::getActiveDocumentContext()$path)
+setwd(dir)
+
+## Load relevant packages
+pacman::p_load(analysis_pckgs, character.only = T)
+pacman::p_load(plot_pckgs, character.only = T)
+
+## Load csv files
+d <- read.csv("bsalData_clean.csv", header = T, encoding = "UTF-8")
+dcbind <- read.csv("bsalData_cbind.csv", header = T, encoding = "UTF-8")
+
+## Set plot theme
+ak_theme <- theme_ipsum() +
+  theme(axis.text.x = element_text(size = 18),
+        axis.title.x = element_text(size = 24, hjust = 0.5, margin = margin(t = 15, r = 0, b = 0, l = 0), face = "plain"),
+        axis.text.y = element_text(size = 18),
+        axis.title.y = element_text(size = 24, hjust = 0.5, margin = margin(t = 0, r = 15, b = 0, l = 5), face = "plain"),
+        plot.title = element_markdown(hjust = c(0, -1), size = 32, face = "plain"),
+        plot.subtitle = element_markdown(size = 12, face = "plain"),
+        plot.margin = margin(6, 12, 2, 2, "pt"), 
+        plot.caption = element_markdown(hjust = 0, size = 14, face = "plain"),
+        plot.caption.position = "plot",
+        legend.position = "bottom", legend.text = element_text(hjust = -1, size = 14),
+        legend.spacing = unit(1, "cm"), # Space legend labels
+        legend.key.size = unit(1,"cm"), 
+        legend.text.align = 1,
+        legend.title = element_text(size = 14, face = "bold"), 
+        panel.border = element_blank(),
+        panel.background = element_blank(),
+        axis.line = element_line(color = 'black'))
+
+
+## Include Pelophylax perezi data  (5 rows) into Pelophylax sp.
+d$scientific <- gsub(d$scientific, pattern = "Pelophylax perezi",
+                     replacement = "Pelophylax sp.")
+
+# log transform + scale vars
+d <- d %>%
+  mutate(logsppAbun = log(sppAbun),
+         logsiteAbun = log(siteAbun),
+         scientific = as.factor(scientific),
+         susceptibility = as.factor(susceptibility)) %>%
+  mutate_at(c("temp_date", "temp_date_t1", "temp_date_t2", 
+              "soilMoisture_date", "soilMoisture_date_t1", "soilMoisture_date_t2",
+              "bio1", "bio12", "tavg", "prec"), ~(as.numeric(.) %>% scale(.) %>% as.vector))
+  
+
+
+
+dcbind <- dcbind %>%
+  mutate(logsppAbun = log(sppAbun),
+         logsiteAbun = log(siteAbun),
+         scientific = as.factor(scientific),
+         susceptibility = as.factor(susceptibility)) %>%
+  mutate_at(c("temp_date", "temp_date_t1", "temp_date_t2", 
+              "soilMoisture_date", "soilMoisture_date_t1", "soilMoisture_date_t2",
+              "bio1", "bio12", "tavg", "prec"), ~(as.numeric(.) %>% scale(.) %>% as.vector))
+
+```
+
+1) Descriptive Figures
+   a. Species by abundance
+```{r}
+m1a <- glmmTMB(logsppAbun ~  scientific + (1|Site),
+                  data = d,
+                  control = glmmTMBControl(optimizer = optim,
+                                           optArgs = list(method = "BFGS")))
+summary(m1a)
+Anova(m1a)
+m1a_predict <- ggpredict(m1a, terms = "scientific")
+
+m1a_plot <- ggplot(m1a_predict, aes(x , exp(predicted))) +
+  geom_point() +
+  geom_errorbar(aes(ymin = exp(conf.low), ymax = exp(conf.high))) +
+  coord_flip() +
+  ylab("Species Abundance") +
+  xlab("Species") + scale_x_discrete(expand = expansion(mult = c(0, 0.1), add = c(1, 0))) +
+  ak_theme +
+  labs(caption = c("Predicted species abundance by species. Error bars represent 95% confidence intervals."))
+
+m1a_plot
+
+
+
+```
+   b. Prevalence ~ Species (excluded spp. that only tested negative)
+```{r}
+
+m1b <- glmer(BsalDetected ~  scientific + (1|Site),
+                  data = d, family = "binomial")
+               
+                  
+summary(m1b)
+Anova(m1b)
+
+m1b_plot <- plot_model(m1b, 
+                       type = "eff", 
+                       terms = "scientific",
+                       show.data = T,
+                       ci.lvl = NA,
+                       axis.title = c("Species", "Bsal Detected"),
+  ) +
+#  ylab("Bsal Detected") +
+#  xlab("Species")  +
+  coord_flip() +
+  labs(title = "") +
+  ak_theme 
+
+
+m1b_plot
+
+
+#prev <- d %>% 
+#    group_by(scientific) %>% 
+#    summarise(Prevalence = sum(BsalDetected)/n())
+
+```
+
+   c. Susceptibility by abundance
+```{r}
+
+```
+
+   d. Maps
+```{r}
+pacman::p_load(map_pckgs, character.only = T)
+
+d <- d %>%
+  mutate(color = case_when(
+    susceptibility == "1" ~ "Resistant",
+    susceptibility == "2" ~ "Tolerant",
+    susceptibility == "3" ~ "Susceptible"
+  ),
+  fatalStatus = case_when(
+    fatal == "1" ~ "Dead",
+    fatal == "0" ~ "Alive",
+    is.na(fatal) == T ~ "Unk")
+  )
+
+## Interactive Map
+pal <- colorFactor(c("#b30000", "#f8ae5d", "#8bd3c7"), domain = c("Susceptible", "Resistant", "Tolerant")) # marker colors
+cols <- c("#b30000", "#f8ae5d", "#8bd3c7") # legend
+labs <- c("Susceptible", "Resistant", "Tolerant") # legend
+#d_geo <- geojsonio::geojson_json(d, lat = "decimalLatitude", lon = "decimalLongitude")
+
+map <- leaflet(data = d) %>%
+  addProviderTiles(provider = "Stamen.TonerLite", group = "Basic Map") %>%
+  addProviderTiles(provider = "Esri.WorldImagery", group = "World Imagery") %>%
+  addLayersControl(baseGroups = c("Basic Map", "World Imagery")) %>%
+  addCircleMarkers(lng = d$decimalLongitude, lat = d$decimalLatitude,
+    radius = 10,
+    color = ~pal(d$color),
+    fillOpacity = ifelse(d$fatalStatus == "Alive", 1, 0.5),
+    stroke = FALSE,
+    clusterOptions = markerClusterOptions(),
+    label = d$scientific,
+    labelOptions = labelOptions(direction = "auto", offset = c(0,0),
+                                style = list("color" = "black",
+                                             "font-family" = "sans-serif",
+                                             "font-style" = "italic",
+                                             "font-weight" = "bold",
+                                             "box-shadow" = "1px 1px rgba(0,0,0,0.25)",
+                                             "font-size" = "12px",
+                                             "padding" = "4px"
+                                             )),
+    popup = paste("<b>Site:</b>", d$Site, "<br>",
+                  "<b>Bsal Detected:</b>", ifelse(d$BsalDetected == 1, "Yes", "No"), "<br>",
+                  "<b>Bd Detected:</b>", ifelse(d$BdDetected == 1, "Yes", "No"), "<br>",
+                  "<b>Status:</b>", d$fatalStatus)) %>%
+  setView(lat = 47.81757743622691, lng = 6.5171597480332135, zoom = 4) %>%
+  addLegend(position = "bottomleft",
+            colors = ~cols,
+            labels = ~labs,
+            title = paste("Bsal Susceptibility"),
+            opacity = 0.75) %>%
+  addScaleBar(position = "bottomleft",
+              options = scaleBarOptions(maxWidth = 100,
+                              metric = TRUE,
+                              updateWhenIdle = TRUE))
+
+map
+
+
+pacman::p_unload(map_pckgs, character.only = T)
+
+```
+
+
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
