@@ -254,7 +254,7 @@ abun
 
 ```
 
-   d. Maps
+   d. Interactive Map
 ```{r}
 pacman::p_load(map_pckgs, character.only = T)
 
@@ -314,7 +314,57 @@ map <- leaflet(data = d) %>%
 map
 
 
-pacman::p_unload(map_pckgs, character.only = T)
+```
+
+   d. Static Maps
+```{r}
+# Code for Europe map with points for each site
+library(mapproj)
+
+v.europe <- c("Norway", "Sweden", "Finland", "Denmark", "United Kingdom","Ireland", "Greece",
+              "Belgium", "Netherlands", "France", "Spain", "Portugal", "Luxembourg", "Croatia",
+              "Germany", "Switzerland", "Austria", "Slovenia", "Italy", "Bulgaria", "Romania",
+              "Czech Rep.", "Slovakia", "Hungary", "Poland", "Bosnia Hercegovina", "Serbia",
+              "Turkey", "Ukraine", "Moldova", "Belarus", "Estonia", "Latvia", "Lithuania",
+              "Montenegro", "Albania", "Macedonia", "UK")
+
+wmap <- map_data("world") %>%
+  filter(region %in% v.europe)
+
+# Aggregate observations to the site level
+d2 <- d %>%
+  group_by(Site, decimalLongitude, decimalLatitude) %>%
+  summarize(Abundance = sum(individualCount),
+            Richness = length(unique(scientific)),
+            Bsal = ifelse(sum(BsalDetected) > 0,
+                          "Detected",
+                          "Not detected"))
+
+# Adding the geom_rect for the inset box takes a bit; comment out for faster mapping
+ggplot(wmap, aes(x = long, y = lat)) +
+  geom_polygon(aes(group = group), fill = NA, colour = "grey60")+
+  geom_point(data = d2, aes(x = decimalLongitude, y = decimalLatitude,
+                            fill = Bsal, alpha = Bsal),
+             shape = 21, size = 3)+
+  scale_alpha_manual(values = c(1,.3))+
+  geom_rect(aes(xmin = 2.5, xmax = 11,
+                ymin = 49, ymax = 52.5),
+            color = "red", linewidth = 1, fill = NA)+
+  coord_map(ylim = c(35,60), xlim = c(-10,15))+
+  theme_bw()
+
+
+ggplot(wmap, aes(x = long, y = lat)) +
+  geom_polygon(aes(group = group), fill = NA, colour = "grey60")+
+  geom_point(data = d2, aes(x = decimalLongitude, y = decimalLatitude,
+                            fill = Bsal, alpha = Bsal),
+             shape = 21, size = 3)+
+  scale_alpha_manual(values = c(1,.3))+
+  coord_map(ylim = c(49.1,52.1), xlim = c(3,11))+
+  theme_bw()
+
+
+
 
 ```
 
