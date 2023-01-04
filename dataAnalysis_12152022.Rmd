@@ -99,17 +99,17 @@ d <- d %>%
   mutate(logsppAbun = log(sppAbun),
          logsiteAbun = log(siteAbun),
          scientific = as.factor(scientific),
-         susceptibility = as.factor(susceptibility),
-         temp_date_scaled = scale(temp_date), 
-         temp_date_t1_scaled = scale(temp_date_t1), 
-         temp_date_t2_scaled = scale(temp_date_t2), 
-         soilMoisture_date_scaled = scale(soilMoisture_date), 
-         soilMoisture_date_t1_scaled = scale(soilMoisture_date_t1), 
-         soilMoisture_date_t2_scaled = scale(soilMoisture_date_t2),
-         bio1_scaled = scale(bio1), 
-         bio12_scaled = scale(bio12), 
-         tavg_scaled = scale(tavg), 
-         prec_scaled = scale(prec))
+         susceptibility = as.factor(susceptibility))#,
+#         temp_date_scaled = scale(temp_date), 
+#         temp_date_t1_scaled = scale(temp_date_t1), 
+#         temp_date_t2_scaled = scale(temp_date_t2), 
+#         soilMoisture_date_scaled = scale(soilMoisture_date), 
+#         soilMoisture_date_t1_scaled = scale(soilMoisture_date_t1), 
+#         soilMoisture_date_t2_scaled = scale(soilMoisture_date_t2),
+#         bio1_scaled = scale(bio1), 
+#         bio12_scaled = scale(bio12), 
+#         tavg_scaled = scale(tavg), 
+#         prec_scaled = scale(prec))
 
 
 
@@ -118,17 +118,17 @@ dcbind <- dcbind %>%
   mutate(logsppAbun = log(sppAbun),
          logsiteAbun = log(siteAbun),
          scientific = as.factor(scientific),
-         susceptibility = as.factor(susceptibility),
-         temp_date_scaled = scale(temp_date), 
-         temp_date_t1_scaled = scale(temp_date_t1), 
-         temp_date_t2_scaled = scale(temp_date_t2), 
-         soilMoisture_date_scaled = scale(soilMoisture_date), 
-         soilMoisture_date_t1_scaled = scale(soilMoisture_date_t1), 
-         soilMoisture_date_t2_scaled = scale(soilMoisture_date_t2),
-         bio1_scaled = scale(bio1), 
-         bio12_scaled = scale(bio12), 
-         tavg_scaled = scale(tavg), 
-         prec_scaled = scale(prec)) 
+         susceptibility = as.factor(susceptibility))#,
+#         temp_date_scaled = scale(temp_date), 
+#         temp_date_t1_scaled = scale(temp_date_t1), 
+#         temp_date_t2_scaled = scale(temp_date_t2), 
+#         soilMoisture_date_scaled = scale(soilMoisture_date), 
+#         soilMoisture_date_t1_scaled = scale(soilMoisture_date_t1), 
+#         soilMoisture_date_t2_scaled = scale(soilMoisture_date_t2),
+#         bio1_scaled = scale(bio1), 
+#         bio12_scaled = scale(bio12), 
+#         tavg_scaled = scale(tavg), 
+#         prec_scaled = scale(prec)) 
 
 # Remove non-native species
 dcbind_alpestris <- subset(dcbind, scientific != "Ichthyosaura alpestris")
@@ -316,7 +316,7 @@ map
 
 ```
 
-   d. Static Maps
+   d. Static Maps showing sampling locations
 ```{r}
 # Code for Europe map with points for each site
 library(mapproj)
@@ -371,13 +371,75 @@ ggplot(wmap, aes(x = long, y = lat)) +
 2. Cbind models for all salamander spp.
    a. T0 (At time of observation)
 ```{r}
-m3a <- glmmTMB(cbind(YesBsal, NoBsal) ~  logsiteAbun*richness + temp_date_scaled*soilMoisture_date_scaled + (1|Site),
-               data = dcbind, family = "binomial", na.action = "na.omit",
+dcbind_alpestris <- tidyr::drop_na(dcbind_alpestris, any_of(c(14:15, 29:34)))
+
+m3a <- glmmTMB(cbind(YesBsal, NoBsal) ~  logsiteAbun*richness + temp_date*soilMoisture_date + (1|scientific),
+               data = dcbind_alpestris, family = "binomial", na.action = "na.omit",
                control = glmmTMBControl(optimizer = optim, 
                                                            optArgs = list(method = "BFGS")))
 
 summary(m3a)
 Anova(m3a)
+
+
+# Scale data:
+scaled_cbind <- dcbind_alpestris
+scaled_cbind$temp_date <- scale(scaled_cbind$temp_date)
+scaled_cbind$soilMoisture_date <- scale(scaled_cbind$soilMoisture_date)
+
+# Save scaled attributes:
+scaleList <- scaled_cbind %>%
+  list(temp_scale = as.numeric(attr(scaled_cbind$temp_date, "scaled:scale")),
+    temp_center = as.numeric(attr(scaled_cbind$temp_date, "scaled:center")),
+    soilMoisture_scale = as.numeric(attr(scaled_cbind$soilMoisture_date, "scaled:scale")),
+    soilMoisture_center = as.numeric(attr(scaled_cbind$soilMoisture_date, "scaled:center")))
+
+m3a_scaled <- glmmTMB(cbind(YesBsal, NoBsal) ~  logsiteAbun*richness + temp_date*soilMoisture_date + (1|scientific),
+               data = scaled_cbind, family = "binomial",
+               control = glmmTMBControl(optimizer = optim, 
+                                        optArgs = list(method = "BFGS")))
+# Predictions on scaled data:
+sp <- ggpredict(m3a_scaled, terms = c("logsiteAbun [all]", "richness", "temp_date", "soilMoisture_date"))
+
+sp <- sp %>%
+  rename("logsiteAbun" = "x",
+         "richness" = "group",
+         "temp_date" = "facet",
+         "soilMoisture_date" = "panel") %>%
+  mutate(temp_date = as.numeric(as.character(temp_date)),
+         soilMoisture_date = as.numeric(as.character(soilMoisture_date)))
+
+# Fit the same model to the original  data:
+m3a <- glmmTMB(cbind(YesBsal, NoBsal) ~  logsiteAbun*richness + temp_date*soilMoisture_date + (1|scientific),
+               data = dcbind_alpestris, family = "binomial",
+               control = glmmTMBControl(optimizer = optim, 
+                                        optArgs = list(method = "BFGS")))
+op <- ggpredict(m3a, terms = c("logsiteAbun [all]", "richness", "temp_date", "soilMoisture_date"))
+op <- op %>%
+  rename("logsiteAbun" = "x",
+         "richness" = "group",
+         "temp_date" = "facet",
+         "soilMoisture_date" = "panel") %>%
+   mutate(temp_date = as.numeric(as.character(temp_date)),
+         soilMoisture_date = as.numeric(as.character(soilMoisture_date)))
+
+# Convert scaled prediction to original data scale:
+usp <- sp
+usp$temp_date <- sp$temp_date * scaleList$temp_scale + scaleList$temp_center 
+usp$soilMoisture_date <- sp$soilMoisture * scaleList$soilMoisture_scale + scaleList$soilMoisture_center
+
+
+# Compare predictions:
+all.equal(op, usp)
+
+
+
+
+
+
+temp_scaled <- scale(dcbind_alpestris$temp_date)
+attributes(temp_scaled)
+test_bcktrnsfm <- temp_scaled * attr(temp_scaled, 'scaled:scale') + attr(temp_scaled, 'scaled:center')
 
 m3a_predict <- ggpredict(m3a, terms = c("logsiteAbun", "richness", "temp_date_scaled", "soilMoisture_date_scaled"))
 m3a_predict <- m3a_predict %>%
@@ -388,18 +450,18 @@ m3a_predict <- m3a_predict %>%
 
 
 ## Abundance and Richness
-m3a_plot1 <- ggplot(m3a_predict, aes(group , predicted), ) +
+m3a_plot1 <- ggplot(m3a_predict, aes(group , predicted)) +
   geom_point() +
   coord_flip() +
   ylab("Disease Prevalence") +
   xlab("Species") + scale_x_discrete(expand = expansion(mult = c(0, 0.1), add = c(1, 0))) +
   ak_theme +
   labs(caption = c("Proportion of disease prevalence (including both Bsal and Bd) by species."))
+m3a_plot1
 
 
 
-
-m3a_plot1 <-plot_model(m3a, type = "pred", terms = c("richness", "logsiteAbun"), transform = "exp",
+m3a_plot1 <- plot_model(m3a, type = "pred", terms = c("richness", "logsiteAbun"), transform = "exp",
   legend.title = c("Ln site-level host abundance"),
   title = "",
   colors = "bw",
