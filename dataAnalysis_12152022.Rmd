@@ -165,6 +165,7 @@ m1a_plot
 
 
 ```
+  
    b. Prevalence ~ Species 
 ```{r}
 m1b <- glmmTMB(diseaseDetected ~ scientific + (1|Site), 
@@ -373,29 +374,61 @@ ggplot(wmap, aes(x = long, y = lat)) +
 ```{r}
 dcbind_alpestris <- tidyr::drop_na(dcbind_alpestris, any_of(c(14:15, 29:34)))
 
-m3a <- glmmTMB(cbind(YesBsal, NoBsal) ~  logsiteAbun*richness + temp_date*soilMoisture_date + (1|scientific),
-               data = dcbind_alpestris, family = "binomial", na.action = "na.omit",
-               control = glmmTMBControl(optimizer = optim, 
-                                                           optArgs = list(method = "BFGS")))
 
-summary(m3a)
-Anova(m3a)
+# Functions to scale & unscale data:
+scale_data <- function(data_in, ...){
+  scaled <- data_in 
+    for(i in list(...)){
+      # store scaled data in object
+      x <- scale(data_in[i])
+      # change col name of scaled data to match fun. input
+      colnames(x) <- paste0(as.character(...))
+      x2 <- paste(x)
+      # overwrite col. in output with scaled data
+      scaled[i] <- x2
+    
+  }
+  scaledData <- data.frame(scaled)
+  return(scaledData)
+  
+}
 
+get_scale_attributes <- function(data_in, ...){
+    for(i in list(...)){
+      varList <- list(as.character(...)) 
+      vars <- do.call(rbind.data.frame, varList)
+      x <- scale(data_in[i])
+      # Save scaled attributes for later use
+      s <- attr(x,"scaled:scale")
+      c <- attr(x, "scaled:center")
+    }       
+  attr_df <- data.frame(variable = as.character(vars),
+                          scale = as.numeric(s),
+                          center = as.numeric(c))
+  
+  return(attr_df)
+}
+  
+unscale_data <- function(data_in, scaled_pred, scale, center, ...){
+  unscaled_pred <- scaled_pred
+  for(i in list(...)){
+    vector1_of_values %in% vector2_of_values
+    unscaled_pred[i] <- scaled_pred[i] * scale[i] + center[i]
+    
+  }
+  unscaledData <- data.frame(unscaled_pred)
+  return(unscaledData)
+}    
 
-# Scale data:
-scaled_cbind <- dcbind_alpestris
-scaled_cbind$temp_date <- scale(scaled_cbind$temp_date)
-scaled_cbind$soilMoisture_date <- scale(scaled_cbind$soilMoisture_date)
-
-# Save scaled attributes:
-scaleList <- scaled_cbind %>%
-  list(temp_scale = as.numeric(attr(scaled_cbind$temp_date, "scaled:scale")),
-    temp_center = as.numeric(attr(scaled_cbind$temp_date, "scaled:center")),
-    soilMoisture_scale = as.numeric(attr(scaled_cbind$soilMoisture_date, "scaled:scale")),
-    soilMoisture_center = as.numeric(attr(scaled_cbind$soilMoisture_date, "scaled:center")))
+varNames <- c("temp_date", "temp_date_t1", "temp_date_t2",
+              "soilMoisture_date", "soilMoisture_date_t1", "soilMoisture_date_t2")
+  
+scaledData <- scale_data(dcbind_alpestris, varNames)
+scaledData_attr <- get_scale_attributes(dcbind_alpestris, varNames)
+unscaledData <- unscale_data()
 
 m3a_scaled <- glmmTMB(cbind(YesBsal, NoBsal) ~  logsiteAbun*richness + temp_date*soilMoisture_date + (1|scientific),
-               data = scaled_cbind, family = "binomial",
+               data = scaledData, family = "binomial",
                control = glmmTMBControl(optimizer = optim, 
                                         optArgs = list(method = "BFGS")))
 # Predictions on scaled data:
@@ -423,23 +456,15 @@ op <- op %>%
    mutate(temp_date = as.numeric(as.character(temp_date)),
          soilMoisture_date = as.numeric(as.character(soilMoisture_date)))
 
-# Convert scaled prediction to original data scale:
-usp <- sp
-usp$temp_date <- sp$temp_date * scaleList$temp_scale + scaleList$temp_center 
-usp$soilMoisture_date <- sp$soilMoisture * scaleList$soilMoisture_scale + scaleList$soilMoisture_center
-
-
-# Compare predictions:
-all.equal(op, usp)
 
 
 
-
-
-
-temp_scaled <- scale(dcbind_alpestris$temp_date)
-attributes(temp_scaled)
-test_bcktrnsfm <- temp_scaled * attr(temp_scaled, 'scaled:scale') + attr(temp_scaled, 'scaled:center')
+###*** KEEP 
+m3a <- glmmTMB(cbind(YesBsal, NoBsal) ~  logsiteAbun*richness + temp_date*soilMoisture_date + (1|scientific),
+               data = dcbind_alpestris, family = "binomial", na.action = "na.omit",
+               control = glmmTMBControl(optimizer = optim, 
+                                                           optArgs = list(method = "BFGS")))
+###
 
 m3a_predict <- ggpredict(m3a, terms = c("logsiteAbun", "richness", "temp_date_scaled", "soilMoisture_date_scaled"))
 m3a_predict <- m3a_predict %>%
@@ -549,4 +574,31 @@ You can also embed plots, for example:
 plot(pressure)
 ```
 
+
+
+```{r}
+
+# Copy dataframe
+scaledData <- dcbind_alpestris
+# Scale variables:
+scaledData$temp_date <- scale(scaledData$temp_date)
+scaledData$soilMoisture_date <- scale(scaledData$soilMoisture_date)
+
+# Save scaled attributes:
+scaleList <- scaledData %>%
+  list(temp_scale = as.numeric(attr(scaledData$temp_date, "scaled:scale")),
+    temp_center = as.numeric(attr(scaledData$temp_date, "scaled:center")),
+    soilMoisture_scale = as.numeric(attr(scaledData$soilMoisture_date, "scaled:scale")),
+    soilMoisture_center = as.numeric(attr(scaledData$soilMoisture_date, "scaled:center")))
+
+
+# Convert scaled prediction to original data scale:
+usp <- sp
+usp$temp_date <- sp$temp_date * scaleList$temp_scale + scaleList$temp_center 
+usp$soilMoisture_date <- sp$soilMoisture * scaleList$soilMoisture_scale + scaleList$soilMoisture_center
+
+
+# Compare predictions:
+all.equal(op, usp)
+```
 Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
