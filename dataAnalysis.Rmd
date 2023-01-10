@@ -39,7 +39,8 @@ map_pckgs <- c("tidyverse",
                "leaflet", # making interactive maps
                "leaftime", # add time scale to map
                "geojsonio",
-               "geojsonlint" # validate GeoJSON and display it on a map
+               "geojsonlint",
+               "ggpubr"# validate GeoJSON and display it on a map
 )
 
 #### Analysis Specific Packages ####
@@ -75,7 +76,7 @@ ak_theme <- theme_ipsum() +
         axis.title.x = element_text(size = 24, hjust = 0.5, margin = margin(t = 15, r = 0, b = 0, l = 0), face = "plain"),
         axis.text.y = element_text(size = 18),
         axis.title.y = element_text(size = 24, hjust = 0.5, margin = margin(t = 0, r = 15, b = 0, l = 5), face = "plain"),
-        plot.title = element_markdown(hjust = c(0, -1), size = 32, face = "plain"),
+        plot.title = element_text(size = 32, hjust = 0.5, face = "plain"),
         plot.subtitle = element_markdown(size = 12, face = "plain"),
         plot.margin = margin(6, 12, 2, 2, "pt"), 
         plot.caption = element_markdown(hjust = 0, size = 14, face = "plain"),
@@ -90,7 +91,7 @@ ak_theme <- theme_ipsum() +
         axis.line = element_line(color = 'black'))
 
 
-## Include Pelophylax perezi data  (5 rows) into Pelophylax sp.
+## Include Pelophylax perezi dta  (5 rows) into Pelophylax sp.
 d$scientific <- gsub(d$scientific, pattern = "Pelophylax perezi",
                      replacement = "Pelophylax sp.")
 
@@ -368,192 +369,595 @@ ggplot(wmap, aes(x = long, y = lat)) +
 
 
 ```
+I am still working on this!
+
 
 2. Cbind models for all salamander spp.
-   a. T0 (At time of observation)
+   a. T0 (At time of observation); T-1 (30 days prior to initial obs.); T-2 (60 days prior to initial obs.)
 ```{r}
+# Drop rows with NA vals
 dcbind_alpestris <- tidyr::drop_na(dcbind_alpestris, any_of(c(14:15, 29:34)))
 
+# Scale relevant vars
+scaledData <- dcbind_alpestris %>%
+  mutate_at(c("temp_date", "temp_date_t1", "temp_date_t2",
+              "soilMoisture_date", "soilMoisture_date_t1", "soilMoisture_date_t2"), 
+            ~(scale(., center = T, scale = T %>% as.numeric)))
 
-# Functions to scale & unscale data:
-scale_data <- function(data_in, ...){
-  scaled <- data_in 
-    for(i in list(...)){
-      # store scaled data in object
-      x <- scale(data_in[i])
-      # change col name of scaled data to match fun. input
-      colnames(x) <- paste0(as.character(...))
-      x2 <- paste(x)
-      # overwrite col. in output with scaled data
-      scaled[i] <- x2
-    
-  }
-  scaledData <- data.frame(scaled)
-  return(scaledData)
-  
-}
 
-get_scale_attributes <- function(data_in, ...){
-    for(i in list(...)){
-      varList <- list(as.character(...)) 
-      vars <- do.call(rbind.data.frame, varList)
-      x <- scale(data_in[i])
-      # Save scaled attributes for later use
-      s <- attr(x,"scaled:scale")
-      c <- attr(x, "scaled:center")
-    }       
-  attr_df <- data.frame(variable = as.character(vars),
-                          scale = as.numeric(s),
-                          center = as.numeric(c))
-  
-  return(attr_df)
-}
-  
-unscale_data <- function(data_in, scaled_pred, scale, center, ...){
-  unscaled_pred <- scaled_pred
-  for(i in list(...)){
-    vector1_of_values %in% vector2_of_values
-    unscaled_pred[i] <- scaled_pred[i] * scale[i] + center[i]
-    
-  }
-  unscaledData <- data.frame(unscaled_pred)
-  return(unscaledData)
-}    
+# T0
+m2_t0 <- glmmTMB(cbind(YesBsal, NoBsal) ~  richness*logsiteAbun + temp_date*soilMoisture_date + (1|scientific),
+                 data = scaledData, family = "binomial",
+                 control = glmmTMBControl(optimizer = optim, 
+                                          optArgs = list(method = "BFGS")))
 
-varNames <- c("temp_date", "temp_date_t1", "temp_date_t2",
-              "soilMoisture_date", "soilMoisture_date_t1", "soilMoisture_date_t2")
-  
-scaledData <- scale_data(dcbind_alpestris, varNames)
-scaledData_attr <- get_scale_attributes(dcbind_alpestris, varNames)
-unscaledData <- unscale_data()
+summary(m2_t0)
+Anova(m2_t0)
 
-m3a_scaled <- glmmTMB(cbind(YesBsal, NoBsal) ~  logsiteAbun*richness + temp_date*soilMoisture_date + (1|scientific),
-               data = scaledData, family = "binomial",
-               control = glmmTMBControl(optimizer = optim, 
-                                        optArgs = list(method = "BFGS")))
-# Predictions on scaled data:
-sp <- ggpredict(m3a_scaled, terms = c("logsiteAbun [all]", "richness", "temp_date", "soilMoisture_date"))
 
-sp <- sp %>%
-  rename("logsiteAbun" = "x",
-         "richness" = "group",
-         "temp_date" = "facet",
-         "soilMoisture_date" = "panel") %>%
+# T-1
+m2_t1 <- glmmTMB(cbind(YesBsal, NoBsal) ~  richness*logsiteAbun + temp_date_t1*soilMoisture_date_t1 + (1|scientific),
+                 data = scaledData, family = "binomial",
+                 control = glmmTMBControl(optimizer = optim, 
+                                          optArgs = list(method = "BFGS")))
+
+summary(m2_t1)
+Anova(m2_t1)
+
+
+
+# T-2
+m2_t2 <- glmmTMB(cbind(YesBsal, NoBsal) ~  richness*logsiteAbun + temp_date_t2*soilMoisture_date_t2 + (1|scientific),
+                 data = scaledData, family = "binomial",
+                 control = glmmTMBControl(optimizer = optim, 
+                                          optArgs = list(method = "BFGS")))
+
+summary(m2_t2)
+Anova(m2_t2)
+
+
+```
+
+   b. Prevalence by Abundance & Richness Plots for T0, T-1, T-2 
+```{r}
+# T0
+m2_t0_rich <- ggpredict(m2_t0,  terms = c("richness", "logsiteAbun [0.5, 2, 4]"))
+
+
+m2_t0_p1 <- ggplot(m2_t0_rich, aes(x = x , y = predicted)) +
+  geom_line(aes(linetype = group)) +
+  labs(title = bquote(Time[(0)]), linetype = "ln(Site-Level Abundance)") +
+#  geom_errorbar(aes(ymin = exp(conf.low), ymax = (conf.high))) +
+  ylab("Predicted Bsal Prevalence\nAcross All Salamander Species") +
+  xlab("Species Richness") + 
+  scale_x_continuous(labels = seq(0, 10, 1), breaks = seq(0, 10, 1)) + 
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1), limits = c(0, 0.05)) + 
+  ak_theme
+
+m2_t0_p1 
+
+# T-1
+m2_t1_rich <- ggpredict(m2_t1,  terms = c("richness", "logsiteAbun [0.5, 2, 4]"))
+
+
+m2_t1_p1 <- ggplot(m2_t1_rich, aes(x = x , y = predicted)) +
+  geom_line(aes(linetype = group)) +
+  labs(title = bquote(Time[(-1)]), linetype = "ln(Site-Level Abundance)") +
+  #  geom_errorbar(aes(ymin = exp(conf.low), ymax = (conf.high))) +
+  ylab("Predicted Bsal Prevalence\nAcross All Salamander Species") +
+  xlab("Species Richness") + 
+  guides(fill = guide_legend(title = "ln(Site-Level Abundance)")) +
+  scale_x_continuous(labels = seq(0, 10, 1), breaks = seq(0, 10, 1)) + 
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1), limits = c(0, 0.05)) + 
+  ak_theme
+
+m2_t1_p1 
+
+
+# T-2
+m2_t2_rich <- ggpredict(m2_t2,  terms = c("richness", "logsiteAbun [0.5, 2, 4]"))
+
+
+m2_t2_p1 <- ggplot(m2_t2_rich, aes(x = x , y = predicted)) +
+  geom_line(aes(linetype = group)) +
+  labs(title = bquote(Time[(-2)]), linetype = "ln(Site-Level Abundance)") +
+  #  geom_errorbar(aes(ymin = exp(conf.low), ymax = (conf.high))) +
+  ylab("Predicted Bsal Prevalence\nAcross All Salamander Species") +
+  xlab("Species Richness") + 
+  guides(fill = guide_legend(title = "ln(Site-Level Abundance)")) +
+  scale_x_continuous(labels = seq(0, 10, 1), breaks = seq(0, 10, 1)) + 
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1), limits = c(0, 0.05)) + 
+  ak_theme
+
+m2_t2_p1 
+
+# 3 Panel Graph
+m2_p1_combined <- ggarrange(m2_t2_p1 + rremove("xlab"), 
+                        m2_t1_p1 + rremove("ylab"), 
+                        m2_t0_p1 + rremove("ylab") + rremove("xlab"), 
+                    labels = NULL,
+                    ncol = 3, nrow = 1,
+                    common.legend = TRUE, legend = "bottom",
+                    align = "hv", 
+                    font.label = list(size = 10, color = "black", face = "bold", family = NULL, position = "top"))
+
+m2_p1_combined
+
+```
+
+   c. Prevalence by Temperature & Soil Moisture Plots for T0, T-1, T-2
+```{r}
+# T0
+m2_t0_weather <- ggpredict(m2_t0, terms = c("temp_date [all]", "soilMoisture_date"))
+m2_t0_weather <- m2_t0_weather %>%
+  rename("temp_date" = "x",
+         "soilMoisture_date" = "group") %>%
   mutate(temp_date = as.numeric(as.character(temp_date)),
          soilMoisture_date = as.numeric(as.character(soilMoisture_date)))
 
-# Fit the same model to the original  data:
-m3a <- glmmTMB(cbind(YesBsal, NoBsal) ~  logsiteAbun*richness + temp_date*soilMoisture_date + (1|scientific),
-               data = dcbind_alpestris, family = "binomial",
-               control = glmmTMBControl(optimizer = optim, 
-                                        optArgs = list(method = "BFGS")))
-op <- ggpredict(m3a, terms = c("logsiteAbun [all]", "richness", "temp_date", "soilMoisture_date"))
-op <- op %>%
-  rename("logsiteAbun" = "x",
-         "richness" = "group",
-         "temp_date" = "facet",
-         "soilMoisture_date" = "panel") %>%
-   mutate(temp_date = as.numeric(as.character(temp_date)),
-         soilMoisture_date = as.numeric(as.character(soilMoisture_date)))
+# Convert scaled prediction to original data scale:
+m2_t0_w_unscaled <- m2_t0_weather
+m2_t0_w_unscaled$temp_date <- m2_t0_weather$temp_date * as.numeric(attr(scaledData$temp_date, "scaled:scale")) +
+                              as.numeric(attr(scaledData$temp_date, "scaled:center"))
+m2_t0_w_unscaled$soilMoisture_date <- m2_t0_weather$soilMoisture * as.numeric(attr(scaledData$soilMoisture_date,
+                                                                                   "scaled:scale")) +
+                                      as.numeric(attr(scaledData$soilMoisture_date, "scaled:center"))
+m2_t0_w_unscaled$soilMoisture_date <- round(m2_t0_w_unscaled$soilMoisture_date, 2)
 
 
-
-
-###*** KEEP 
-m3a <- glmmTMB(cbind(YesBsal, NoBsal) ~  logsiteAbun*richness + temp_date*soilMoisture_date + (1|scientific),
-               data = dcbind_alpestris, family = "binomial", na.action = "na.omit",
-               control = glmmTMBControl(optimizer = optim, 
-                                                           optArgs = list(method = "BFGS")))
-###
-
-m3a_predict <- ggpredict(m3a, terms = c("logsiteAbun", "richness", "temp_date_scaled", "soilMoisture_date_scaled"))
-m3a_predict <- m3a_predict %>%
-  rename("logsiteAbun" = "x",
-         "richness" = "group",
-         "temp_date_scaled" = "facet",
-         "soilMoisture_date_scaled" = "panel")
-
-
-## Abundance and Richness
-m3a_plot1 <- ggplot(m3a_predict, aes(group , predicted)) +
-  geom_point() +
-  coord_flip() +
-  ylab("Disease Prevalence") +
-  xlab("Species") + scale_x_discrete(expand = expansion(mult = c(0, 0.1), add = c(1, 0))) +
-  ak_theme +
-  labs(caption = c("Proportion of disease prevalence (including both Bsal and Bd) by species."))
-m3a_plot1
-
-
-
-m3a_plot1 <- plot_model(m3a, type = "pred", terms = c("richness", "logsiteAbun"), transform = "exp",
-  legend.title = c("Ln site-level host abundance"),
-  title = "",
-  colors = "bw",
-  ci.lvl = NA) +
-#  labs(xlab = bquote("Soil Moisture (kg/m"^2~")"), ylab = expression("Temperature (°C)")) +
+m2_t0_p2 <- ggplot(m2_t0_w_unscaled, aes(x = temp_date , y = predicted)) +
+  geom_line(aes(linetype = as.factor(soilMoisture_date))) +
+  labs(title = bquote(Time[(0)]), linetype = bquote("Soil Moisture (kg/m"^2~")")) +
+  #  geom_errorbar(aes(ymin = exp(conf.low), ymax = (conf.high))) +
+  ylab("Predicted Bsal Prevalence\nAcross All Salamander Species") +
+  xlab(expression("Temperature (°C)")) + 
+#  scale_x_continuous(labels = seq(0, 10, 1), breaks = seq(0, 10, 1)) + 
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1)) + 
   ak_theme
-m3a_plot1
+
+m2_t0_p2 
+
+
+# T-1
+m2_t1_weather <- ggpredict(m2_t1, terms = c("temp_date_t1 [all]", "soilMoisture_date_t1"))
+m2_t1_weather <- m2_t1_weather %>%
+  rename("temp_date_t1" = "x",
+         "soilMoisture_date_t1" = "group") %>%
+  mutate(temp_date_t1 = as.numeric(as.character(temp_date_t1)),
+         soilMoisture_date_t1 = as.numeric(as.character(soilMoisture_date_t1)))
+
+# Convert scaled prediction to original data scale:
+m2_t1_w_unscaled <- m2_t1_weather
+m2_t1_w_unscaled$temp_date_t1 <- m2_t1_weather$temp_date_t1 * as.numeric(attr(scaledData$temp_date_t1, "scaled:scale")) +
+                                 as.numeric(attr(scaledData$temp_date_t1, "scaled:center"))
+m2_t1_w_unscaled$soilMoisture_date_t1 <- m2_t1_weather$soilMoisture * as.numeric(attr(scaledData$soilMoisture_date_t1,
+                                                                                   "scaled:scale")) +
+                                         as.numeric(attr(scaledData$soilMoisture_date_t1, "scaled:center"))
+m2_t1_w_unscaled$soilMoisture_date_t1 <- round(m2_t1_w_unscaled$soilMoisture_date_t1, 2)
+
+
+m2_t1_p2 <- ggplot(m2_t1_w_unscaled, aes(x = temp_date_t1 , y = predicted)) +
+  geom_line(aes(linetype = as.factor(soilMoisture_date_t1))) +
+  labs(title = bquote(Time[(-1)]), linetype = bquote("Soil Moisture (kg/m"^2~")")) +
+  #  geom_errorbar(aes(ymin = exp(conf.low), ymax = (conf.high))) +
+  ylab("Predicted Bsal Prevalence\nAcross All Salamander Species") +
+  xlab(expression("Temperature (°C)")) + 
+  #  scale_x_continuous(labels = seq(0, 10, 1), breaks = seq(0, 10, 1)) + 
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1)) + 
+  ak_theme
+
+m2_t1_p2 
 
 
 
+# T-2
+m2_t2_weather <- ggpredict(m2_t2, terms = c("temp_date_t2 [all]", "soilMoisture_date_t2"))
+m2_t2_weather <- m2_t2_weather %>%
+  rename("temp_date_t2" = "x",
+         "soilMoisture_date_t2" = "group") %>%
+  mutate(temp_date_t2 = as.numeric(as.character(temp_date_t2)),
+         soilMoisture_date_t2 = as.numeric(as.character(soilMoisture_date_t2)))
 
-m3a_plot <- ggplot(m3a, aes(x, predicted, shape = facet)) +
-  geom_jitter(size = 4, alpha = 0.85, position = position_jitter(width = 0.2, height = 0.2, seed = 123)) +
-  geom_errorbar(aes(ymin = conf.low, ymax = conf.high),
-                width = 0.1, position = position_jitter(width = 0.2, height = 0.2, seed = 123)) +
-  scale_shape_manual(name = bquote("Soil Moisture (kg/m"^2~")"), 
-                     values = c(15, 16, 17)) +
-  scale_colour_manual(name = expression("Temperature (°C)"),
-                      values = c("#032349", "#f7c331", "#c4001f")) +
-  labs(title = bquote("Time T"[(0)])) +
-  ylab("ln(Species Abundance)") +
-  ylim(-1.7, 4) +
-  xlab("Susceptibility Level") +
-  scale_x_discrete(labels = c("Low","Med","High"),
-                   limits = factor(c(1:3))) +
-  guides(color = guide_legend(override.aes = list(size = 5))) + ak_theme 
-
-m3a_plot
-
-## Temperature and Soil Moisture
+# Convert scaled prediction to original data scale:
+m2_t2_w_unscaled <- m2_t2_weather
+m2_t2_w_unscaled$temp_date_t2 <- m2_t2_weather$temp_date_t2 * as.numeric(attr(scaledData$temp_date_t2, "scaled:scale")) +
+  as.numeric(attr(scaledData$temp_date_t2, "scaled:center"))
+m2_t2_w_unscaled$soilMoisture_date_t2 <- m2_t2_weather$soilMoisture * as.numeric(attr(scaledData$soilMoisture_date_t2,
+                                                                                   "scaled:scale")) +
+  as.numeric(attr(scaledData$soilMoisture_date_t2, "scaled:center"))
+m2_t2_w_unscaled$soilMoisture_date_t2 <- round(m2_t2_w_unscaled$soilMoisture_date_t2, 2)
 
 
-```
+m2_t2_p2 <- ggplot(m2_t2_w_unscaled, aes(x = temp_date_t2 , y = predicted)) +
+  geom_line(aes(linetype = as.factor(soilMoisture_date_t2))) +
+  labs(title = bquote(Time[(-2)]), linetype = bquote("Soil Moisture (kg/m"^2~")")) +
+  #  geom_errorbar(aes(ymin = exp(conf.low), ymax = (conf.high))) +
+  ylab("Predicted Bsal Prevalence\nAcross All Salamander Species") +
+  xlab(expression("Temperature (°C)")) + 
+  #  scale_x_continuous(labels = seq(0, 10, 1), breaks = seq(0, 10, 1)) + 
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1)) + 
+  ak_theme
 
-   b. T-1 (One month prior to observation)
-```{r}
+m2_t2_p2 
 
 
-```
+# 3 Panel Graph
+m2_p2_combined <- ggarrange(m2_t2_p2 + rremove("xlab"), 
+                        m2_t1_p2  + rremove("ylab"), 
+                        m2_t0_p2 +rremove("ylab") + rremove("xlab"), 
+                    labels = NULL,
+                    ncol = 3, nrow = 1,
+                    common.legend = TRUE, legend = "bottom",
+                    align = "hv", 
+                    font.label = list(size = 10, color = "black", face = "bold", family = NULL, position = "top"))
 
-   c. T-2 (Two months prior to observation)
-```{r}
+m2_p2_combined
 
 
 ```
 
 3. Cbind models for fire salamanders only
-   a. T0 (At time of observation)
+   a. T0 (At time of observation); T-1 (30 days prior to initial obs.); T-2 (60 days prior to initial obs.)
 ```{r}
+# T0
+m3_t0 <- glmmTMB(cbind(YesBsal, NoBsal) ~  richness*logsiteAbun + temp_date*soilMoisture_date + (1|scientific),
+                 data = subset(scaledData, scientific =="Salamandra salamandra"), family = "binomial",
+                 control = glmmTMBControl(optimizer = optim, 
+                                          optArgs = list(method = "BFGS")))
+
+summary(m3_t0)
+Anova(m3_t0)
+
+
+# T-1
+m3_t1 <- glmmTMB(cbind(YesBsal, NoBsal) ~  richness*logsiteAbun + temp_date_t1*soilMoisture_date_t1 + (1|scientific),
+                 data = subset(scaledData, scientific =="Salamandra salamandra"), family = "binomial",
+                 control = glmmTMBControl(optimizer = optim, 
+                                          optArgs = list(method = "BFGS")))
+
+summary(m3_t1)
+Anova(m3_t1)
+
+
+
+# T-2
+m3_t2 <- glmmTMB(cbind(YesBsal, NoBsal) ~  richness*logsiteAbun + temp_date_t2*soilMoisture_date_t2 + (1|scientific),
+                 data = subset(scaledData, scientific =="Salamandra salamandra"), family = "binomial",
+                 control = glmmTMBControl(optimizer = optim, 
+                                          optArgs = list(method = "BFGS")))
+
+summary(m3_t2)
+Anova(m3_t2)
+
+```
+
+   b. Prevalence by Abundance & Richness Plots for T0, T-1, T-2 (Fire Salamanders Only)
+```{r}
+# T0
+m3_t0_rich <- ggpredict(m3_t0,  terms = c("richness", "logsiteAbun [0.5, 1.5, 3]"))
+
+
+m3_t0_p1 <- ggplot(m3_t0_rich, aes(x = x , y = predicted)) +
+  geom_line(aes(linetype = group)) +
+  labs(title = bquote(Time[(0)]), linetype = "ln(Site-Level Abundance)") +
+  #  geom_errorbar(aes(ymin = exp(conf.low), ymax = (conf.high))) +
+  ylab("Predicted Bsal Prevalence\nin Fire Salamanders") +
+  xlab("Species Richness") + 
+  scale_x_continuous(labels = seq(0, 10, 1), breaks = seq(0, 10, 1)) + 
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1), limits = c(0, 0.6)) + 
+  ak_theme
+
+m3_t0_p1 
+
+# T-1
+m3_t1_rich <- ggpredict(m3_t1,  terms = c("richness", "logsiteAbun [0.5, 1.5, 3]"))
+
+
+m3_t1_p1 <- ggplot(m3_t1_rich, aes(x = x , y = predicted)) +
+  geom_line(aes(linetype = group)) +
+  labs(title = bquote(Time[(-1)]), linetype = "ln(Site-Level Abundance)") +
+  #  geom_errorbar(aes(ymin = exp(conf.low), ymax = (conf.high))) +
+  ylab("Predicted Bsal Prevalence\nin Fire Salamanders") +
+  xlab("Species Richness") + 
+  guides(fill = guide_legend(title = "ln(Site-Level Abundance)")) +
+  scale_x_continuous(labels = seq(0, 10, 1), breaks = seq(0, 10, 1)) + 
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1), limits = c(0, 0.6)) + 
+  ak_theme
+
+m3_t1_p1 
+
+
+# T-2
+m3_t2_rich <- ggpredict(m3_t2,  terms = c("richness", "logsiteAbun [0.5, 1.5, 3]"))
+
+
+m3_t2_p1 <- ggplot(m3_t2_rich, aes(x = x , y = predicted)) +
+  geom_line(aes(linetype = group)) +
+  labs(title = bquote(Time[(-2)]), linetype = "ln(Site-Level Abundance)") +
+  #  geom_errorbar(aes(ymin = exp(conf.low), ymax = (conf.high))) +
+  ylab("Predicted Bsal Prevalence\nin Fire Salamanders") +
+  xlab("Species Richness") + 
+  guides(fill = guide_legend(title = "ln(Site-Level Abundance)")) +
+  scale_x_continuous(labels = seq(0, 10, 1), breaks = seq(0, 10, 1)) + 
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1), limits = c(0, 0.6)) + 
+  ak_theme
+
+m3_t2_p1 
+
+# 3 Panel Graph
+m3_p1_combined <- ggarrange(m3_t2_p1 + rremove("xlab"), 
+                            m3_t1_p1 + rremove("ylab"), 
+                            m3_t0_p1 + rremove("ylab") + rremove("xlab"), 
+                            labels = NULL,
+                            ncol = 3, nrow = 1,
+                            common.legend = TRUE, legend = "bottom",
+                            align = "hv", 
+                            font.label = list(size = 10, color = "black", face = "bold", family = NULL, position = "top"))
+
+m3_p1_combined
 
 
 ```
 
-   b. T-1 (One month prior to observation)
+   c. Prevalence by Temperature & Soil Moisture Plots for T0, T-1, T-2 (Fire Salamanders Only)
 ```{r}
+# T0
+m3_t0_weather <- ggpredict(m3_t0, terms = c("temp_date [all]", "soilMoisture_date"))
+m3_t0_weather <- m3_t0_weather %>%
+  rename("temp_date" = "x",
+         "soilMoisture_date" = "group") %>%
+  mutate(temp_date = as.numeric(as.character(temp_date)),
+         soilMoisture_date = as.numeric(as.character(soilMoisture_date)))
+
+# Convert scaled prediction to original data scale:
+m3_t0_w_unscaled <- m3_t0_weather
+m3_t0_w_unscaled$temp_date <- m3_t0_weather$temp_date * as.numeric(attr(scaledData$temp_date, "scaled:scale")) +
+  as.numeric(attr(scaledData$temp_date, "scaled:center"))
+m3_t0_w_unscaled$soilMoisture_date <- m3_t0_weather$soilMoisture * as.numeric(attr(scaledData$soilMoisture_date,
+                                                                                   "scaled:scale")) +
+  as.numeric(attr(scaledData$soilMoisture_date, "scaled:center"))
+m3_t0_w_unscaled$soilMoisture_date <- round(m3_t0_w_unscaled$soilMoisture_date, 2)
 
 
-```
+m3_t0_p2 <- ggplot(m3_t0_w_unscaled, aes(x = temp_date , y = predicted)) +
+  geom_line(aes(linetype = as.factor(soilMoisture_date))) +
+  labs(title = bquote(Time[(0)]), linetype = bquote("Soil Moisture (kg/m"^2~")")) +
+  #  geom_errorbar(aes(ymin = exp(conf.low), ymax = (conf.high))) +
+  ylab("Predicted Bsal Prevalence\nin Fire Salamanders") +
+  xlab(expression("Temperature (°C)")) + 
+  scale_x_continuous(labels = seq(-10, 30, 10), breaks = seq(-10, 30, 10), limits = c(-10, 30)) +  
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1), limits = c(0, 0.6)) + 
+  ak_theme
 
-   c. T-2 (Two months prior to observation)
-```{r}
+m3_t0_p2 
+
+
+# T-1
+m3_t1_weather <- ggpredict(m3_t1, terms = c("temp_date_t1 [all]", "soilMoisture_date_t1"))
+m3_t1_weather <- m3_t1_weather %>%
+  rename("temp_date_t1" = "x",
+         "soilMoisture_date_t1" = "group") %>%
+  mutate(temp_date_t1 = as.numeric(as.character(temp_date_t1)),
+         soilMoisture_date_t1 = as.numeric(as.character(soilMoisture_date_t1)))
+
+# Convert scaled prediction to original data scale:
+m3_t1_w_unscaled <- m3_t1_weather
+m3_t1_w_unscaled$temp_date_t1 <- m3_t1_weather$temp_date_t1 * as.numeric(attr(scaledData$temp_date_t1, "scaled:scale")) +
+  as.numeric(attr(scaledData$temp_date_t1, "scaled:center"))
+m3_t1_w_unscaled$soilMoisture_date_t1 <- m3_t1_weather$soilMoisture * as.numeric(attr(scaledData$soilMoisture_date_t1,
+                                                                                      "scaled:scale")) +
+  as.numeric(attr(scaledData$soilMoisture_date_t1, "scaled:center"))
+m3_t1_w_unscaled$soilMoisture_date_t1 <- round(m3_t1_w_unscaled$soilMoisture_date_t1, 2)
+
+
+m3_t1_p2 <- ggplot(m3_t1_w_unscaled, aes(x = temp_date_t1 , y = predicted)) +
+  geom_line(aes(linetype = as.factor(soilMoisture_date_t1))) +
+  labs(title = bquote(Time[(-1)]), linetype = bquote("Soil Moisture (kg/m"^2~")")) +
+  #  geom_errorbar(aes(ymin = exp(conf.low), ymax = (conf.high))) +
+  ylab("Predicted Bsal Prevalence\nin Fire Salamanders") +
+  xlab(expression("Temperature (°C)")) + 
+    scale_x_continuous(labels = seq(-10, 30, 10), breaks = seq(-10, 30, 10), limits = c(-10, 30)) +  
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1), limits = c(0, 0.6)) + 
+  ak_theme
+
+m3_t1_p2 
+
+
+
+# T-2
+m3_t2_weather <- ggpredict(m3_t2, terms = c("temp_date_t2 [all]", "soilMoisture_date_t2"))
+m3_t2_weather <- m3_t2_weather %>%
+  rename("temp_date_t2" = "x",
+         "soilMoisture_date_t2" = "group") %>%
+  mutate(temp_date_t2 = as.numeric(as.character(temp_date_t2)),
+         soilMoisture_date_t2 = as.numeric(as.character(soilMoisture_date_t2)))
+
+# Convert scaled prediction to original data scale:
+m3_t2_w_unscaled <- m3_t2_weather
+m3_t2_w_unscaled$temp_date_t2 <- m3_t2_weather$temp_date_t2 * as.numeric(attr(scaledData$temp_date_t2, "scaled:scale")) +
+  as.numeric(attr(scaledData$temp_date_t2, "scaled:center"))
+m3_t2_w_unscaled$soilMoisture_date_t2 <- m3_t2_weather$soilMoisture * as.numeric(attr(scaledData$soilMoisture_date_t2,
+                                                                                      "scaled:scale")) +
+  as.numeric(attr(scaledData$soilMoisture_date_t2, "scaled:center"))
+m3_t2_w_unscaled$soilMoisture_date_t2 <- round(m3_t2_w_unscaled$soilMoisture_date_t2, 2)
+
+
+m3_t2_p2 <- ggplot(m3_t2_w_unscaled, aes(x = temp_date_t2 , y = predicted)) +
+  geom_line(aes(linetype = as.factor(soilMoisture_date_t2))) +
+  labs(title = bquote(Time[(-2)]), linetype = bquote("Soil Moisture (kg/m"^2~")")) +
+  #  geom_errorbar(aes(ymin = exp(conf.low), ymax = (conf.high))) +
+  ylab("Predicted Bsal Prevalence\nin Fire Salamanders") +
+  xlab(expression("Temperature (°C)")) + 
+  scale_x_continuous(labels = seq(-10, 30, 10), breaks = seq(-10, 30, 10), limits = c(-10, 30)) + 
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1), limits = c(0, 0.6)) + 
+  ak_theme
+
+m3_t2_p2 
+
+
+# 3 Panel Graph
+m3_p2_combined <- ggarrange(m3_t2_p2 + rremove("xlab"), 
+                            m3_t1_p2 + rremove("ylab"), 
+                            m3_t0_p2 + rremove("ylab") + rremove("xlab"), 
+                            labels = NULL,
+                            ncol = 3, nrow = 1,
+                            common.legend = TRUE, legend = "bottom",
+                            align = "hv", 
+                            font.label = list(size = 10, color = "black", face = "bold", family = NULL, position = "top"))
+
+m3_p2_combined
+
 
 
 ```
 
 4. Fatality models
-   a. Interaction plot for fire salamanders only
+   a. T0 (At time of observation); T-1 (30 days prior to initial obs.); T-2 (60 days prior to initial obs.)
+```{r}
+# Drop rows with NA vals
+d_alpestris <- tidyr::drop_na(d_alpestris, any_of(c(37:42)))
+
+# Scale relevant vars
+scaledData_fatal <- d_alpestris %>%
+  mutate_at(c("temp_date", "temp_date_t1", "temp_date_t2",
+              "soilMoisture_date", "soilMoisture_date_t1", "soilMoisture_date_t2"), 
+            ~(scale(., center = T, scale = T %>% as.numeric)))
+
+
+# T0
+m4_t0 <- glmmTMB(fatal ~ temp_date*BsalDetected + (1|Site),
+                  family = "binomial",
+                  data = subset(scaledData_fatal, scientific =="Salamandra salamandra"),
+                  control = glmmTMBControl(optimizer = optim,
+                                           optArgs = list(method = "BFGS")))
+
+summary(m4_t0)
+Anova(m4_t0)
+
+
+
+# T-1
+m4_t1 <- glmmTMB(fatal ~ temp_date_t1*BsalDetected  + (1|Site),
+                  family = "binomial",
+                  data = subset(scaledData_fatal, scientific =="Salamandra salamandra"),
+                  control = glmmTMBControl(optimizer = optim,
+                                           optArgs = list(method = "BFGS")))
+
+summary(m4_t1)
+Anova(m4_t1)
+
+# T-2
+m4_t2 <- glmmTMB(fatal ~ temp_date_t2*BsalDetected + (1|Site),
+                  family = "binomial",
+                  data = subset(scaledData_fatal, scientific =="Salamandra salamandra"),
+                  control = glmmTMBControl(optimizer = optim,
+                                           optArgs = list(method = "BFGS")))
+
+summary(m4_t2)
+Anova(m4_t2)
+```
+
+   b. Interaction plot for fire salamanders only
+```{r}
+# T0
+m4_t0_predict <- ggpredict(m4_t0, terms = c("temp_date [all]", "BsalDetected"))
+m4_t0_predict <- m4_t0_predict %>%
+  rename("temp_date" = "x",
+         "BsalDetected" = "group") %>%
+  mutate(temp_date = as.numeric(as.character(temp_date)),
+         BsalDetected = ifelse(BsalDetected == 0, "No", "Yes"))
+
+# Convert scaled prediction to original data scale:
+m4_t0_unscaled <- m4_t0_predict
+m4_t0_unscaled$temp_date <- m4_t0_predict$temp_date * as.numeric(attr(scaledData_fatal$temp_date, "scaled:scale")) +
+                            as.numeric(attr(scaledData$temp_date, "scaled:center"))
+
+m4_t0_plot <- ggplot(m4_t0_unscaled, aes(x = temp_date , y = predicted)) +
+  geom_line(aes(linetype = as.factor(BsalDetected))) +
+  labs(title = bquote(Time[(0)]), linetype = "Bsal Positive") +
+  #  geom_errorbar(aes(ymin = exp(conf.low), ymax = (conf.high))) +
+  ylab("Predicted Fire Salamander\nMortality (%)") +
+  xlab(expression("Temperature (°C)")) + 
+  scale_x_continuous(labels = seq(-10, 30, 10), breaks = seq(-10, 30, 10), limits = c(-10, 30)) +  
+  scale_y_continuous(breaks = seq(0, .02, .01),
+                     labels = scales::percent,
+                     limits = c(0, .02)) +
+  ak_theme
+
+
+m4_t0_plot
+
+# T-1
+m4_t1_predict <- ggpredict(m4_t1, terms = c("temp_date_t1 [all]", "BsalDetected"))
+m4_t1_predict <- m4_t1_predict %>%
+  rename("temp_date_t1" = "x",
+         "BsalDetected" = "group") %>%
+  mutate(temp_date = as.numeric(as.character(temp_date_t1)),
+         BsalDetected = ifelse(BsalDetected == 0, "No", "Yes"))
+
+# Convert scaled prediction to original data scale:
+m4_t1_unscaled <- m4_t1_predict
+m4_t1_unscaled$temp_date_t1 <- m4_t1_predict$temp_date_t1 * as.numeric(attr(scaledData_fatal$temp_date_t1, "scaled:scale")) +
+  as.numeric(attr(scaledData$temp_date_t1, "scaled:center"))
+
+m4_t1_plot <- ggplot(m4_t1_unscaled, aes(x = temp_date_t1 , y = predicted)) +
+  geom_line(aes(linetype = as.factor(BsalDetected))) +
+  labs(title = bquote(Time[(-1)]), linetype = "Bsal Positive") +
+  #  geom_errorbar(aes(ymin = exp(conf.low), ymax = (conf.high))) +
+  ylab("Predicted Fire Salamander\nMortality (%)") +
+  xlab(expression("Temperature (°C)")) + 
+  scale_x_continuous(labels = seq(-10, 30, 10), breaks = seq(-10, 30, 10), limits = c(-10, 30)) +  
+  scale_y_continuous(breaks = seq(0, .002, .001),
+                     labels = scales::percent,
+                     limits = c(0, .002)) +
+  ak_theme
+
+
+m4_t1_plot
+
+# T-2
+m4_t2_predict <- ggpredict(m4_t2, terms = c("temp_date_t2 [all]", "BsalDetected"))
+m4_t2_predict <- m4_t2_predict %>%
+  rename("temp_date_t2" = "x",
+         "BsalDetected" = "group") %>%
+  mutate(temp_date = as.numeric(as.character(temp_date_t2)),
+         BsalDetected = ifelse(BsalDetected == 0, "No", "Yes"))
+
+# Convert scaled prediction to original data scale:
+m4_t2_unscaled <- m4_t2_predict
+m4_t2_unscaled$temp_date_t2 <- m4_t2_predict$temp_date_t2 * as.numeric(attr(scaledData_fatal$temp_date_t2, "scaled:scale")) +
+  as.numeric(attr(scaledData$temp_date_t2, "scaled:center"))
+
+m4_t2_plot <- ggplot(m4_t2_unscaled, aes(x = temp_date_t2 , y = predicted)) +
+  geom_line(aes(linetype = as.factor(BsalDetected))) +
+  labs(title = bquote(Time[(-2)]), linetype = "Bsal Positive") +
+  #  geom_errorbar(aes(ymin = exp(conf.low), ymax = (conf.high))) +
+  ylab("Predicted Fire Salamander\nMortality (%)") +
+  xlab(expression("Temperature (°C)")) + 
+  scale_x_continuous(labels = seq(-10, 30, 10), breaks = seq(-10, 30, 10), limits = c(-10, 30)) +  
+  scale_y_continuous(breaks = seq(0, .002, .001),
+                     labels = scales::percent,
+                     limits = c(0, .002)) + 
+  ak_theme
+
+
+m4_t2_plot
+
+
+# 3 Panel Graph
+m4_combined <- ggarrange(m4_t2_plot  + rremove("xlab"), 
+                            m4_t1_plot  + rremove("ylab"), 
+                            m4_t0_plot +rremove("ylab") + rremove("xlab"), 
+                            labels = NULL,
+                            ncol = 3, nrow = 1,
+                            common.legend = TRUE, legend = "bottom",
+                            align = "hv", 
+                            font.label = list(size = 10, color = "black", face = "bold", family = NULL, position = "top"))
+
+m4_combined
+
+```
+
 
 
 ## R Markdown
@@ -562,9 +966,7 @@ This is an R Markdown document. Markdown is a simple formatting syntax for autho
 
 When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
 
-```{r cars}
-summary(cars)
-```
+
 
 ## Including Plots
 
@@ -576,29 +978,4 @@ plot(pressure)
 
 
 
-```{r}
-
-# Copy dataframe
-scaledData <- dcbind_alpestris
-# Scale variables:
-scaledData$temp_date <- scale(scaledData$temp_date)
-scaledData$soilMoisture_date <- scale(scaledData$soilMoisture_date)
-
-# Save scaled attributes:
-scaleList <- scaledData %>%
-  list(temp_scale = as.numeric(attr(scaledData$temp_date, "scaled:scale")),
-    temp_center = as.numeric(attr(scaledData$temp_date, "scaled:center")),
-    soilMoisture_scale = as.numeric(attr(scaledData$soilMoisture_date, "scaled:scale")),
-    soilMoisture_center = as.numeric(attr(scaledData$soilMoisture_date, "scaled:center")))
-
-
-# Convert scaled prediction to original data scale:
-usp <- sp
-usp$temp_date <- sp$temp_date * scaleList$temp_scale + scaleList$temp_center 
-usp$soilMoisture_date <- sp$soilMoisture * scaleList$soilMoisture_scale + scaleList$soilMoisture_center
-
-
-# Compare predictions:
-all.equal(op, usp)
-```
 Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
