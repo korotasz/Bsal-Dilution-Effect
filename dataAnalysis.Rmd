@@ -1,12 +1,12 @@
 ---
-title: "Untitled"
+title: "DEH & Thermal Mismatch Hypothesis Analyses"
 author: "Alexis Korotasz"
 date: "`r Sys.Date()`"
 output: html_document
 ---
 
 ```{r setup, include=FALSE}
-#emotes::install_version("Rttf2pt1", version = "1.3.8") # install this version, latest ver. not compatible
+#remotes::install_version("Rttf2pt1", version = "1.3.8") # install this version, latest ver. not compatible
 #extrafont::font_import() # load fonts before ggplot2; only need to do this once
 require(pacman)
 require(rstudioapi) # Set working directory to current file location
@@ -60,7 +60,8 @@ analysis_pckgs <- c("tidyverse",
 #### ####
 ## Set working directory
 dir <- dirname(rstudioapi::getActiveDocumentContext()$path)
-setwd(dir)
+csvpath <- (path.expand("csvFiles"))
+setwd(file.path(dir, csvpath))
 
 ## Load relevant packages
 pacman::p_load(analysis_pckgs, character.only = T)
@@ -76,6 +77,8 @@ ak_theme <- theme_ipsum() +
         axis.title.x = element_text(size = 24, hjust = 0.5, margin = margin(t = 15, r = 0, b = 0, l = 0), face = "plain"),
         axis.text.y = element_text(size = 18),
         axis.title.y = element_text(size = 24, hjust = 0.5, margin = margin(t = 0, r = 15, b = 0, l = 5), face = "plain"),
+        plot.tag = element_text(size = 32,  hjust = 0.5, face = "plain"),
+        plot.tag.position = "topleft",
         plot.title = element_text(size = 32, hjust = 0.5, face = "plain"),
         plot.subtitle = element_markdown(size = 12, face = "plain"),
         plot.margin = margin(6, 12, 2, 2, "pt"), 
@@ -101,18 +104,6 @@ d <- d %>%
          logsiteAbun = log(siteAbun),
          scientific = as.factor(scientific),
          susceptibility = as.factor(susceptibility))#,
-#         temp_date_scaled = scale(temp_date), 
-#         temp_date_t1_scaled = scale(temp_date_t1), 
-#         temp_date_t2_scaled = scale(temp_date_t2), 
-#         soilMoisture_date_scaled = scale(soilMoisture_date), 
-#         soilMoisture_date_t1_scaled = scale(soilMoisture_date_t1), 
-#         soilMoisture_date_t2_scaled = scale(soilMoisture_date_t2),
-#         bio1_scaled = scale(bio1), 
-#         bio12_scaled = scale(bio12), 
-#         tavg_scaled = scale(tavg), 
-#         prec_scaled = scale(prec))
-
-
 
 
 dcbind <- dcbind %>%
@@ -120,16 +111,7 @@ dcbind <- dcbind %>%
          logsiteAbun = log(siteAbun),
          scientific = as.factor(scientific),
          susceptibility = as.factor(susceptibility))#,
-#         temp_date_scaled = scale(temp_date), 
-#         temp_date_t1_scaled = scale(temp_date_t1), 
-#         temp_date_t2_scaled = scale(temp_date_t2), 
-#         soilMoisture_date_scaled = scale(soilMoisture_date), 
-#         soilMoisture_date_t1_scaled = scale(soilMoisture_date_t1), 
-#         soilMoisture_date_t2_scaled = scale(soilMoisture_date_t2),
-#         bio1_scaled = scale(bio1), 
-#         bio12_scaled = scale(bio12), 
-#         tavg_scaled = scale(tavg), 
-#         prec_scaled = scale(prec)) 
+
 
 # Remove non-native species
 dcbind_alpestris <- subset(dcbind, scientific != "Ichthyosaura alpestris")
@@ -159,7 +141,8 @@ m1a_plot <- ggplot(m1a_predict, aes(x , exp(predicted))) +
   ylab("Species Abundance") +
   xlab("Species") + scale_x_discrete(expand = expansion(mult = c(0, 0.1), add = c(1, 0))) +
   ak_theme +
-  labs(caption = c("Relative species abundance at a given site by species. Error bars represent 95% confidence intervals."))
+  labs(tag = "A",
+       caption = c("Relative species abundance at a given site by species. Error bars represent 95% confidence intervals."))
 
 m1a_plot
 
@@ -185,7 +168,8 @@ m1b_plot <- ggplot(m1b_predict, aes(x , predicted)) +
   ylab("Disease Prevalence") +
   xlab("Species") + scale_x_discrete(expand = expansion(mult = c(0, 0.1), add = c(1, 0))) +
   ak_theme +
-  labs(caption = c("Proportion of disease prevalence (including both Bsal and Bd) by species."))
+  labs(tag = "B",
+       caption = c("Proportion of disease prevalence (including both Bsal and Bd) by species."))
 
 
 m1b_plot
