@@ -15,7 +15,10 @@ library(fs) # construct relative paths to files/directories
 
 
 
-wdir <- setwd('C:/Users/alexi/OneDrive/Documents/01_GradSchool/_DissertationWork/Chapter4/03_code')
+dir <- dirname(rstudioapi::getActiveDocumentContext()$path)
+csvpath <- (path.expand("/csvFiles"))
+setwd(file.path(dir, csvpath))
+
 euram <- read.csv("euram.csv", header = T, encoding = "UTF-8")
 germany <- read.csv("germany.csv", header = T, encoding = "UTF-8")
 uk <- read.csv("uk.csv", header = T, encoding = "UTF-8")
@@ -163,8 +166,7 @@ spr <- prev %>%
   group_by(Site, date) %>% 
   summarise_all(sum) %>%
   ungroup() %>%
-  mutate(richness = apply(.[,3:(ncol(.)-1)] > 0, 1, sum))
-
+  mutate(richness = apply(.[,3:(ncol(.))] > 0, 1, sum))
 
 ## Calculate abundance of individual spp at a site during each sampling event
 spa <- prev %>%
@@ -432,40 +434,39 @@ BEL <- temp %>% # Belgium
 
 
 ## Construct file path to store WorldClim Data
-worldclim_filepath <- base::file.path("C:/Users/alexi/OneDrive/Documents/01_GradSchool/_DissertationWork/Chapter4/03_code/WorldClimVars")
-# use filepath for WorldClim Data
-setwd(worldclim_filepath)
+wclim_path <- (path.expand("/WorldClim"))
+setwd(file.path(dir, wclim_path))
 
-CHEadm2 <- geodata::gadm(country = CHE$ADM0, path = worldclim_filepath, level = 2, version = "latest")
+CHEadm2 <- geodata::gadm(country = CHE$ADM0, path = file.path(dir, wclim_path), level = 2, version = "latest")
 CHEadm2 <- sf::st_as_sf(CHEadm2)
   
-DEUadm2 <- geodata::gadm(country = DEU$ADM0, path = worldclim_filepath, level = 2, version = "latest")
+DEUadm2 <- geodata::gadm(country = DEU$ADM0, path = file.path(dir, wclim_path), level = 2, version = "latest")
 DEUadm2 <- sf::st_as_sf(DEUadm2)
   
-GBRadm2 <- geodata::gadm(country = GBR$ADM0, path = worldclim_filepath, level = 2, version = "latest")
+GBRadm2 <- geodata::gadm(country = GBR$ADM0, path = file.path(dir, wclim_path), level = 2, version = "latest")
 GBRadm2 <- sf::st_as_sf(GBRadm2)
   
-ESPadm2 <- geodata::gadm(country = ESP$ADM0, path = worldclim_filepath, level = 2, version = "latest")
+ESPadm2 <- geodata::gadm(country = ESP$ADM0, path = file.path(dir, wclim_path), level = 2, version = "latest")
 ESPadm2 <- sf::st_as_sf(ESPadm2)
   
-BELadm2 <- geodata::gadm(country = BEL$ADM0, path = worldclim_filepath, level = 2, version = "latest")
+BELadm2 <- geodata::gadm(country = BEL$ADM0, path = file.path(dir, wclim_path), level = 2, version = "latest")
 BELadm2 <- sf::st_as_sf(BELadm2)
 
 #### Obtain WorldClim data as SpatVector layers ####
-tmin <- geodata::worldclim_global(var = 'tmin', path = worldclim_filepath, res = 2.5, version = "2.1")
+tmin <- geodata::worldclim_global(var = 'tmin', path = file.path(dir, wclim_path), res = 2.5, version = "2.1")
 tmin <- as(tmin, "Raster") # convert SpatRaster to Rasterstack
 
-tmax <- geodata::worldclim_global(var = 'tmax', path = worldclim_filepath, res = 2.5, version = "2.1")
+tmax <- geodata::worldclim_global(var = 'tmax', path = file.path(dir, wclim_path), res = 2.5, version = "2.1")
 tmax <- as(tmax, "Raster") # convert SpatRaster to Rasterstack
 
-tavg <- geodata::worldclim_global(var = 'tavg', path = worldclim_filepath, res = 2.5, version = "2.1")
+tavg <- geodata::worldclim_global(var = 'tavg', path = file.path(dir, wclim_path), res = 2.5, version = "2.1")
 tavg <- as(tavg, "Raster") # convert SpatRaster to Rasterstack
 
-prec <- geodata::worldclim_global(var = 'prec', path = worldclim_filepath, res = 2.5, version = "2.1")
+prec <- geodata::worldclim_global(var = 'prec', path = file.path(dir, wclim_path), res = 2.5, version = "2.1")
 prec <- as(prec, "Raster") # convert SpatRaster to Rasterstack
 gain(prec) = 0.1 # convert to cm
 
-bio <- geodata::worldclim_global(var = 'bio', path = worldclim_filepath, res = 2.5, version = "2.1")
+bio <- geodata::worldclim_global(var = 'bio', path = file.path(dir, wclim_path), res = 2.5, version = "2.1")
 bio <- as(bio, "Raster") # convert SpatRaster to Rasterstack
 
 
@@ -1104,13 +1105,12 @@ disease <- prev %>%
   
 disease <- with(disease, disease[order(Site, scientific), ])
 
+setwd(file.path(dir, csvpath))
 ## File for final prev dataframe:
-#write.csv(prev, 'C:/Users/alexi/OneDrive/Documents/01_GradSchool/_DissertationWork/Chapter4/03_code/bsalData_clean.csv',
-#          row.names = FALSE)
+write.csv(prev, file = "bsalData_clean.csv", row.names = FALSE)
 
 ## File for cbind model:
-#write.csv(disease, 'C:/Users/alexi/OneDrive/Documents/01_GradSchool/_DissertationWork/Chapter4/03_code/bsalData_cbind.csv',
-#          row.names = FALSE)
+write.csv(disease, file = "bsalData_cbind.csv", row.names = FALSE)
 
 
 

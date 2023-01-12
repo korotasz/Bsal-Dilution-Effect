@@ -43,6 +43,7 @@ analysis_pckgs <- c("tidyverse",
                     "DHARMa", # simulateResiduals(), testZeroInflation(), testDispersion()
                     "lme4", # lm()
                     "MASS", # negative binomial models
+                    "epiR",
                     "sjPlot" # plot_model()
 )
 
@@ -94,7 +95,8 @@ d <- d %>%
   mutate(logsppAbun = log(sppAbun),
          logsiteAbun = log(siteAbun),
          scientific = as.factor(scientific),
-         susceptibility = as.factor(susceptibility))#,
+         susceptibility = as.factor(susceptibility)) %>%
+         subset(scientific != "Calotriton asper") # Only one observation with NA vals for date
 
 
 dcbind <- dcbind %>%
@@ -112,10 +114,12 @@ d_alpestris <- subset(d, scientific != "Ichthyosaura alpestris")
 d_noJB <- subset(d, collectorList != "Jaime Bosch")
 dcbind_noJB <- subset(dcbind, collectorList != "Jaime Bosch")
 
+## Why is Richness 0 for 48 observations?
+test <- subset(d, richness == 0)
+
 
 #### 1) Descriptive Figures ####################################################
 ##      1a. Species ~ Abundance
-
 m1a <- glmmTMB(logsppAbun ~ scientific + (1|Site),
                data = d,
                control = glmmTMBControl(optimizer = optim,
@@ -126,96 +130,87 @@ m1a_predict <- ggpredict(m1a, terms = "scientific")
 
 m1a_plot <- ggplot(m1a_predict, aes(x , exp(predicted))) +
   geom_point() +
-  geom_errorbar(aes(ymin = exp(conf.low), ymax = exp(conf.high))) +
+  geom_errorbar(aes(ymin = exp(conf.low), ymax = exp(conf.high)), width = 0.4) +
   coord_flip() +
   ylab("Species abundance") +
-  xlab("Species") + scale_x_discrete(expand = expansion(mult = c(0, 0.1), add = c(1, 0))) +
+  xlab("Species") + scale_x_discrete(expand = expansion(mult = c(0, 0.01), add = c(1, 0.5))) +
   ak_theme +
   labs(caption = c("Relative species abundance at a given site by species. Error bars represent 95% confidence intervals."))
 
 m1a_plot
 
-
+#, add = c(1, 0)
 
 ##      1b. Prevalence ~ Species
+d_prev <- d %>%
+#  dplyr::select(Site, date, scientific, diseaseDetected, individualCount) %>%
+  group_by(scientific) %>%
+  mutate(ncas = sum(diseaseDetected == 1), # number of pos. cases
+         npop = sum(individualCount)) %>% # pop size (# of ALL individuals of that spp. for graphing purposes)
+  drop_na(date) %>%
+  ungroup() %>%
+  mutate(prev = ncas/npop) # prevalence as a proportion
+
+# Frequency histogram of disease prevalence estimates for our data
+ggplot(data = d_prev, aes(x = prev)) +
+  theme_bw() +
+  geom_histogram(binwidth = 0.01, colour = "gray", fill = "dark blue", size = 0.1) +
+  xlab("Prevalence") +
+  ylab("N")
+
+# Use a matrix containing number of cases (ncas) and population size (npop) to calculate the prevalence of disease in each population and its 95% confint
+tmp <- as.matrix(cbind(d_prev$ncas, d_prev$npop))
+tmp <- epi.conf(tmp, ctype = "prevalence", method = "exact", N = 1000, design = 1, 
+                 conf.level = 0.95) * 100
+
+# Add back to d_prev dataframe and sort by estimated prevalence
+d_prev <- cbind(d_prev, tmp)
+d_prev <- d_prev[sort.list(d_prev$est),]
+
 m1b <- glmmTMB(diseaseDetected ~ scientific + (1|Site), 
-               data = d, family = "binom", na.action = "na.exclude",
+               data = d_prev, family = "binomial", na.action = "na.exclude",
                control = glmmTMBControl(optimizer = optim,
                                         optArgs = list(method = "BFGS")))
 
 summary(m1b)
 Anova(m1b)
 
-m1b_predict <- ggpredict(m1b, terms = "scientific")
+m1b_predict <- ggpredict(m1b, terms = "scientific") # I don't think this is right?
 
-m1b_plot <- ggplot(m1b_predict, aes(x, predicted)) +
+
+#m1b_plot <- ggplot(m1b_predict, aes(x, predicted)) +
+#  geom_point() +
+#  coord_flip() +
+#  ylab("Disease prevalence (%)") +
+#  xlab("Species") + scale_x_discrete(expand = expansion(mult = c(0, 0.1), add = c(1, 0))) +
+#  scale_y_continuous(labels = scales::percent_format(accuracy = 0.1)) +
+#  ak_theme +
+#  labs(caption = c("Percent disease prevalence (including both Bsal and Bd) by species."))
+
+# Descriptive plot showing estimated disease prevalence values per species with a 95% ci
+m1b_plot <- ggplot(d_prev, aes(scientific, est)) +
+  geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.4) +
   geom_point() +
   coord_flip() +
-  ylab("Disease prevalence") +
-  xlab("Species") + scale_x_discrete(expand = expansion(mult = c(0, 0.1), add = c(1, 0))) +
-  scale_y_continuous(labels = scales::percent_format(accuracy = 0.1)) +
+  ylab("Disease prevalence (%)") +
+  xlab("Species") + scale_x_discrete(expand = expansion(mult = c(0, 0.01), add = c(1, 0.5))) +
+  scale_y_continuous(labels = scales::label_percent(scale = 1, suffix = "%")) +
   ak_theme +
-  labs(caption = c("Percent disease prevalence (including both Bsal and Bd) by species."))
+  labs(caption = c("Descriptive plot showing estimated disease prevalence (including both Bsal and Bd) for each species as a percent. Error bars represent 95% confidence intervals."))
+
 
 
 m1b_plot
 
-p1combined <- ((m1a_plot + labs(caption = NULL) + theme(plot.tag.position = c(0.95, 0.92)))|
-               (m1b_plot + labs(caption = NULL) +theme(axis.text.y = element_blank(), 
+p1combined <- ((m1a_plot + labs(caption = NULL) + theme(plot.tag.position = c(0.96, 0.95)))|
+               (m1b_plot + labs(caption = NULL) + theme(axis.text.y = element_blank(), 
                                                        axis.title.y = element_blank(),
-                                                       plot.tag.position = c(0.93, 0.92)))) +
+                                                       plot.tag.position = c(0.93, 0.95)))) +
                 plot_annotation(tag_levels = "A") 
                  
                 
 
 p1combined
-
-
-## m1b_test
-library(epiR)
-tmp <- d %>%
-  dplyr::select(Site, date, scientific, diseaseDetected, individualCount) %>%
-  group_by(Site, date, scientific) %>%
-  mutate(ncas = sum(diseaseDetected == 1),
-         npop = sum(individualCount)) %>%
-  drop_na(date) %>%
-  ungroup() %>%
-  mutate(prev = ncas/npop)
-  
-ggplot(data = tmp, aes(x = prev)) +
-  theme_bw() +
-  geom_histogram(binwidth = 0.01, colour = "gray", fill = "dark blue", size = 0.1) +
-  scale_x_continuous(limits = c(0,1), name = "Prevalence") +
-  scale_y_continuous(limits = c(0, 150), name = "N")
-
-tmp2 <- as.matrix(cbind(tmp$ncas, tmp$npop))
-View(tmp2)
-
-tmp2 <- epi.conf(tmp2, ctype = "prevalence", method = "exact", N = 1000, design = 1, 
-                 conf.level = 0.95) * 100
-
-tmp <- cbind(tmp, tmp2)
-tmp <- tmp[sort.list(tmp$est),]
-
-m1b_test <- glmmTMB(ncas ~ scientific + (1|Site), 
-               data = tmp, family = "binomial", na.action = "na.exclude",
-               control = glmmTMBControl(optimizer = optim,
-                                        optArgs = list(method = "BFGS")))
-
-summary(m1b_test)
-Anova(m1b_test)
-
-m1b_plot <- ggplot(tmp, aes(scientific, est)) +
-  geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.1) +
-  geom_point() +
-  coord_flip() +
-  ylab("Disease prevalence") +
-#  xlab("Species") + scale_x_discrete(expand = expansion(mult = c(0, 0.1), add = c(1, 0))) +
-#  scale_y_continuous(labels = scales::percent_format(accuracy = 0.1)) +
-  ak_theme +
-  labs(caption = c("Percent disease prevalence (including both Bsal and Bd) by species."))
-
-m1b_plot
 
 
 ##      1c. Susceptibility ~ Abundance
@@ -229,14 +224,17 @@ Anova(m1c)
 m1c_predict <- ggpredict(m1c, terms = c("susceptibility"))
 
 m1c_plot <- ggplot(m1c_predict, aes(x , exp(predicted))) +
-  geom_point(size = 3) +
-  geom_errorbar(aes(ymin = exp(conf.low), ymax = exp(conf.high))) +
+  geom_point(size = 5) +
+  geom_errorbar(aes(ymin = exp(conf.low), ymax = exp(conf.high)), width = 0.2) +
   scale_x_discrete(labels = c("Resistant", "Tolerant", "Susceptible")) +
   ylab("Species abundance") +
   xlab("Susceptibility level") + 
   ak_theme +
-  labs(caption = c("Resistant = No to low infection and no clinical signs of disease; Tolerant = low infection loads with<br> 
-  low or variable mortality; and Susceptible = High infection loads resulting in consistently high mortality.<br>On average, less abundant species at a given site tend to be more resistant while more abundant species tend to be<br>susceptible. Thus, given that rare species are lost from communities first, biodiversity loss might increase<br>disease risk in ecosystems with Bsal. Error bars represent 95% confidence intervals. "))
+  labs(caption = c("Resistant = No to low infection and no clinical signs of disease; Tolerant = low infection loads with low or variable mortality;
+                   and Susceptible = High infection loads resulting in consistently high mortality. On average, less abundant species at a given site 
+                   tend to be more resistant while more abundant species<br>tend to be susceptible. Thus, given that rare species are lost from 
+                   communities first, biodiversity loss might increase disease risk in ecosystems with Bsal. Error bars represent 95% confidence 
+                   intervals."))
 
 m1c_plot
 
