@@ -16,7 +16,9 @@ plot_pckgs <- c("tidyverse",
                 "RColorBrewer",
                 "colorspace", # color scale
                 "viridis", # arranging figures
-                "gridExtra" 
+                "gridExtra",
+                "grid",
+                "cowplot"
 )
 
 #### Map Specific Packages ####
@@ -70,7 +72,7 @@ ak_theme <- theme_ipsum() +
         axis.title.x = element_text(size = 24, hjust = 0.5, margin = margin(t = 15, r = 0, b = 0, l = 0), face = "plain"),
         axis.text.y = element_text(size = 18),
         axis.title.y = element_text(size = 24, hjust = 0.5, margin = margin(t = 0, r = 15, b = 0, l = 5), face = "plain"),
-        plot.tag = element_text(size = 32,  hjust = 0.5, face = "plain"),
+        plot.tag = element_text(size = 32, face = "plain"),
         plot.title = element_text(size = 32, hjust = 0.5, face = "plain"),
         plot.subtitle = element_markdown(size = 12, face = "plain"),
         plot.margin = margin(6, 12, 2, 2, "pt"), 
@@ -96,14 +98,16 @@ d <- d %>%
          logsiteAbun = log(siteAbun),
          scientific = as.factor(scientific),
          susceptibility = as.factor(susceptibility)) %>%
-         subset(scientific != "Calotriton asper") # Only one observation with NA vals for date
+  subset(scientific != "Calotriton asper") # Only one observation with NA vals for date
 
 
 dcbind <- dcbind %>%
   mutate(logsppAbun = log(sppAbun),
          logsiteAbun = log(siteAbun),
          scientific = as.factor(scientific),
-         susceptibility = as.factor(susceptibility))#,
+         susceptibility = as.factor(susceptibility))%>%
+  subset(scientific != "Calotriton asper") # Only one observation with NA vals for date
+
 
 
 # Remove non-native species
@@ -113,9 +117,6 @@ d_alpestris <- subset(d, scientific != "Ichthyosaura alpestris")
 # Remove Jaime's data 
 d_noJB <- subset(d, collectorList != "Jaime Bosch")
 dcbind_noJB <- subset(dcbind, collectorList != "Jaime Bosch")
-
-## Why is Richness 0 for 48 observations?
-test <- subset(d, richness == 0)
 
 
 #### 1) Descriptive Figures ####################################################
@@ -139,11 +140,9 @@ m1a_plot <- ggplot(m1a_predict, aes(x , exp(predicted))) +
 
 m1a_plot
 
-#, add = c(1, 0)
 
 ##      1b. Prevalence ~ Species
 d_prev <- d %>%
-#  dplyr::select(Site, date, scientific, diseaseDetected, individualCount) %>%
   group_by(scientific) %>%
   mutate(ncas = sum(diseaseDetected == 1), # number of pos. cases
          npop = sum(individualCount)) %>% # pop size (# of ALL individuals of that spp. for graphing purposes)
@@ -167,26 +166,6 @@ tmp <- epi.conf(tmp, ctype = "prevalence", method = "exact", N = 1000, design = 
 d_prev <- cbind(d_prev, tmp)
 d_prev <- d_prev[sort.list(d_prev$est),]
 
-m1b <- glmmTMB(diseaseDetected ~ scientific + (1|Site), 
-               data = d_prev, family = "binomial", na.action = "na.exclude",
-               control = glmmTMBControl(optimizer = optim,
-                                        optArgs = list(method = "BFGS")))
-
-summary(m1b)
-Anova(m1b)
-
-m1b_predict <- ggpredict(m1b, terms = "scientific") # I don't think this is right?
-
-
-#m1b_plot <- ggplot(m1b_predict, aes(x, predicted)) +
-#  geom_point() +
-#  coord_flip() +
-#  ylab("Disease prevalence (%)") +
-#  xlab("Species") + scale_x_discrete(expand = expansion(mult = c(0, 0.1), add = c(1, 0))) +
-#  scale_y_continuous(labels = scales::percent_format(accuracy = 0.1)) +
-#  ak_theme +
-#  labs(caption = c("Percent disease prevalence (including both Bsal and Bd) by species."))
-
 # Descriptive plot showing estimated disease prevalence values per species with a 95% ci
 m1b_plot <- ggplot(d_prev, aes(scientific, est)) +
   geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.4) +
@@ -196,11 +175,10 @@ m1b_plot <- ggplot(d_prev, aes(scientific, est)) +
   xlab("Species") + scale_x_discrete(expand = expansion(mult = c(0, 0.01), add = c(1, 0.5))) +
   scale_y_continuous(labels = scales::label_percent(scale = 1, suffix = "%")) +
   ak_theme +
-  labs(caption = c("Descriptive plot showing estimated disease prevalence (including both Bsal and Bd) for each species as a percent. Error bars represent 95% confidence intervals."))
-
-
+  labs(caption = c("Descriptive plot showing disease prevalence (including both Bsal and Bd) for each species as a percent. Error bars represent 95% confidence intervals."))
 
 m1b_plot
+
 
 p1combined <- ((m1a_plot + labs(caption = NULL) + theme(plot.tag.position = c(0.96, 0.95)))|
                (m1b_plot + labs(caption = NULL) + theme(axis.text.y = element_blank(), 
@@ -225,9 +203,9 @@ m1c_predict <- ggpredict(m1c, terms = c("susceptibility"))
 
 m1c_plot <- ggplot(m1c_predict, aes(x , exp(predicted))) +
   geom_point(size = 5) +
-  geom_errorbar(aes(ymin = exp(conf.low), ymax = exp(conf.high)), width = 0.2) +
+  geom_errorbar(aes(ymin = exp(conf.low), ymax = exp(conf.high)), width = 0.2, size = 1) +
   scale_x_discrete(labels = c("Resistant", "Tolerant", "Susceptible")) +
-  ylab("Species abundance") +
+  ylab("Species abundance") + scale_y_discrete(limits = factor(0:8), breaks = c("0", "2", "4", "6", "8")) +
   xlab("Susceptibility level") + 
   ak_theme +
   labs(caption = c("Resistant = No to low infection and no clinical signs of disease; Tolerant = low infection loads with low or variable mortality;
@@ -430,14 +408,15 @@ m2_t0_rich <- ggpredict(m2_t0,  terms = c("richness", "logsiteAbun [0.5, 2, 4]")
 
 
 m2_t0_p1 <- ggplot(m2_t0_rich, aes(x = x , y = predicted)) +
-  geom_line(aes(linetype = group)) +
-  labs(title = bquote(Time[(0)]), linetype = "ln(Site-Level Abundance)") +
-  #  geom_errorbar(aes(ymin = exp(conf.low), ymax = (conf.high))) +
-  ylab("Predicted Bsal Prevalence\nAcross All Salamander Species") +
+  geom_line(aes(linetype = group), size = 1) +
+  labs(title = bquote(paste(italic(t))[(0~days)]), linetype = "ln(Site-Level Abundance)") +
+  #  geom_ribbon(aes(ymin = exp(conf.low), ymax = (conf.high))) +
+  ylab("Predicted Bsal prevalence\nacross all salamander species") +
   xlab("Species Richness") + 
+  scale_linetype_manual(values = c("solid", "longdash", "twodash")) +
   scale_x_continuous(labels = seq(0, 10, 1), breaks = seq(0, 10, 1)) + 
-  scale_y_continuous(labels = scales::percent_format(accuracy = 1), limits = c(0, 0.05)) + 
-  ak_theme
+  scale_y_continuous(labels = scales::percent_format(accuracy = 0.1), limits = c(0, 0.021)) + 
+  ak_theme + theme(plot.tag.position = c(0.9, 0.9))
 
 m2_t0_p1 
 
@@ -446,15 +425,16 @@ m2_t1_rich <- ggpredict(m2_t1,  terms = c("richness", "logsiteAbun [0.5, 2, 4]")
 
 
 m2_t1_p1 <- ggplot(m2_t1_rich, aes(x = x , y = predicted)) +
-  geom_line(aes(linetype = group)) +
-  labs(title = bquote(Time[(-1)]), linetype = "ln(Site-Level Abundance)") +
-  #  geom_errorbar(aes(ymin = exp(conf.low), ymax = (conf.high))) +
-  ylab("Predicted Bsal Prevalence\nAcross All Salamander Species") +
+  geom_line(aes(linetype = group), size = 1) +
+  labs(title = bquote(paste(italic(t))[(-30~days)]), linetype = "ln(Site-Level Abundance)") +
+  #  geom_ribbon(aes(ymin = exp(conf.low), ymax = (conf.high))) +
+  ylab("Predicted Bsal prevalence\nacross all salamander species") +
   xlab("Species Richness") + 
   guides(fill = guide_legend(title = "ln(Site-Level Abundance)")) +
+  scale_linetype_manual(values = c("solid", "longdash", "twodash")) +
   scale_x_continuous(labels = seq(0, 10, 1), breaks = seq(0, 10, 1)) + 
-  scale_y_continuous(labels = scales::percent_format(accuracy = 1), limits = c(0, 0.05)) + 
-  ak_theme
+  scale_y_continuous(labels = scales::percent_format(accuracy = 0.1), limits = c(0, 0.021)) + 
+  ak_theme + theme(plot.tag.position = c(0.9, 0.9))
 
 m2_t1_p1 
 
@@ -464,29 +444,32 @@ m2_t2_rich <- ggpredict(m2_t2,  terms = c("richness", "logsiteAbun [0.5, 2, 4]")
 
 
 m2_t2_p1 <- ggplot(m2_t2_rich, aes(x = x , y = predicted)) +
-  geom_line(aes(linetype = group)) +
-  labs(title = bquote(Time[(-2)]), linetype = "ln(Site-Level Abundance)") +
-  #  geom_errorbar(aes(ymin = exp(conf.low), ymax = (conf.high))) +
-  ylab("Predicted Bsal Prevalence\nAcross All Salamander Species") +
+  geom_line(aes(linetype = group), size = 1) +
+  labs(title = bquote(paste(italic(t))[(-60~days)]), linetype = "ln(Site-Level Abundance)") +
+  #  geom_ribbon(aes(ymin = exp(conf.low), ymax = (conf.high))) +
+  ylab("Predicted Bsal prevalence across all salamander species") +
   xlab("Species Richness") + 
   guides(fill = guide_legend(title = "ln(Site-Level Abundance)")) +
+  scale_linetype_manual(values = c("solid", "longdash", "twodash")) +
   scale_x_continuous(labels = seq(0, 10, 1), breaks = seq(0, 10, 1)) + 
-  scale_y_continuous(labels = scales::percent_format(accuracy = 1), limits = c(0, 0.05)) + 
-  ak_theme
+  scale_y_continuous(labels = scales::percent_format(accuracy = 0.1), limits = c(0, 0.021)) + 
+  ak_theme + theme(plot.tag.position = c(0.9, 0.9))
 
 m2_t2_p1 
 
 # 3 Panel Graph
-m2_p1_combined <- ggarrange(m2_t2_p1 + rremove("xlab"), 
-                            m2_t1_p1 + rremove("ylab"), 
-                            m2_t0_p1 + rremove("ylab") + rremove("xlab"), 
+m2_p1_combined <- ggarrange(m2_t2_p1 + labs(tag = "A") + rremove("xlab"), 
+                            m2_t1_p1 + labs(tag = "B") +  rremove("ylab"), 
+                            m2_t0_p1 + labs(tag = "C") + rremove("ylab") + rremove("xlab"), 
                             labels = NULL,
                             ncol = 3, nrow = 1,
                             common.legend = TRUE, legend = "bottom",
                             align = "hv", 
                             font.label = list(size = 10, color = "black", face = "bold", family = NULL, position = "top"))
 
-m2_p1_combined
+annotate_figure(m2_p1_combined, bottom = textGrob("Timepoints above each graph indicate the time from the initial observation.", x = 0, 
+                                                  hjust = 0, gp = gpar(fontsize = 12)))
+
 
 
 
@@ -508,21 +491,36 @@ m2_t0_w_unscaled$soilMoisture_date <- m2_t0_weather$soilMoisture * as.numeric(at
   as.numeric(attr(scaledData$soilMoisture_date, "scaled:center"))
 m2_t0_w_unscaled$soilMoisture_date <- round(m2_t0_w_unscaled$soilMoisture_date, 2)
 
+# Create dummy column for soil moisture labels
+m2_t0_w_unscaled$dummy <- NA
+for(i in 1:nrow(m2_t0_w_unscaled)){
+    if(m2_t0_w_unscaled[i,6] == 5.37){
+      m2_t0_w_unscaled[i,7] <- "Low"
+    }
+  else if(m2_t0_w_unscaled[i,6] == 6.11){
+    m2_t0_w_unscaled[i,7] <- "Med"
+  }
+  else if(m2_t0_w_unscaled[i,6] == 6.85){
+    m2_t0_w_unscaled[i,7] <- "High"
+  }
+}
+
 
 m2_t0_p2 <- ggplot(m2_t0_w_unscaled, aes(x = temp_date , y = predicted)) +
-  geom_line(aes(linetype = as.factor(soilMoisture_date))) +
-  labs(title = bquote(Time[(0)]), linetype = bquote("Soil Moisture (kg/m"^2~")")) +
+  geom_line(aes(linetype = factor(dummy, levels  = c("Low", "Med", "High"))), size = 1) +
+  labs(title =  bquote(paste(italic(t))[(0~days)]), linetype = bquote("Soil Moisture")) +
   #  geom_errorbar(aes(ymin = exp(conf.low), ymax = (conf.high))) +
-  ylab("Predicted Bsal Prevalence\nAcross All Salamander Species") +
+  ylab("Predicted Bsal prevalence\nacross all salamander species") +
   xlab(expression("Temperature (°C)")) + 
-  #  scale_x_continuous(labels = seq(0, 10, 1), breaks = seq(0, 10, 1)) + 
-  scale_y_continuous(labels = scales::percent_format(accuracy = 1)) + 
-  ak_theme
+  scale_linetype_manual(values = c("solid", "longdash", "twodash")) +
+  scale_x_continuous(labels = seq(-10, 30, 10), breaks = seq(-10, 30, 10), limits = c(-10, 30)) + 
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1), limits = c(0, 0.2)) + 
+  ak_theme + theme(plot.tag.position = c(0.9, 0.9))
 
 m2_t0_p2 
 
 
-# T-1
+k# T-1
 m2_t1_weather <- ggpredict(m2_t1, terms = c("temp_date_t1 [all]", "soilMoisture_date_t1"))
 m2_t1_weather <- m2_t1_weather %>%
   rename("temp_date_t1" = "x",
@@ -539,16 +537,30 @@ m2_t1_w_unscaled$soilMoisture_date_t1 <- m2_t1_weather$soilMoisture * as.numeric
   as.numeric(attr(scaledData$soilMoisture_date_t1, "scaled:center"))
 m2_t1_w_unscaled$soilMoisture_date_t1 <- round(m2_t1_w_unscaled$soilMoisture_date_t1, 2)
 
+# Create dummy column for soil moisture labels
+m2_t1_w_unscaled$dummy <- NA
+for(i in 1:nrow(m2_t1_w_unscaled)){
+  if(m2_t1_w_unscaled[i,6] == 5.36){
+    m2_t1_w_unscaled[i,7] <- "Low"
+  }
+  else if(m2_t1_w_unscaled[i,6] == 6.12){
+    m2_t1_w_unscaled[i,7] <- "Med"
+  }
+  else if(m2_t1_w_unscaled[i,6] == 6.88){
+    m2_t1_w_unscaled[i,7] <- "High"
+  }
+}
 
 m2_t1_p2 <- ggplot(m2_t1_w_unscaled, aes(x = temp_date_t1 , y = predicted)) +
-  geom_line(aes(linetype = as.factor(soilMoisture_date_t1))) +
-  labs(title = bquote(Time[(-1)]), linetype = bquote("Soil Moisture (kg/m"^2~")")) +
+  geom_line(aes(linetype = factor(dummy, levels  = c("Low", "Med", "High"))), size = 1) +
+  labs(title = bquote(paste(italic(t))[(-30~days)]), linetype = bquote("Soil Moisture")) +
   #  geom_errorbar(aes(ymin = exp(conf.low), ymax = (conf.high))) +
-  ylab("Predicted Bsal Prevalence\nAcross All Salamander Species") +
+  ylab("Predicted Bsal prevalence\nacross all salamander species") +
   xlab(expression("Temperature (°C)")) + 
-  #  scale_x_continuous(labels = seq(0, 10, 1), breaks = seq(0, 10, 1)) + 
-  scale_y_continuous(labels = scales::percent_format(accuracy = 1)) + 
-  ak_theme
+  scale_linetype_manual(values = c("solid", "longdash", "twodash")) +
+  scale_x_continuous(labels = seq(-10, 30, 10), breaks = seq(-10, 30, 10), limits = c(-10, 30)) + 
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1), limits = c(0, 0.2)) + 
+  ak_theme + theme(plot.tag.position = c(0.9, 0.9))
 
 m2_t1_p2 
 
@@ -570,36 +582,57 @@ m2_t2_w_unscaled$soilMoisture_date_t2 <- m2_t2_weather$soilMoisture * as.numeric
   as.numeric(attr(scaledData$soilMoisture_date_t2, "scaled:center"))
 m2_t2_w_unscaled$soilMoisture_date_t2 <- round(m2_t2_w_unscaled$soilMoisture_date_t2, 2)
 
+# Create dummy column for soil moisture labels
+m2_t2_w_unscaled$dummy <- NA
+for(i in 1:nrow(m2_t2_w_unscaled)){
+  if(m2_t2_w_unscaled[i,6] == 5.33){
+    m2_t2_w_unscaled[i,7] <- "Low"
+  }
+  else if(m2_t2_w_unscaled[i,6] == 6.13){
+    m2_t2_w_unscaled[i,7] <- "Med"
+  }
+  else if(m2_t2_w_unscaled[i,6] == 6.93){
+    m2_t2_w_unscaled[i,7] <- "High"
+  }
+}
+
 
 m2_t2_p2 <- ggplot(m2_t2_w_unscaled, aes(x = temp_date_t2 , y = predicted)) +
-  geom_line(aes(linetype = as.factor(soilMoisture_date_t2))) +
-  labs(title = bquote(Time[(-2)]), linetype = bquote("Soil Moisture (kg/m"^2~")")) +
+  geom_line(aes(linetype = factor(dummy, levels  = c("Low", "Med", "High"))), size = 1) +
+  labs(title = bquote(paste(italic(t))[(-60~days)]), linetype = bquote("Soil Moisture")) +
   #  geom_errorbar(aes(ymin = exp(conf.low), ymax = (conf.high))) +
-  ylab("Predicted Bsal Prevalence\nAcross All Salamander Species") +
+  ylab("Predicted Bsal prevalence across all salamander species") +
   xlab(expression("Temperature (°C)")) + 
-  #  scale_x_continuous(labels = seq(0, 10, 1), breaks = seq(0, 10, 1)) + 
-  scale_y_continuous(labels = scales::percent_format(accuracy = 1)) + 
-  ak_theme
+  scale_linetype_manual(values = c("solid", "longdash", "twodash")) +
+  scale_x_continuous(labels = seq(-10, 30, 10), breaks = seq(-10, 30, 10), limits = c(-10, 30)) + 
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1), limits = c(0, 0.2)) + 
+  ak_theme + theme(plot.tag.position = c(0.9, 0.9))
 
 m2_t2_p2 
 
 
 # 3 Panel Graph
-m2_p2_combined <- ggarrange(m2_t2_p2 + rremove("xlab"), 
-                            m2_t1_p2  + rremove("ylab"), 
-                            m2_t0_p2 +rremove("ylab") + rremove("xlab"), 
+m2_p2_combined <- ggarrange((m2_t2_p2 + labs(tag = "A") + rremove("xlab")),
+                            (m2_t1_p2 + labs(tag = "B") + rremove("ylab")), 
+                            (m2_t0_p2 + labs(tag = "C") + rremove("ylab") + rremove("xlab")), 
                             labels = NULL,
                             ncol = 3, nrow = 1,
                             common.legend = TRUE, legend = "bottom",
                             align = "hv", 
                             font.label = list(size = 10, color = "black", face = "bold", family = NULL, position = "top"))
 
-m2_p2_combined
 
+annotate_figure(m2_p2_combined, bottom = textGrob(bquote("Soil moisture ranged from 5.33-5.37 (kg/m"^2~"), 6.11-6.13 (kg/m"^2~"), and 6.85-6.97 (kg/m"^2~"), for the Low, Medium, and High categories respectively. Timepoints above each graph indicate the time from the initial observation."), x = 0, 
+                                                  hjust = 0, gp = gpar(fontsize = 12)))
 
 
 #### 3. Cbind models for fire salamanders only ####################################################
 ##      3a. T0 (At time of observation); T-1 (30 days prior to initial obs.); T-2 (60 days prior to initial obs.)
+FS_abun <- d_cbind
+FS_abun <- d %>%
+  
+
+
 # T0
 m3_t0 <- glmmTMB(cbind(YesBsal, NoBsal) ~  richness*logsiteAbun + temp_date*soilMoisture_date + (1|scientific),
                  data = subset(scaledData, scientific =="Salamandra salamandra"), family = "binomial",
