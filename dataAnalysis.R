@@ -153,7 +153,7 @@ d_prev <- d %>%
 # Frequency histogram of disease prevalence estimates for our data
 ggplot(data = d_prev, aes(x = prev)) +
   theme_bw() +
-  geom_histogram(binwidth = 0.01, colour = "gray", fill = "dark blue", size = 0.1) +
+  geom_histogram(binwidth = 0.01, colour = "gray", fill = "dark blue", linewidth = 0.1) +
   xlab("Prevalence") +
   ylab("N")
 
@@ -520,7 +520,7 @@ m2_t0_p2 <- ggplot(m2_t0_w_unscaled, aes(x = temp_date , y = predicted)) +
 m2_t0_p2 
 
 
-k# T-1
+# T-1
 m2_t1_weather <- ggpredict(m2_t1, terms = c("temp_date_t1 [all]", "soilMoisture_date_t1"))
 m2_t1_weather <- m2_t1_weather %>%
   rename("temp_date_t1" = "x",
@@ -627,9 +627,59 @@ annotate_figure(m2_p2_combined, bottom = textGrob(bquote("Soil moisture ranged f
 
 
 #### 3. Cbind models for fire salamanders only ####################################################
+# Determine which sites are Bsal positive and when they first tested positive for fire salamanders only
+BsalPosSites <- d %>%
+  dplyr::filter(scientific == "Salamandra salamandra" & date != "NA") %>%
+  group_by(Site, date, BsalDetected) %>%
+  summarise_at(vars(colnames("date")), min, na.rm = T) %>%
+  dplyr::filter(BsalDetected != 0) %>%
+  group_by(Site) %>%
+  arrange(date) %>%
+  slice(1L) %>%
+  mutate(date = as.Date(date))
+
+# Add back into main cbind data frame
+tmp <- dcbind
+tmp <- dcbind %>%
+  dplyr::filter(scientific == "Salamandra salamandra" & date != "NA") %>%
+  mutate(prevalence_above_0 = NA,
+         date = as.Date(date))
+
+tmp$prevalence_above_0 = BsalPosSites$prevalence_above_0[base::match(paste(tmp$Site, tmp$date), 
+                                                                     paste(BsalPosSites$Site, BsalPosSites$date))]
+
+
+
+plyr::adply(BsalPosSites, 1, transform, prevalence_above_0 = {data <- dplyr::select(tmp$Site == BsalPosSites$Site &
+                                                                              lubridate::as_date(tmp$date, origin = lubridate::origin) >= lubridate::as_date(tmp$date, origin = lubridate::origin))
+                                                              tail(data$prevalence_above_0, 1)})
+
+for(i in 1:nrow(tmp)){
+  if(BsalPosSites[i, 1] == tmp[i, 4] &
+    lubridate::as_date(BsalPosSites[i, 2], origin = lubridate::origin) >= 
+    lubridate::as_date(as.numeric(tmp[i, 5]), origin = lubridate::origin)){
+    tmp[i, 61] <- "TRUE"
+    }
+  else if(lubridate::as_date(tmp[i, 5] == "NA", origin = lubridate::origin)){
+    tmp[i, 61] <- "NA"
+    }
+  else {
+     tmp[i, 61] <- "FALSE"
+     }
+}
+
+
+
+
+
 ##      3a. T0 (At time of observation); T-1 (30 days prior to initial obs.); T-2 (60 days prior to initial obs.)
-FS_abun <- d_cbind
-FS_abun <- d %>%
+
+
+
+  
+  
+
+
   
 
 
