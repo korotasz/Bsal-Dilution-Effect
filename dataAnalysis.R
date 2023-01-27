@@ -361,7 +361,7 @@ ggplot(wmap, aes(x = long, y = lat)) +
 #### 2. Cbind models for all salamander spp. ####################################################
 ##      2a. T0 (At time of observation); T-1 (30 days prior to initial obs.); T-2 (60 days prior to initial obs.)
 # Drop rows with NA vals
-dcbind_alpestris <- tidyr::drop_na(dcbind_alpestris, any_of(c(14:15, 29:34)))
+dcbind_alpestris <- tidyr::drop_na(dcbind_alpestris, any_of(c(25:30)))
 
 # Scale relevant vars
 scaledData <- dcbind_alpestris %>%
@@ -371,7 +371,7 @@ scaledData <- dcbind_alpestris %>%
 
 
 # T0
-m2_t0 <- glmmTMB(cbind(YesBsal, NoBsal) ~  richness*logsiteAbun + temp_date*soilMoisture_date + (1|scientific),
+m2_t0 <- glmmTMB(cbind(nPos_all, nNeg_all) ~  richness*logsiteAbun + temp_date*soilMoisture_date + (1|scientific),
                  data = scaledData, family = "binomial",
                  control = glmmTMBControl(optimizer = optim, 
                                           optArgs = list(method = "BFGS")))
@@ -381,7 +381,7 @@ Anova(m2_t0)
 
 
 # T-1
-m2_t1 <- glmmTMB(cbind(YesBsal, NoBsal) ~  richness*logsiteAbun + temp_date_t1*soilMoisture_date_t1 + (1|scientific),
+m2_t1 <- glmmTMB(cbind(nPos_all, nNeg_all) ~  richness*logsiteAbun + temp_date_t1*soilMoisture_date_t1 + (1|scientific),
                  data = scaledData, family = "binomial",
                  control = glmmTMBControl(optimizer = optim, 
                                           optArgs = list(method = "BFGS")))
@@ -392,7 +392,7 @@ Anova(m2_t1)
 
 
 # T-2
-m2_t2 <- glmmTMB(cbind(YesBsal, NoBsal) ~  richness*logsiteAbun + temp_date_t2*soilMoisture_date_t2 + (1|scientific),
+m2_t2 <- glmmTMB(cbind(nPos_all, nNeg_all) ~  richness*logsiteAbun + temp_date_t2*soilMoisture_date_t2 + (1|scientific),
                  data = scaledData, family = "binomial",
                  control = glmmTMBControl(optimizer = optim, 
                                           optArgs = list(method = "BFGS")))
@@ -627,64 +627,21 @@ annotate_figure(m2_p2_combined, bottom = textGrob(bquote("Soil moisture ranged f
 
 
 #### 3. Cbind models for fire salamanders only ####################################################
-# Determine which sites are Bsal positive and when they first tested positive for fire salamanders only
-BsalPosSites <- d %>%
-  dplyr::filter(scientific == "Salamandra salamandra" & date != "NA") %>%
-  group_by(Site, date, BsalDetected) %>%
-  summarise_at(vars(colnames("date")), min, na.rm = T) %>%
-  dplyr::filter(BsalDetected != 0) %>%
-  group_by(Site) %>%
-  arrange(date) %>%
-  slice(1L) %>%
-  mutate(date = as.Date(date))
 
-# Add back into main cbind data frame
-tmp <- dcbind
-tmp <- dcbind %>%
-  dplyr::filter(scientific == "Salamandra salamandra" & date != "NA") %>%
-  mutate(prevalence_above_0 = NA,
-         date = as.Date(date))
-
-tmp$prevalence_above_0 = BsalPosSites$prevalence_above_0[base::match(paste(tmp$Site, tmp$date), 
-                                                                     paste(BsalPosSites$Site, BsalPosSites$date))]
-
-
-
-plyr::adply(BsalPosSites, 1, transform, prevalence_above_0 = {data <- dplyr::select(tmp$Site == BsalPosSites$Site &
-                                                                              lubridate::as_date(tmp$date, origin = lubridate::origin) >= lubridate::as_date(tmp$date, origin = lubridate::origin))
-                                                              tail(data$prevalence_above_0, 1)})
-
-for(i in 1:nrow(tmp)){
-  if(BsalPosSites[i, 1] == tmp[i, 4] &
-    lubridate::as_date(BsalPosSites[i, 2], origin = lubridate::origin) >= 
-    lubridate::as_date(as.numeric(tmp[i, 5]), origin = lubridate::origin)){
-    tmp[i, 61] <- "TRUE"
-    }
-  else if(lubridate::as_date(tmp[i, 5] == "NA", origin = lubridate::origin)){
-    tmp[i, 61] <- "NA"
-    }
-  else {
-     tmp[i, 61] <- "FALSE"
-     }
-}
-
-
-
+# there should be 34 sites total that tested positive for Bsal
+#tmp <- BsalPos_FS %>%
+#  dplyr::select(Site, date, prev_above_0) %>%
+#  dplyr::filter(prev_above_0 != 0) %>%
+#  group_by(Site, date) %>%
+#  summarise_at(vars(colnames("date")), min, na.rm = T) %>%
+#  group_by(Site) %>%
+#  arrange(date) %>%
+#  slice(1L)
 
 
 ##      3a. T0 (At time of observation); T-1 (30 days prior to initial obs.); T-2 (60 days prior to initial obs.)
-
-
-
-  
-  
-
-
-  
-
-
 # T0
-m3_t0 <- glmmTMB(cbind(YesBsal, NoBsal) ~  richness*logsiteAbun + temp_date*soilMoisture_date + (1|scientific),
+m3_t0 <- glmmTMB(cbind(nPos_FS, nNeg_FS) ~  richness*logsiteAbun + temp_date*soilMoisture_date + (1|scientific),
                  data = subset(scaledData, scientific =="Salamandra salamandra"), family = "binomial",
                  control = glmmTMBControl(optimizer = optim, 
                                           optArgs = list(method = "BFGS")))
@@ -694,7 +651,7 @@ Anova(m3_t0)
 
 
 # T-1
-m3_t1 <- glmmTMB(cbind(YesBsal, NoBsal) ~  richness*logsiteAbun + temp_date_t1*soilMoisture_date_t1 + (1|scientific),
+m3_t1 <- glmmTMB(cbind(nPos_FS, nNeg_FS) ~  richness*logsiteAbun + temp_date_t1*soilMoisture_date_t1 + (1|scientific),
                  data = subset(scaledData, scientific =="Salamandra salamandra"), family = "binomial",
                  control = glmmTMBControl(optimizer = optim, 
                                           optArgs = list(method = "BFGS")))
@@ -705,7 +662,7 @@ Anova(m3_t1)
 
 
 # T-2
-m3_t2 <- glmmTMB(cbind(YesBsal, NoBsal) ~  richness*logsiteAbun + temp_date_t2*soilMoisture_date_t2 + (1|scientific),
+m3_t2 <- glmmTMB(cbind(nPos_FS, nNeg_FS) ~  richness*logsiteAbun + temp_date_t2*soilMoisture_date_t2 + (1|scientific),
                  data = subset(scaledData, scientific =="Salamandra salamandra"), family = "binomial",
                  control = glmmTMBControl(optimizer = optim, 
                                           optArgs = list(method = "BFGS")))

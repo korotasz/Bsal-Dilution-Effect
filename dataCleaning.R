@@ -1071,46 +1071,62 @@ data.frame(colnames(prev))
 prev <- prev[, c(1:42, 51:73, 43:50)]
 
 #### cbind model df ####
-## Create two new columns for Bsal detection successes/failures at each site, 
-## for each species, during each sampling event
 prev$genus <- gsub("[[:space:]]", "", prev$genus) # get rid of weird spaces in this column
 
-disease <- prev %>%
-  dplyr::select(country, decimalLatitude, decimalLongitude, Site, date, date_t1, date_t2,  
-                scientific, susceptibility, BdDetected, BsalDetected, diseaseDetected, whichDisease, 
-                fatal, sppAbun, siteAbun, richness, alphadiv, soilMoisture_date, soilMoisture_date_t1, soilMoisture_date_t2, 
-                temp_date, temp_date_t1, temp_date_t2, tmin, tmax, tavg, prec, bio1, bio2, bio3,
-                bio4, bio5, bio6, bio7, bio8, bio9, bio10, bio11, bio12, bio13, bio14, bio15, 
-                bio16, bio17, bio18, bio19, collectorList) %>%
+# Classify which sites are Bsal positive beginning at the date of the first positive Bsal observation
+# A site may initially be Bsal negative and may later test positive, thus it is possible to have a site classified as both negative and positive
+BsalPos_FS <- prev %>%
+  tidyr::drop_na(., any_of(c("BsalDetected", "date", "soilMoisture_date", "temp_date"))) %>%
+  group_by(Site, date) %>%
+  mutate(scientific = gsub(pattern = "Pelophylax perezi", replacement = "Pelophylax sp.", scientific),
+         cumulative_prev = ave(BsalDetected == 1, FUN = cumsum),
+         prev_above_0 = NA) %>%
+  ungroup()
+
+
+# Populate all rows with 1 or 0 based on Bsal presence at a given Site
+for(i in 1:nrow(BsalPos_FS)){
+  if(BsalPos_FS[i, 74] != 0){
+    BsalPos_FS[i, 75] = 1 # true; at least one animal at that site tested positive for Bsal at the time of the observation
+  }
+  else {
+    BsalPos_FS[i, 75] <- 0 # false; Site either is Bsal negative, or Bsal had not been detected at the time of the observation
+  }
+}
+
+# Return data frame containing only fire salamander observations from sites that have tested positive for Bsal (starting at the date the sites initially tested positive) 
+dcbind <- BsalPos_FS %>%
+  relocate(c(cumulative_prev, prev_above_0), .after = Site) %>%
   group_by(Site, date, scientific) %>%
-  mutate(YesBsal = sum(BsalDetected == 1),
-         YesBd = sum(BdDetected == 1),
-         YesDisease = sum(diseaseDetected == 1),
-         NoBsal = sum((BsalDetected == 0)),
-         NoBd = sum(BdDetected == 0),
-         NoDisease = sum(diseaseDetected == 0)) %>%
-  drop_na(date) %>%
+  mutate(nPos_FS = sum(BsalDetected == 1 & scientific == "Salamandra salamandra"),
+         nNeg_FS = sum(BsalDetected == 0 & scientific == "Salamandra salamandra"),
+         nDead_FS = sum(fatal == 1 & scientific == "Salamandra salamandra", na.rm = T),
+         nAlive_FS = sum(fatal == 0 & scientific == "Salamandra salamandra", na.rm = T),
+         nFatalUnk_FS = sum(is.na(fatal) & scientific == "Salamandra salamandra"), 
+         nPos_all = sum(BsalDetected == 1),
+         nNeg_all = sum(BsalDetected == 0),
+         nDead_all = sum(fatal == 1, na.rm = T),
+         nAlive_all = sum(fatal == 0, na.rm = T),
+         nFatalUnk_all = sum(is.na(fatal)),
+         prev_above_0 = as.factor(prev_above_0)) %>%
   ungroup() %>%
-  dplyr::group_by(Site, date, scientific, diseaseDetected, fatal) %>%
-  mutate(fatalDisease = sum(ifelse(diseaseDetected == 1 & fatal == 1, diseaseDetected, NA), na.rm = T),
-         fatalNoDisease = sum(ifelse(diseaseDetected == 0 & fatal == 1, diseaseDetected, NA), na.rm = T),
-         aliveDisease = sum(ifelse(diseaseDetected == 1 & fatal == 0, diseaseDetected, NA), na.rm = T),
-         aliveNoDisease = sum(ifelse(diseaseDetected == 0 & fatal == 0, diseaseDetected, NA), na.rm = T))  %>%
-  ungroup() %>%
-  relocate(c(YesBsal, NoBsal), .after = BsalDetected) %>%
-  relocate(c(YesBd, NoBd), .after = BdDetected) %>%
-  relocate(c(YesDisease, NoDisease), .after = diseaseDetected) %>%
-  relocate(c(fatalDisease, fatalNoDisease, aliveDisease, aliveNoDisease), .after = fatal) %>%
+  relocate(c(nPos_FS, nNeg_FS, nDead_FS, nAlive_FS, nFatalUnk_FS, nPos_all, nNeg_all, nDead_all, nAlive_all, nFatalUnk_all), .after = susceptibility) %>%
+  dplyr::select(country, decimalLatitude, decimalLongitude, Site, prev_above_0, date, date_t1, date_t2, scientific, susceptibility, 
+                nPos_FS, nNeg_FS, nDead_FS, nAlive_FS, nFatalUnk_FS, nPos_all, nNeg_all, nDead_all, nAlive_all, nFatalUnk_all,
+                richness, sppAbun, siteAbun, alphadiv, temp_date, temp_date_t1, temp_date_t2, soilMoisture_date, soilMoisture_date_t1, soilMoisture_date_t2, 
+                tmin, tmax, tavg, prec, bio1, bio2, bio3, bio4, bio5, bio6, bio7, bio8, bio9, bio10, bio11, bio12, bio13, bio14, bio15, bio16, bio17, bio18, bio19, collectorList) %>%
+  group_by(Site, date) %>%
   distinct() 
-  
-disease <- with(disease, disease[order(Site, scientific), ])
+
+dcbind <- with(dcbind, dcbind[order(Site, scientific), ])
+
 
 setwd(file.path(dir, csvpath))
 ## File for final prev dataframe:
 write.csv(prev, file = "bsalData_clean.csv", row.names = FALSE)
 
 ## File for cbind model:
-write.csv(disease, file = "bsalData_cbind.csv", row.names = FALSE)
+write.csv(dcbind, file = "bsalData_cbind.csv", row.names = FALSE)
 
 
 
