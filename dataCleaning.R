@@ -1094,7 +1094,21 @@ for(i in 1:nrow(BsalPos_FS)){
   }
 }
 
+# There should be 34 sites total that tested positive for Bsal at some point -- double check
+tmp <- BsalPos_FS %>%
+  dplyr::select(Site, date, prev_above_0) %>%
+  dplyr::filter(prev_above_0 != 0) %>%
+  group_by(Site, date) %>%
+  summarise_at(vars(colnames("date")), min, na.rm = T) %>%
+  group_by(Site) %>%
+  arrange(date) %>%
+  slice(1L)
+
 # Return data frame containing only fire salamander observations from sites that have tested positive for Bsal (starting at the date the sites initially tested positive) 
+prev <- BsalPos_FS %>%
+  relocate(c(cumulative_prev, prev_above_0), .after = Site) %>%
+  dplyr::select(-cumulative_prev)
+
 dcbind <- BsalPos_FS %>%
   relocate(c(cumulative_prev, prev_above_0), .after = Site) %>%
   group_by(Site, date, scientific) %>%
