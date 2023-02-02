@@ -57,6 +57,7 @@ analysis_pckgs <- c("tidyverse",
 ## Set working directory
 dir <- dirname(rstudioapi::getActiveDocumentContext()$path)
 csvpath <- (path.expand("/csvFiles"))
+figpath <- (path.expand("/figures"))
 setwd(file.path(dir, csvpath))
 
 ## Load relevant packages
@@ -138,11 +139,12 @@ m1a_plot <- ggplot(m1a_predict, aes(x , exp(predicted))) +
   coord_flip() +
   ylab("Species abundance") +
   xlab("Species") + scale_x_discrete(expand = expansion(mult = c(0, 0.01), add = c(1, 0.5))) +
-  ak_theme +
-  labs(caption = c("Relative species abundance at a given site by species. Error bars represent 95% confidence intervals."))
+  ak_theme #+
+ # labs(caption = c("Relative species abundance at a given site by species. Error bars represent 95% confidence intervals."))
 
 m1a_plot
-
+ggsave("plot1a_sppAbun.tif", m1a_plot, device = "tiff", scale = 2, width = 1920, height = 1080, units = "px", 
+       path = file.path(dir, figpath), dpi = 300)
 
 ##      1b. Prevalence ~ Species
 d_prev <- d %>%
@@ -198,11 +200,12 @@ m1b_plot <- ggplot(d_prev, aes(scientific, est_all)) +
   ylab("Disease prevalence (%)") +
   xlab("Species") + scale_x_discrete(expand = expansion(mult = c(0, 0.01), add = c(1, 0.5))) +
   scale_y_continuous(labels = scales::label_percent(scale = 1, suffix = "%")) +
-  ak_theme +
-  labs(caption = c("Descriptive plot showing disease prevalence (including both Bsal and Bd) for each species as a percent. Error bars represent 95% confidence intervals."))
+  ak_theme #+
+#  labs(caption = c("Descriptive plot showing disease prevalence (including both Bsal and Bd) for each species as a percent. Error bars represent 95% confidence intervals."))
 
 m1b_plot
-
+ggsave("plot1b_prevalence.tif", m1b_plot, device = "tiff", scale = 2, width = 1920, height = 1080, units = "px", 
+       path = file.path(dir, figpath), dpi = 300)
 
 p1combined <- ((m1a_plot + labs(caption = NULL) + theme(plot.tag.position = c(0.96, 0.95)))|
                (m1b_plot + labs(caption = NULL) + theme(axis.text.y = element_blank(), 
@@ -214,6 +217,8 @@ p1combined <- ((m1a_plot + labs(caption = NULL) + theme(plot.tag.position = c(0.
 
 p1combined
 
+ggsave("plots1ab_combined.tif", p1combined, device = "tiff", scale = 2, width = 2400, height = 1080, units = "px", 
+       path = file.path(dir, figpath), dpi = 300)
 
 ##      1c. Susceptibility ~ Abundance
 ## Model based
@@ -231,14 +236,16 @@ m1c_plot <- ggplot(m1c_predict, aes(x , exp(predicted))) +
   scale_x_discrete(labels = c("Resistant", "Tolerant", "Susceptible")) +
   ylab("Species abundance") + scale_y_discrete(limits = factor(0:8), breaks = c("0", "2", "4", "6", "8")) +
   xlab("Susceptibility level") + 
-  ak_theme +
-  labs(caption = c("Resistant = No to low infection and no clinical signs of disease; Tolerant = low infection loads with low or variable mortality;
-                   and Susceptible = High infection loads resulting in consistently high mortality. On average, less abundant species at a given site 
-                   tend to be more resistant while more abundant species<br>tend to be susceptible. Thus, given that rare species are lost from 
-                   communities first, biodiversity loss might increase disease risk in ecosystems with Bsal. Error bars represent 95% confidence 
-                   intervals."))
+  ak_theme #+
+#  labs(caption = c("Resistant = No to low infection and no clinical signs of disease; Tolerant = low infection loads with low or variable mortality;
+#                   and Susceptible = High infection loads resulting in consistently high mortality. On average, less abundant species at a given site 
+#                   tend to be more resistant while more abundant species<br>tend to be susceptible. Thus, given that rare species are lost from 
+#                   communities first, biodiversity loss might increase disease risk in ecosystems with Bsal. Error bars represent 95% confidence 
+#                   intervals."))
 
 m1c_plot
+ggsave("plot1c_susceptibility.tif", m1c_plot, device = "tiff", scale = 2, width = 1920, height = 1080, units = "px", 
+       path = file.path(dir, figpath), dpi = 300)
 
 
 ## Descriptive (no stats)
@@ -257,9 +264,11 @@ descriptive <-d %>%
   subset(individualCount != 208 & individualCount != 72)
 
 # mean spp. abundance by site with susceptibility level noted
+jitter <- position_jitter(width = 0.2, height = 0.25)
+
 abun <-ggplot(descriptive, aes(x = Site, y = scientific, size = meanSppAbun, colour = susceptibility)) +
-  geom_point(aes(size = meanSppAbun), alpha=0.5) +
-  scale_size_continuous(name = "Mean Species Abundance", range = c(3, 10)) +
+  geom_point(aes(size = meanSppAbun), alpha = 0.4, position = jitter) +
+  scale_size_continuous(name = "Mean Species Abundance", limits = c(1, 24), breaks = c(1, 12, 24), range = c(2, 9)) +
   scale_colour_manual(name = "Susceptibility",values = c("#8bd3c7", "#f8ae5d", "#b30000"),
                       labels = c("Resistant", "Tolerant", "Susceptible")) +
   scale_x_discrete(limits = factor(c(0:400)), breaks = c(0, 25, 50, 75, 100, 125, 150, 175, 200, 
@@ -267,12 +276,13 @@ abun <-ggplot(descriptive, aes(x = Site, y = scientific, size = meanSppAbun, col
                    labels = c("0", "", "", "", "100", "", "", "", "200", "", "", "", "300", "", "", "", "400")) +
   ylab("Species") +
   xlab("Site #") + guides(color = guide_legend(override.aes = list(size = 10))) + # increase size of 'susceptibility' legend icons
-  ak_theme + 
-  labs(caption = c("Abundance of individual species at each site. Outliers (*e.g.*, instances of a single mass die-off) were<br>removed to better highlight data. Size of each point indicates the site abundance (*i.e.*, how many<br>species total there are at a site for  all sampling occurrences). Color indicates the susceptibility level<br>of each species: Resistant (blue) = No to low infection and no clinical signs of disease;<br> Tolerant (orange) = low infection loads with low or variable mortality; and Susceptible (red) = High<br> infection loads resulting in consistently high mortality."))
+  ak_theme + theme(plot.margin = margin(2, 16, 2, 2, "pt")) 
+#  labs(caption = c("Abundance of individual species at each site. Outliers (*e.g.*, instances of a single mass die-off) were<br>removed to better highlight data. Size of each point indicates the site abundance (*i.e.*, how many<br>species total there are at a site for  all sampling occurrences). Color indicates the susceptibility level<br>of each species: Resistant (blue) = No to low infection and no clinical signs of disease;<br> Tolerant (orange) = low infection loads with low or variable mortality; and Susceptible (red) = High<br> infection loads resulting in consistently high mortality."))
 
 abun
 
-
+ggsave("sppAbunxSite.tif", abun, device = "tiff", scale = 2, width = 2600, height = 1200, units = "px", 
+       path = file.path(dir, figpath), dpi = 300)
 
 ##      1d. Maps (Interactive)
 pacman::p_load(map_pckgs, character.only = T)
@@ -428,58 +438,65 @@ Anova(m2_t2)
 
 ##      2b. Prevalence by Abundance & Richness Plots for T0, T-1, T-2 
 # T0
-m2_t0_rich <- ggpredict(m2_t0,  terms = c("richness", "logsiteAbun [0.5, 2, 4]"))
-
+m2_t0_rich <- ggpredict(m2_t0,  terms = c("richness", "logsiteAbun"))
+m2_t0_rich$dummy <- as.factor(round(exp(as.numeric(m2_t0_rich$group)), 0))
 
 m2_t0_p1 <- ggplot(m2_t0_rich, aes(x = x , y = predicted)) +
-  geom_line(aes(linetype = group), size = 1) +
-  labs(title = bquote(paste(italic(t))[(0~days)]), linetype = "ln(Site-level abundance)") +
-  #  geom_ribbon(aes(ymin = exp(conf.low), ymax = (conf.high))) +
-  ylab("Predicted Bsal prevalence\nacross all salamander species") +
+  geom_line(aes(linetype = dummy), linewidth = 1) +
+  labs(title = bquote(paste(italic(t))[(0~days)]), linetype = "Site-level abundance") +
+#  geom_ribbon(aes(ymin = conf.low, ymax = conf.high)) +
+  ylab("Predicted Bsal prevalence across all salamander species") +
   xlab("Species richness") + 
   scale_linetype_manual(values = c("solid", "longdash", "twodash")) +
   scale_x_continuous(labels = seq(0, 10, 1), breaks = seq(0, 10, 1)) + 
-  scale_y_continuous(labels = scales::percent_format(accuracy = 0.1), limits = c(0, 0.021)) + 
+  scale_y_continuous(labels = scales::percent_format(accuracy = 0.1), limits = c(0, 0.017)) + 
   ak_theme + theme(plot.tag.position = c(0.9, 0.9))
 
 m2_t0_p1 
+ggsave("m2_t0_AbunRich.tif", m2_t0_p1, device = "tiff", scale = 2, width = 1920, height = 1080, units = "px", 
+       path = file.path(dir, figpath), dpi = 300)
+
+
 
 # T-1
-m2_t1_rich <- ggpredict(m2_t1,  terms = c("richness", "logsiteAbun [0.5, 2, 4]"))
-
+m2_t1_rich <- ggpredict(m2_t1,  terms = c("richness", "logsiteAbun"))
+m2_t1_rich$dummy <- as.factor(round(exp(as.numeric(m2_t1_rich$group)), 0))
 
 m2_t1_p1 <- ggplot(m2_t1_rich, aes(x = x , y = predicted)) +
-  geom_line(aes(linetype = group), size = 1) +
-  labs(title = bquote(paste(italic(t))[(-30~days)]), linetype = "ln(Site-level abundance)") +
-  #  geom_ribbon(aes(ymin = exp(conf.low), ymax = (conf.high))) +
-  ylab("Predicted Bsal prevalence\nacross all salamander species") +
-  xlab("Species richness") + 
-  guides(fill = guide_legend(title = "ln(Site-Level Abundance)")) +
-  scale_linetype_manual(values = c("solid", "longdash", "twodash")) +
-  scale_x_continuous(labels = seq(0, 10, 1), breaks = seq(0, 10, 1)) + 
-  scale_y_continuous(labels = scales::percent_format(accuracy = 0.1), limits = c(0, 0.021)) + 
-  ak_theme + theme(plot.tag.position = c(0.9, 0.9))
-
-m2_t1_p1 
-
-
-# T-2
-m2_t2_rich <- ggpredict(m2_t2,  terms = c("richness", "logsiteAbun [0.5, 2, 4]"))
-
-
-m2_t2_p1 <- ggplot(m2_t2_rich, aes(x = x , y = predicted)) +
-  geom_line(aes(linetype = group), size = 1) +
-  labs(title = bquote(paste(italic(t))[(-60~days)]), linetype = "ln(Site-level abundance)") +
+  geom_line(aes(linetype = dummy), size = 1) +
+  labs(title = bquote(paste(italic(t))[(-30~days)]), linetype = "Site-level abundance") +
   #  geom_ribbon(aes(ymin = exp(conf.low), ymax = (conf.high))) +
   ylab("Predicted Bsal prevalence across all salamander species") +
   xlab("Species richness") + 
-  guides(fill = guide_legend(title = "ln(Site-Level Abundance)")) +
+  guides(fill = guide_legend(title = "Site-Level abundance")) +
   scale_linetype_manual(values = c("solid", "longdash", "twodash")) +
   scale_x_continuous(labels = seq(0, 10, 1), breaks = seq(0, 10, 1)) + 
-  scale_y_continuous(labels = scales::percent_format(accuracy = 0.1), limits = c(0, 0.021)) + 
+  scale_y_continuous(labels = scales::percent_format(accuracy = 0.1), limits = c(0, 0.017)) + 
+  ak_theme + theme(plot.tag.position = c(0.9, 0.9))
+
+m2_t1_p1 
+ggsave("m2_t1_AbunRich.tif", m2_t1_p1, device = "tiff", scale = 2, width = 1920, height = 1080, units = "px", 
+       path = file.path(dir, figpath), dpi = 300)
+
+# T-2
+m2_t2_rich <- ggpredict(m2_t2,  terms = c("richness", "logsiteAbun"))
+m2_t2_rich$dummy <- as.factor(round(exp(as.numeric(m2_t2_rich$group)), 0))
+
+m2_t2_p1 <- ggplot(m2_t2_rich, aes(x = x , y = predicted)) +
+  geom_line(aes(linetype = dummy), size = 1) +
+  labs(title = bquote(paste(italic(t))[(-60~days)]), linetype = "Site-level abundance") +
+  #  geom_ribbon(aes(ymin = exp(conf.low), ymax = (conf.high))) +
+  ylab("Predicted Bsal prevalence across all salamander species") +
+  xlab("Species richness") + 
+  guides(fill = guide_legend(title = "Site-Level Abundance")) +
+  scale_linetype_manual(values = c("solid", "longdash", "twodash")) +
+  scale_x_continuous(labels = seq(0, 10, 1), breaks = seq(0, 10, 1)) + 
+  scale_y_continuous(labels = scales::percent_format(accuracy = 0.1), limits = c(0, 0.017)) + 
   ak_theme + theme(plot.tag.position = c(0.9, 0.9))
 
 m2_t2_p1 
+ggsave("m2_t2_AbunRich.tif", m2_t2_p1, device = "tiff", scale = 2, width = 1920, height = 1080, units = "px", 
+       path = file.path(dir, figpath), dpi = 300)
 
 # 3 Panel Graph
 m2_p1_combined <- ggarrange(m2_t2_p1 + labs(tag = "A") + rremove("xlab"), 
@@ -495,7 +512,8 @@ annotate_figure(m2_p1_combined, bottom = textGrob("Timepoints above each graph i
                                                   hjust = 0, gp = gpar(fontsize = 12)))
 
 
-
+ggsave("model2_AbunRich_combined.tif", m2_p1_combined, device = "tiff", scale = 2, width = 2600, height = 1200, units = "px", 
+       path = file.path(dir, figpath), dpi = 300)
 
 ##      2c. Prevalence by Temperature & Soil Moisture Plots for T0, T-1, T-2 
 # T0
@@ -907,7 +925,7 @@ annotate_figure(m3_p2_combined, bottom = textGrob(bquote("Soil moisture ranged f
 # Remove any instances of NA within the fatal column & weather vars columns, as well as I. alpestris
 d_fatal <- d_prev %>%
   tidyr::drop_na(any_of(c(31, 40:45))) %>%
-  subset(scientific != "Ichthyosaura alpestris" & prev_above_0 == 1)
+  subset(scientific != "Ichthyosaura alpestris")
 
 # Scale relevant vars
 d_fatal <- d_fatal %>%
