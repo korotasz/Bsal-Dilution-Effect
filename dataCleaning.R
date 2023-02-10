@@ -1123,14 +1123,14 @@ dcbind <- BsalPos_FS %>%
          nAlive_all = sum(fatal == 0, na.rm = T),
          nFatalUnk_all = sum(is.na(fatal)),
          prev_above_0 = as.factor(prev_above_0)) %>%
-  ungroup() %>%
+  slice(1) %>%
   relocate(c(nPos_FS, nNeg_FS, nDead_FS, nAlive_FS, nFatalUnk_FS, nPos_all, nNeg_all, nDead_all, nAlive_all, nFatalUnk_all), .after = susceptibility) %>%
   dplyr::select(country, decimalLatitude, decimalLongitude, Site, prev_above_0, date, date_t1, date_t2, scientific, susceptibility, 
                 nPos_FS, nNeg_FS, nDead_FS, nAlive_FS, nFatalUnk_FS, nPos_all, nNeg_all, nDead_all, nAlive_all, nFatalUnk_all,
                 richness, sppAbun, siteAbun, alphadiv, temp_date, temp_date_t1, temp_date_t2, soilMoisture_date, soilMoisture_date_t1, soilMoisture_date_t2, 
                 tmin, tmax, tavg, prec, bio1, bio2, bio3, bio4, bio5, bio6, bio7, bio8, bio9, bio10, bio11, bio12, bio13, bio14, bio15, bio16, bio17, bio18, bio19, collectorList) %>%
-  group_by(Site, date) %>%
-  distinct() 
+  ungroup()
+
 
 dcbind <- with(dcbind, dcbind[order(Site, scientific), ])
 
@@ -1141,6 +1141,8 @@ write.csv(prev, file = "bsalData_clean.csv", row.names = FALSE)
 
 ## File for cbind model:
 write.csv(dcbind, file = "bsalData_cbind.csv", row.names = FALSE)
+
+
 
 
 
