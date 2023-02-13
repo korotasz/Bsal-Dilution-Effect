@@ -71,21 +71,24 @@ dcbind <- read.csv("bsalData_cbind.csv", header = T, encoding = "UTF-8")
 
 ## Set plot theme
 ak_theme <- theme_ipsum() +
-  theme(axis.text.x = element_text(size = 18),
-        axis.title.x = element_text(size = 24, hjust = 0.5, margin = margin(t = 15, r = 0, b = 0, l = 0), face = "plain"),
-        axis.text.y = element_text(size = 18),
-        axis.title.y = element_text(size = 24, hjust = 0.5, margin = margin(t = 0, r = 15, b = 0, l = 5), face = "plain"),
+  theme(axis.text.x = element_text(size = 22),
+        axis.title.x = element_text(size = 26, hjust = 0.5, margin = margin(t = 10, r = 0, b = 0, l = 0), face = "plain"),
+        axis.text.y = element_text(size = 22),
+        axis.title.y = element_text(size = 26, hjust = 0.5, margin = margin(t = 0, r = 15, b = 0, l = 5), face = "plain"),
+        axis.ticks.length = unit(.25, "cm"),
+        axis.ticks = element_blank(),
         plot.tag = element_text(size = 32, face = "plain"),
         plot.title = element_text(size = 32, hjust = 0.5, face = "plain"),
         plot.subtitle = element_markdown(size = 12, face = "plain"),
         plot.margin = margin(6, 12, 2, 2, "pt"), 
         plot.caption = element_markdown(hjust = 0, size = 14, face = "plain"),
         plot.caption.position = "plot",
-        legend.position = "bottom", legend.text = element_text(hjust = -1, size = 14),
+        legend.position = "bottom", 
         legend.spacing = unit(1, "cm"), # Space legend labels
         legend.key.size = unit(1,"cm"), 
         legend.text.align = 1,
-        legend.title = element_text(size = 14, face = "bold"), 
+        legend.text = element_text(size = 16, hjust = -1),
+        legend.title = element_text(size = 16, face = "bold"), 
         panel.border = element_blank(),
         panel.background = element_blank(),
         axis.line = element_line(color = 'black'))
@@ -137,11 +140,12 @@ m1a_predict <- ggpredict(m1a, terms = "scientific")
 m1a_plot <- ggplot(m1a_predict, aes(x , exp(predicted))) +
   geom_point() +
   geom_errorbar(aes(ymin = exp(conf.low), ymax = exp(conf.high)), width = 0.4) +
+  geom_rug(data = d, aes(x = scientific, y = sppAbun ), alpha = 0.25, position = "jitter", inherit.aes = F, na.rm = T) +
   coord_flip() +
   ylab("Species abundance") +
   xlab("Species") + scale_x_discrete(expand = expansion(mult = c(0, 0.01), add = c(1, 0.5))) +
-  ak_theme #+
- # labs(caption = c("Relative species abundance at a given site by species. Error bars represent 95% confidence intervals."))
+  ak_theme + theme(axis.text.y = element_text(face = "italic")) +
+  labs(caption = c("Relative species abundance at a given site by species. Error bars represent 95% confidence intervals."))
 
 m1a_plot
 ggsave("plot1a_sppAbun.tif", m1a_plot, device = "tiff", scale = 2, width = 1920, height = 1080, units = "px", 
@@ -197,18 +201,19 @@ d_prev <- d_prev %>%
 m1b_plot <- ggplot(d_prev, aes(scientific, est_all)) +
   geom_errorbar(aes(ymin = lower_all, ymax = upper_all), width = 0.4) +
   geom_point() +
+  geom_rug(data = subset(d_prev, BsalDetected == 1), aes(x = scientific, y = est_all), alpha = 0.4, position = "jitter", inherit.aes = F, na.rm = T) +
   coord_flip() +
   ylab("Disease prevalence (%)") +
   xlab("Species") + scale_x_discrete(expand = expansion(mult = c(0, 0.01), add = c(1, 0.5))) +
   scale_y_continuous(labels = scales::label_percent(scale = 1, suffix = "%")) +
-  ak_theme #+
-#  labs(caption = c("Descriptive plot showing disease prevalence (including both Bsal and Bd) for each species as a percent. Error bars represent 95% confidence intervals."))
+  ak_theme + theme(axis.text.y = element_text(face = "italic")) +
+  labs(caption = c("Descriptive plot showing disease prevalence (including both Bsal and Bd) for each species as a percent. Error bars represent 95% confidence intervals."))
 
 m1b_plot
 ggsave("plot1b_prevalence.tif", m1b_plot, device = "tiff", scale = 2, width = 1920, height = 1080, units = "px", 
        path = file.path(dir, figpath), dpi = 300)
 
-p1combined <- ((m1a_plot + labs(caption = NULL) + theme(plot.tag.position = c(0.96, 0.95)))|
+p1abcombined <- ((m1a_plot + labs(caption = NULL) + theme(plot.tag.position = c(0.96, 0.95)))|
                (m1b_plot + labs(caption = NULL) + theme(axis.text.y = element_blank(), 
                                                        axis.title.y = element_blank(),
                                                        plot.tag.position = c(0.93, 0.95)))) +
@@ -216,9 +221,9 @@ p1combined <- ((m1a_plot + labs(caption = NULL) + theme(plot.tag.position = c(0.
                  
                 
 
-p1combined
+p1abcombined
 
-ggsave("plots1ab_combined.tif", p1combined, device = "tiff", scale = 2, width = 2400, height = 1080, units = "px", 
+ggsave("plots1ab_combined.tif", p1abcombined, device = "tiff", scale = 2, width = 2400, height = 1080, units = "px", 
        path = file.path(dir, figpath), dpi = 300)
 
 ##      1c. Susceptibility ~ Abundance
@@ -229,23 +234,68 @@ m1c <- glmmTMB(logsppAbun ~ susceptibility + (1|Site),
                                         optArgs = list(method = "BFGS")))
 summary(m1c)
 Anova(m1c)
-m1c_predict <- ggpredict(m1c, terms = c("susceptibility"))
 
-m1c_plot <- ggplot(m1c_predict, aes(x , exp(predicted))) +
+m1c_predict <- ggpredict(m1c, terms = c("susceptibility")) %>%
+  rename("susceptibility" = "x",
+         "group" = "group") %>%
+  mutate(predicted = exp(as.numeric(predicted)),
+         conf.high = exp(as.numeric(conf.high)),
+         conf.low = exp(as.numeric(conf.low)))
+
+m1c_rug <- d %>%
+  group_by(susceptibility) %>%
+  summarise(n = n())
+
+m1c_predict <- merge(m1c_predict, m1c_rug)
+
+m1c_plot <- ggplot(m1c_predict, aes(susceptibility , predicted)) +
   geom_point(size = 5) +
-  geom_errorbar(aes(ymin = exp(conf.low), ymax = exp(conf.high)), width = 0.2, linewidth = 1) +
+  geom_errorbar(aes(ymin = conf.low, ymax = conf.high), width = 0.2, linewidth = 1) +
   scale_x_discrete(labels = c("Resistant", "Tolerant", "Susceptible")) +
   ylab("Species abundance") + scale_y_discrete(limits = factor(0:8), breaks = c("0", "2", "4", "6", "8")) +
   xlab("Susceptibility level") + 
-  ak_theme #+
-#  labs(caption = c("Resistant = No to low infection and no clinical signs of disease; Tolerant = low infection loads with low or variable mortality;
-#                   and Susceptible = High infection loads resulting in consistently high mortality. On average, less abundant species at a given site 
-#                   tend to be more resistant while more abundant species<br>tend to be susceptible. Thus, given that rare species are lost from 
-#                   communities first, biodiversity loss might increase disease risk in ecosystems with Bsal. Error bars represent 95% confidence 
-#                   intervals."))
+  annotate('text', x = 1, y = 3.5, label = 'n = 2007', size = 6) + 
+  annotate('text', x = 2, y = 3.5, label = 'n = 1776', size = 6) +
+  annotate('text', x = 3, y = 7.5, label = 'n = 3615', size = 6) +
+  ak_theme +
+  labs(caption = c("Resistant = No to low infection and no clinical signs of disease; Tolerant = low infection loads with low or variable mortality;
+                   and Susceptible = High infection loads resulting in consistently high mortality. On average, less abundant species at a given site 
+                   tend to be more resistant while more abundant species<br>tend to be susceptible. Thus, given that rare species are lost from 
+                   communities first, biodiversity loss might increase disease risk in ecosystems with Bsal. Error bars represent 95% confidence 
+                   intervals."))
 
 m1c_plot
 ggsave("plot1c_susceptibility.tif", m1c_plot, device = "tiff", scale = 2, width = 1920, height = 1080, units = "px", 
+       path = file.path(dir, figpath), dpi = 300)
+
+p1combined <- (((m1a_plot + labs(caption = NULL) + theme(plot.tag.position = c(0.96, 0.95),
+                                                         plot.margin = margin(.5, .75, .5, .75, "cm"),
+                                                         axis.ticks.length = unit(.25, "cm"),
+                                                         axis.ticks = element_blank(),
+                                                         axis.title.y = element_text(margin = margin(r = -75)),
+                                                         axis.title.x = element_text(size = 26),
+                                                         axis.text.x = element_text(size = 20))) | (m1b_plot + labs(caption = NULL) + theme(axis.text.y = element_blank(), 
+                                                                                                                                                 axis.title.y = element_blank(),
+                                                                                                                                                 axis.title.x = element_text(size = 26),
+                                                                                                                                                 axis.text.x = element_text(size = 20),
+                                                                                                                                                 axis.ticks.length = unit(.25, "cm"),
+                                                                                                                                                 axis.ticks = element_blank(),
+                                                                                                                                                 plot.margin = margin(.5, .75, .5, .5, "cm"),
+                                                                                                                                                 plot.tag.position = c(0.93, 0.95)))) / 
+                 (m1c_plot + labs(caption = NULL) + theme(panel.border = element_rect(colour = "black", fill = NA, linewidth = 1),
+                                                          plot.margin = margin(1, 2, .75, 0, "cm"), 
+                                                          axis.ticks.length.y = unit(.25, "cm"),
+                                                          axis.ticks = element_blank(),
+                                                          axis.title.y = element_text(margin = margin(r = -375), size = 26),
+                                                          axis.text.y = element_text(size = 22),
+                                                          axis.title.x = element_text(size = 26),
+                                                          axis.text.x = element_text(size = 22),
+                                                          plot.tag.position = c(0.96, 0.95)))) +
+  plot_annotation(tag_levels = "A")  +  plot_layout(widths = c(1, 2), heights = c(1,1))
+
+p1combined
+
+ggsave("plots1abc_combined.tif", p1combined, device = "tiff", scale = 2, width = 2600, height = 2300, units = "px", 
        path = file.path(dir, figpath), dpi = 300)
 
 
@@ -277,12 +327,13 @@ abun <-ggplot(descriptive, aes(x = Site, y = scientific, size = meanSppAbun, col
                    labels = c("0", "", "", "", "100", "", "", "", "200", "", "", "", "300", "", "", "", "400")) +
   ylab("Species") +
   xlab("Site #") + guides(color = guide_legend(override.aes = list(size = 10))) + # increase size of 'susceptibility' legend icons
-  ak_theme + theme(plot.margin = margin(2, 16, 2, 2, "pt")) 
+  ak_theme + theme(plot.margin = margin(2, 16, 2, 2, "pt"),
+                   axis.text.y = element_text(face = "italic")) 
 #  labs(caption = c("Abundance of individual species at each site. Outliers (*e.g.*, instances of a single mass die-off) were<br>removed to better highlight data. Size of each point indicates the site abundance (*i.e.*, how many<br>species total there are at a site for  all sampling occurrences). Color indicates the susceptibility level<br>of each species: Resistant (blue) = No to low infection and no clinical signs of disease;<br> Tolerant (orange) = low infection loads with low or variable mortality; and Susceptible (red) = High<br> infection loads resulting in consistently high mortality."))
 
 abun
 
-ggsave("sppAbunxSite.tif", abun, device = "tiff", scale = 2, width = 2600, height = 1200, units = "px", 
+ggsave("sppAbunxSite.tif", abun, device = "tiff", scale = 2, width = 2600, height = 1300, units = "px", 
        path = file.path(dir, figpath), dpi = 300)
 
 ##      1d. Maps (Interactive)
@@ -446,15 +497,18 @@ m2_t0_p1 <- ggplot(m2_t0_rich, aes(x = x , y = predicted)) +
   geom_line(aes(linetype = dummy), linewidth = 1) +
   labs(title = bquote(paste(italic(t))[(0~days)]), linetype = "Site-level abundance") +
 #  geom_ribbon(aes(ymin = conf.low, ymax = conf.high)) +
-  ylab("Predicted Bsal prevalence across all salamander species") +
+  ylab("Predicted Bsal prevalence across\nall salamander species") +
   xlab("Species richness") + 
   scale_linetype_manual(values = c("solid", "longdash", "twodash")) +
   scale_x_continuous(labels = seq(0, 10, 1), breaks = seq(0, 10, 1)) + 
-  scale_y_continuous(labels = scales::percent_format(accuracy = 0.1), limits = c(0, 0.017)) + 
-  ak_theme + theme(plot.tag.position = c(0.9, 0.9))
+  scale_y_continuous(labels = scales::percent_format(accuracy = 0.1), breaks = seq(0, .02, 0.005), limits = c(0, 0.021)) + 
+  ak_theme + theme(plot.tag.position = c(0.9, 0.9),
+                   legend.text = element_text(size = 16),
+                   legend.title = element_text(size = 16))
 
 m2_t0_p1 
-ggsave("m2_t0_AbunRich.tif", m2_t0_p1, device = "tiff", scale = 2, width = 1920, height = 1080, units = "px", 
+
+ggsave("m2_t0_AbunRich.tif", m2_t0_p1, device = "tiff", scale = 2, width = 2000, height = 1300, units = "px", 
        path = file.path(dir, figpath), dpi = 300)
 
 
@@ -464,19 +518,19 @@ m2_t1_rich <- ggpredict(m2_t1,  terms = c("richness", "logsiteAbun"))
 m2_t1_rich$dummy <- as.factor(round(exp(as.numeric(m2_t1_rich$group)), 0))
 
 m2_t1_p1 <- ggplot(m2_t1_rich, aes(x = x , y = predicted)) +
-  geom_line(aes(linetype = dummy), size = 1) +
+  geom_line(aes(linetype = dummy), linewidth = 1) +
   labs(title = bquote(paste(italic(t))[(-30~days)]), linetype = "Site-level abundance") +
   #  geom_ribbon(aes(ymin = exp(conf.low), ymax = (conf.high))) +
-  ylab("Predicted Bsal prevalence across all salamander species") +
+  ylab("Predicted Bsal prevalence across\nall salamander species") +
   xlab("Species richness") + 
   guides(fill = guide_legend(title = "Site-Level abundance")) +
   scale_linetype_manual(values = c("solid", "longdash", "twodash")) +
   scale_x_continuous(labels = seq(0, 10, 1), breaks = seq(0, 10, 1)) + 
-  scale_y_continuous(labels = scales::percent_format(accuracy = 0.1), limits = c(0, 0.017)) + 
+  scale_y_continuous(labels = scales::percent_format(accuracy = 0.1), breaks = seq(0, 0.02, 0.005),limits = c(0, 0.021)) + 
   ak_theme + theme(plot.tag.position = c(0.9, 0.9))
 
 m2_t1_p1 
-ggsave("m2_t1_AbunRich.tif", m2_t1_p1, device = "tiff", scale = 2, width = 1920, height = 1080, units = "px", 
+ggsave("m2_t1_AbunRich.tif", m2_t1_p1, device = "tiff", scale = 2, width = 2000, height = 1300, units = "px", 
        path = file.path(dir, figpath), dpi = 300)
 
 # T-2
@@ -487,33 +541,35 @@ m2_t2_p1 <- ggplot(m2_t2_rich, aes(x = x , y = predicted)) +
   geom_line(aes(linetype = dummy), size = 1) +
   labs(title = bquote(paste(italic(t))[(-60~days)]), linetype = "Site-level abundance") +
   #  geom_ribbon(aes(ymin = exp(conf.low), ymax = (conf.high))) +
-  ylab("Predicted Bsal prevalence across all salamander species") +
+  ylab("Predicted Bsal prevalence across\nall salamander species") +
   xlab("Species richness") + 
   guides(fill = guide_legend(title = "Site-Level Abundance")) +
   scale_linetype_manual(values = c("solid", "longdash", "twodash")) +
   scale_x_continuous(labels = seq(0, 10, 1), breaks = seq(0, 10, 1)) + 
-  scale_y_continuous(labels = scales::percent_format(accuracy = 0.1), limits = c(0, 0.017)) + 
+  scale_y_continuous(labels = scales::percent_format(accuracy = 0.1), breaks = seq(0, 0.02, 0.005), limits = c(0, 0.021)) + 
   ak_theme + theme(plot.tag.position = c(0.9, 0.9))
 
 m2_t2_p1 
-ggsave("m2_t2_AbunRich.tif", m2_t2_p1, device = "tiff", scale = 2, width = 1920, height = 1080, units = "px", 
+ggsave("m2_t2_AbunRich.tif", m2_t2_p1, device = "tiff", scale = 2, width = 2000, height = 1300, units = "px", 
        path = file.path(dir, figpath), dpi = 300)
 
 # 3 Panel Graph
-m2_p1_combined <- ggarrange(m2_t2_p1 + labs(tag = "A") + rremove("xlab"), 
-                            m2_t1_p1 + labs(tag = "B") +  rremove("ylab"), 
-                            m2_t0_p1 + labs(tag = "C") + rremove("ylab") + rremove("xlab"), 
-                            labels = NULL,
-                            ncol = 3, nrow = 1,
-                            common.legend = TRUE, legend = "bottom",
-                            align = "hv", 
-                            font.label = list(size = 10, color = "black", face = "bold", family = NULL, position = "top"))
+m2_p1_combined <- ((m2_t2_p1 + labs(caption = NULL) + theme(plot.tag.position = c(0.96, 0.95),
+                                                            legend.position = "none")) | 
+                   (m2_t1_p1 + labs(caption = NULL,
+                                    y = NULL) + theme(plot.tag.position = c(0.96, 0.95))) | 
+                   (m2_t0_p1 + labs(caption = NULL,
+                                    y = NULL) + theme(plot.tag.position = c(0.96, 0.95), 
+                                                            legend.position = "none"))) + 
+  plot_annotation(tag_levels = "A", 
+                  caption = "Timepoints above each graph indicate the time from the initial observation.",
+                  theme = theme(plot.caption = element_text(size = 12, hjust = 0)))
+  
 
-annotate_figure(m2_p1_combined, bottom = textGrob("Timepoints above each graph indicate the time from the initial observation.", x = 0, 
-                                                  hjust = 0, gp = gpar(fontsize = 12)))
+m2_p1_combined
 
 
-ggsave("model2_AbunRich_combined.tif", m2_p1_combined, device = "tiff", scale = 2, width = 2600, height = 1200, units = "px", 
+ggsave("model2_AbunRich_combined.tif", m2_p1_combined, device = "tiff", scale = 2, width = 2600, height = 1500, units = "px", 
        path = file.path(dir, figpath), dpi = 300)
 
 ##      2c. Prevalence by Temperature & Soil Moisture Plots for T0, T-1, T-2 
