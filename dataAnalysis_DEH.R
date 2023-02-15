@@ -31,11 +31,10 @@ map_pckgs <- c("tidyverse",
                "raster", # raster data handling
                "sf", # vector data handling
                "sp", 
-               "leaflet", # making interactive maps
-               "leaftime", # add time scale to map
                "geojsonio",
                "geojsonlint",
-               "ggpubr"# validate GeoJSON and display it on a map
+               "ggpubr",
+               "mapproj" 
 )
 
 #### Analysis Specific Packages ####
@@ -122,9 +121,6 @@ dcbind <- dcbind %>%
 dcbind_alpestris <- subset(dcbind, scientific != "Ichthyosaura alpestris")
 d_alpestris <- subset(d, scientific != "Ichthyosaura alpestris")
 
-# Remove Jaime's data 
-d_noJB <- subset(d, collectorList != "Jaime Bosch")
-dcbind_noJB <- subset(dcbind, collectorList != "Jaime Bosch")
 
 
 #### 1) Descriptive Figures ####################################################
@@ -197,7 +193,6 @@ d_prev <- d_prev[sort.list(d_prev$est_Bsal),]
 d_prev <- d_prev %>%
   relocate(c(est_all, lower_all, upper_all), .after = prev_all)
 
-rm(tmp)
 # Descriptive plot showing estimated disease prevalence values per species with a 95% ci
 m1b_plot <- ggplot(d_prev, aes(scientific, est_all)) +
   geom_errorbar(aes(ymin = lower_all, ymax = upper_all), width = 0.4) +
@@ -337,69 +332,10 @@ abun
 #ggsave("sppAbunxSite.tif", abun, device = "tiff", scale = 2, width = 2600, height = 1300, units = "px", 
 #       path = file.path(dir, figpath), dpi = 300)
 
-##      1d. Maps (Interactive)
-pacman::p_load(map_pckgs, character.only = T)
 
-d <- d %>%
-  mutate(color = case_when(
-    susceptibility == "1" ~ "Resistant",
-    susceptibility == "2" ~ "Tolerant",
-    susceptibility == "3" ~ "Susceptible"
-  ),
-  fatalStatus = case_when(
-    fatal == "1" ~ "Dead",
-    fatal == "0" ~ "Alive",
-    is.na(fatal) == T ~ "Unk")
-  )
-
-## Interactive Map
-pal <- colorFactor(c("#b30000", "#f8ae5d", "#8bd3c7"), domain = c("Susceptible", "Resistant", "Tolerant")) # marker colors
-cols <- c("#b30000", "#f8ae5d", "#8bd3c7") # legend
-labs <- c("Susceptible", "Resistant", "Tolerant") # legend
-#d_geo <- geojsonio::geojson_json(d, lat = "decimalLatitude", lon = "decimalLongitude")
-
-map <- leaflet(data = d) %>%
-  addProviderTiles(provider = "Stamen.TonerLite", group = "Basic Map") %>%
-  addProviderTiles(provider = "Esri.WorldImagery", group = "World Imagery") %>%
-  addLayersControl(baseGroups = c("Basic Map", "World Imagery")) %>%
-  addCircleMarkers(lng = d$decimalLongitude, lat = d$decimalLatitude,
-                   radius = 10,
-                   color = ~pal(d$color),
-                   fillOpacity = ifelse(d$fatalStatus == "Alive", 1, 0.5),
-                   stroke = FALSE,
-                   clusterOptions = markerClusterOptions(),
-                   label = d$scientific,
-                   labelOptions = labelOptions(direction = "auto", offset = c(0,0),
-                                               style = list("color" = "black",
-                                                            "font-family" = "sans-serif",
-                                                            "font-style" = "italic",
-                                                            "font-weight" = "bold",
-                                                            "box-shadow" = "1px 1px rgba(0,0,0,0.25)",
-                                                            "font-size" = "12px",
-                                                            "padding" = "4px"
-                                               )),
-                   popup = paste("<b>Site:</b>", d$Site, "<br>",
-                                 "<b>Bsal Detected:</b>", ifelse(d$BsalDetected == 1, "Yes", "No"), "<br>",
-                                 "<b>Bd Detected:</b>", ifelse(d$BdDetected == 1, "Yes", "No"), "<br>",
-                                 "<b>Status:</b>", d$fatalStatus)) %>%
-  setView(lat = 47.81757743622691, lng = 6.5171597480332135, zoom = 4) %>%
-  addLegend(position = "bottomleft",
-            colors = ~cols,
-            labels = ~labs,
-            title = paste("Bsal Susceptibility"),
-            opacity = 0.75) %>%
-  addScaleBar(position = "bottomleft",
-              options = scaleBarOptions(maxWidth = 100,
-                                        metric = TRUE,
-                                        updateWhenIdle = TRUE))
-
-map
-
-
-
-##      1d. Maps (Static Maps showing sampling locations)
+##      1d. Maps
 # Code for Europe map with points for each site
-library(mapproj)
+
 
 v.europe <- c("Norway", "Sweden", "Finland", "Denmark", "United Kingdom","Ireland", "Greece",
               "Belgium", "Netherlands", "France", "Spain", "Portugal", "Luxembourg", "Croatia",
@@ -443,11 +379,12 @@ ggplot(wmap, aes(x = long, y = lat)) +
   coord_map(ylim = c(49.1,52.1), xlim = c(3,11))+
   theme_bw()
 
-
+# Remove objects from global environment to speed up processing
+rm(abun, d2, descriptive, m1a, m1a_plot, m1a_predict, m1b_plot, m1c, m1c_plot, m1c_predict, m1c_rug, mean_sppAbun, p1abcombined, p1combined, tmp)
 
 #### 2. Cbind models for all salamander spp. ####################################################
 ##      2a. T0 (At time of observation); T-1 (30 days prior to initial obs.); T-2 (60 days prior to initial obs.)
-# Drop rows with NA vals
+# Drop rows with NA vals in weather data
 dcbind_alpestris <- tidyr::drop_na(dcbind_alpestris, any_of(c(25:30)))
 
 # Scale relevant vars
@@ -498,14 +435,17 @@ m2_t0_rich <- ggpredict(m2_t0,  terms = c("richness", "logsiteAbun")) %>%
          logsiteAbun = as.numeric(as.character(logsiteAbun)),
          # Convert scaled prediction to original data scale:
          siteAbun = as.factor(round(exp(as.numeric(logsiteAbun)), 0)))
-  
+
 
 m2_t0_p1 <- ggplot(m2_t0_rich, aes(x = richness, y = predicted, colour = siteAbun)) +
   geom_line(aes(linetype = siteAbun), linewidth = 1) +
-  labs(title = bquote(paste(italic(t))[(0~days)]), linetype = "Site-level abundance") +
+  geom_rug(data = dcbindScaled, aes(x = richness, y = 0), sides = "b", alpha = 0.5, 
+           position = position_jitter(width = 0.4, height = 0.1), inherit.aes = F, na.rm = T) +
+  labs(x = "Species richness",
+       y = "Predicted Bsal prevalence across\nall salamander species",
+       title = bquote(paste(italic(t))[(-60~days)]), 
+       linetype = "Site-level abundance") +
 #  geom_ribbon(aes(x = richness, ymin = conf.low, ymax = conf.high, fill = siteAbun), alpha = 0.2, colour = NA, show.legend = F) +
-  ylab("Predicted Bsal prevalence across\nall salamander species") +
-  xlab("Species richness") + 
   scale_linetype_manual(values = c("solid", "longdash", "twodash")) +
   scale_color_grey(start = 0.8, end = 0.2) +
   scale_x_continuous(labels = seq(0, 10, 1), breaks = seq(0, 10, 1)) + 
@@ -531,10 +471,13 @@ m2_t1_rich <- ggpredict(m2_t1,  terms = c("richness", "logsiteAbun")) %>%
 
 m2_t1_p1 <- ggplot(m2_t1_rich, aes(x = richness, y = predicted, colour = siteAbun)) +
   geom_line(aes(linetype = siteAbun), linewidth = 1) +
-  labs(title = bquote(paste(italic(t))[(-30~days)]), linetype = "Site-level abundance") +
+  geom_rug(data = dcbindScaled, aes(x = richness, y = 0), sides = "b", alpha = 0.5, 
+           position = position_jitter(width = 0.4, height = 0.1), inherit.aes = F, na.rm = T) +
+  labs(x = "Species richness",
+       y = "Predicted Bsal prevalence across\nall salamander species",
+       title = bquote(paste(italic(t))[(-60~days)]), 
+       linetype = "Site-level abundance") +
   #  geom_ribbon(aes(x = richness, ymin = conf.low, ymax = conf.high, fill = siteAbun), alpha = 0.2, colour = NA, show.legend = F) +
-  ylab("Predicted Bsal prevalence across\nall salamander species") +
-  xlab("Species richness") + 
   scale_linetype_manual(values = c("solid", "longdash", "twodash")) +
   scale_color_grey(start = 0.8, end = 0.2) +
   scale_x_continuous(labels = seq(0, 10, 1), breaks = seq(0, 10, 1)) + 
@@ -558,10 +501,13 @@ m2_t2_rich <- ggpredict(m2_t2,  terms = c("richness", "logsiteAbun")) %>%
 
 m2_t2_p1 <- ggplot(m2_t2_rich, aes(x = richness, y = predicted, colour = siteAbun)) +
   geom_line(aes(linetype = siteAbun), linewidth = 1) +
-  labs(title = bquote(paste(italic(t))[(-60~days)]), linetype = "Site-level abundance") +
+  geom_rug(data = dcbindScaled, aes(x = richness, y = 0), sides = "b", alpha = 0.5, 
+           position = position_jitter(width = 0.4, height = 0.1), inherit.aes = F, na.rm = T) +
+  labs(x = "Species richness",
+       y = "Predicted Bsal prevalence across\nall salamander species",
+       title = bquote(paste(italic(t))[(-60~days)]), 
+       linetype = "Site-level abundance") +
   #  geom_ribbon(aes(x = richness, ymin = conf.low, ymax = conf.high, fill = siteAbun), alpha = 0.2, colour = NA, show.legend = F) +
-  ylab("Predicted Bsal prevalence across\nall salamander species") +
-  xlab("Species richness") + 
   scale_linetype_manual(values = c("solid", "longdash", "twodash")) +
   scale_color_grey(start = 0.8, end = 0.2) +
   scale_x_continuous(labels = seq(0, 10, 1), breaks = seq(0, 10, 1)) + 
@@ -570,21 +516,21 @@ m2_t2_p1 <- ggplot(m2_t2_rich, aes(x = richness, y = predicted, colour = siteAbu
 
 m2_t2_p1
 
-ggsave("m2_t2_AbunRich.tif", m2_t2_p1, device = "tiff", scale = 2, width = 1920, height = 1080, units = "px", 
-       path = file.path(dir, figpath), dpi = 300)
+#ggsave("m2_t2_AbunRich.tif", m2_t2_p1, device = "tiff", scale = 2, width = 1920, height = 1080, units = "px", 
+#       path = file.path(dir, figpath), dpi = 300)
 
 # 3 Panel Graph
 m2_p1_combined <- ((m2_t2_p1 + labs(caption = NULL, x = NULL) + theme(legend.position = "none")) | 
                    (m2_t1_p1 + labs(caption = NULL, y = NULL)) | 
                    (m2_t0_p1 + labs(caption = NULL, y = NULL, x = NULL) + theme(legend.position = "none"))) + 
   plot_annotation(tag_levels = "A", 
-                  caption = "Timepoints above each graph indicate the time from the initial observation.",
+                  caption = "Timepoints above each graph indicate the time from the initial observation. The tick marks on the x-axis display the cumulative frequency of each level of species richness in the dataset.",
                   theme = theme(plot.caption = element_text(size = 12, hjust = 0)))
 
 m2_p1_combined
 
-#ggsave("model2_AbunRich_combined.tif", m2_p1_combined, device = "tiff", scale = 2, width = 2600, height = 1500, units = "px", 
-#      path = file.path(dir, figpath), dpi = 300)
+ggsave("model2_AbunRich_combined.tif", m2_p1_combined, device = "tiff", scale = 2, width = 2600, height = 1500, units = "px", 
+      path = file.path(dir, figpath), dpi = 300)
 
 
 
@@ -611,12 +557,12 @@ m2_t0_weather <- ggpredict(m2_t0, terms = c("temp_date [all]", "soilMoisture_dat
                               as.numeric(attr(dcbindScaled$temp_date, "scaled:center"))),
          soilMoistureUnscaled = as.factor((round(soilMoisture_date * as.numeric(attr(dcbindScaled$soilMoisture_date, "scaled:scale")) +
                                  as.numeric(attr(dcbindScaled$soilMoisture_date, "scaled:center")), 2)))) 
- 
+# Create dummy column for soil moisture labels 
 m2_t0_weather <- create_dummy_col(m2_t0_weather)
 
 
 m2_t0_p2 <- ggplot(m2_t0_weather, aes(x = temp_dateUnscaled , y = predicted, colour = dummy)) +
-  geom_line(aes(linetype = factor(dummy, levels  = c("Low", "Med", "High"))), size = 1) +
+  geom_line(aes(linetype = factor(dummy, levels  = c("Low", "Med", "High"))), linewidth = 1) +
 #  geom_ribbon(aes(x = temp_dateUnscaled, ymin = conf.low, ymax = conf.high, fill = dummy), alpha = 0.2, colour = NA, show.legend = F) +
   labs(title =  bquote(paste(italic(t))[(0~days)]), linetype = "Soil moisture") +
   ylab("Predicted Bsal prevalence\nacross all salamander species") +
@@ -628,9 +574,8 @@ m2_t0_p2 <- ggplot(m2_t0_weather, aes(x = temp_dateUnscaled , y = predicted, col
   ak_theme + theme(plot.tag.position = c(0.96, 0.9)) + guides(colour = guide_legend("Soil moisture"))
 
 m2_t0_p2 
-
-ggsave("m2_t0_weather.tif", m2_t0_p2, device = "tiff", scale = 2, width = 1920, height = 1080, units = "px", 
-       path = file.path(dir, figpath), dpi = 300)
+#ggsave("m2_t0_weather.tif", m2_t0_p2, device = "tiff", scale = 2, width = 1920, height = 1080, units = "px", 
+#       path = file.path(dir, figpath), dpi = 300)
 
 
 # T-1
@@ -660,7 +605,6 @@ m2_t1_p2 <- ggplot(m2_t1_weather, aes(x = temp_date_t1Unscaled , y = predicted, 
   ak_theme + theme(plot.tag.position = c(0.96, 0.9)) + guides(colour = guide_legend("Soil moisture"))
 
 m2_t1_p2 
-
 #ggsave("m2_t1_weather.tif", m2_t1_p2, device = "tiff", scale = 2, width = 1920, height = 1080, units = "px", 
 #       path = file.path(dir, figpath), dpi = 300)
 
@@ -692,7 +636,6 @@ m2_t2_p2 <- ggplot(m2_t2_weather, aes(x = temp_date_t2Unscaled , y = predicted, 
   ak_theme + theme(plot.tag.position = c(0.96, 0.9)) + guides(colour = guide_legend("Soil moisture"))
 
 m2_t2_p2 
-
 #ggsave("m2_t2_weather.tif", m2_t2_p2, device = "tiff", scale = 2, width = 1920, height = 1080, units = "px", 
 #       path = file.path(dir, figpath), dpi = 300)
 
@@ -701,14 +644,19 @@ m2_p2_combined <- ((m2_t2_p2 + labs(caption = NULL, x = NULL) + theme(legend.pos
                      (m2_t1_p2 + labs(caption = NULL, y = NULL)) | 
                      (m2_t0_p2 + labs(caption = NULL, y = NULL, x = NULL) + theme(legend.position = "none"))) + 
   plot_annotation(tag_levels = "A", 
-                  caption = "Soil moisture ranged from 5.34-5.36 (kg/m"^2~"), 6.10-6.12 (kg/m"^2~"), and 6.84-6.90 (kg/m"^2~") for the Low, Medium, and High categories, respectively. Timepoints above each graph indicate the time from the initial observation.",
+                  caption = "Soil moisture ranged from 5.34-5.36 (kg/m"^2~"), 6.10-6.12 (kg/m"^2~"), and 6.84-6.90 (kg/m"^2~") for the Low, Medium, and High categories respectively. Timepoints above each graph indicate the time from the initial observation.",
                   theme = theme(plot.caption = element_text(size = 12, hjust = 0)))
 
 m2_p2_combined
+#ggsave("m2_weather_combined.tif", m2_p2_combined, device = "tiff", scale = 2, width = 2600, height = 1500, units = "px", 
+#       path = file.path(dir, figpath), dpi = 300)
 
 
-ggsave("m2_weather_combined.tif", m2_p2_combined, device = "tiff", scale = 2, width = 2600, height = 1500, units = "px", 
-       path = file.path(dir, figpath), dpi = 300)
+# Remove saved objects from the global environment to speed up processing
+rm(m2_p1_combined, m2_p2_combined, m2_t0_p1, m2_t0_p2, m2_t0_rich, m2_t0_weather, 
+                                   m2_t1_p1, m2_t1_p2, m2_t1_rich, m2_t1_weather, 
+                                   m2_t2_p1, m2_t2_p2, m2_t2_rich, m2_t2_weather)
+
 
 
 #### 3. Cbind models for fire salamanders only ####################################################
@@ -747,237 +695,210 @@ Anova(m3_t2)
 
 ##      3b. Prevalence by Abundance & Richness Plots for T0, T-1, T-2 (Fire Salamanders Only)
 # T0
-m3_t0_rich <- ggpredict(m3_t0,  terms = c("richness", "logsiteAbun"))
-m3_t0_rich$dummy <- as.factor(round(exp(as.numeric(m3_t0_rich$group)), 0))
+m3_t0_rich <- ggpredict(m3_t0,  terms = c("richness", "logsiteAbun")) %>%
+  rename("richness" = "x",
+         "logsiteAbun" = "group") %>%
+  mutate(richness = as.numeric(as.character(richness)),
+         logsiteAbun = as.numeric(as.character(logsiteAbun)),
+         # Convert scaled prediction to original data scale:
+         siteAbun = as.factor(round(exp(as.numeric(logsiteAbun)), 0)))
 
-m3_t0_p1 <- ggplot(m3_t0_rich, aes(x = x , y = predicted)) +
-  geom_line(aes(linetype = dummy), size = 1) +
+m3_t0_p1 <- ggplot(m3_t0_rich, aes(x = richness , y = predicted, colour = siteAbun)) +
+  geom_line(aes(linetype = siteAbun), linewidth = 1) +
   labs(title =  bquote(paste(italic(t))[(0~days)]), linetype = "Site-level abundance") +
-  #  geom_errorbar(aes(ymin = exp(conf.low), ymax = (conf.high))) +
-  ylab("Predicted Bsal prevalence in fire salamanders") +
+  #  geom_ribbon(aes(x = richness, ymin = conf.low, ymax = conf.high, fill = siteAbun), alpha = 0.2, colour = NA, show.legend = F) +
+  ylab("Predicted Bsal prevalence in\nfire salamanders") +
   xlab("Species richness") + 
+  scale_linetype_manual(values = c("solid", "longdash", "twodash")) +
+  scale_color_grey(start = 0.8, end = 0.2) +
   scale_x_continuous(labels = seq(0, 10, 1), breaks = seq(0, 10, 1)) + 
   scale_y_continuous(labels = scales::percent_format(accuracy = 1), limits = c(0, 0.65)) + 
-  ak_theme + theme(plot.tag.position = c(0.9, 0.9))
+  ak_theme + theme(plot.tag.position = c(0.96, 0.9)) + guides(colour = guide_legend("Site-level abundance"))
+
 
 m3_t0_p1 
-ggsave("m3_t0_AbunRich.tif", m3_t0_p1, device = "tiff", scale = 2, width = 1920, height = 1080, units = "px", 
-       path = file.path(dir, figpath), dpi = 300)
+#ggsave("m3_t0_AbunRich.tif", m3_t0_p1, device = "tiff", scale = 2, width = 1920, height = 1080, units = "px", 
+#       path = file.path(dir, figpath), dpi = 300)
 
 # T-1
-m3_t1_rich <- ggpredict(m3_t1,  terms = c("richness", "logsiteAbun"))
-m3_t1_rich$dummy <- as.factor(round(exp(as.numeric(m3_t1_rich$group)), 0))
+m3_t1_rich <- ggpredict(m3_t1,  terms = c("richness", "logsiteAbun")) %>%
+  rename("richness" = "x",
+         "logsiteAbun" = "group") %>%
+  mutate(richness = as.numeric(as.character(richness)),
+         logsiteAbun = as.numeric(as.character(logsiteAbun)),
+         # Convert scaled prediction to original data scale:
+         siteAbun = as.factor(round(exp(as.numeric(logsiteAbun)), 0)))
 
-
-m3_t1_p1 <- ggplot(m3_t1_rich, aes(x = x , y = predicted)) +
-  geom_line(aes(linetype = dummy), size = 1) +
-  labs(title = bquote(paste(italic(t))[(-30~days)]), linetype = "Site-level abundance") +
-  #  geom_errorbar(aes(ymin = exp(conf.low), ymax = (conf.high))) +
-  ylab("Predicted Bsal prevalence in fire salamanders") +
+m3_t1_p1 <- ggplot(m3_t1_rich, aes(x = richness , y = predicted, colour = siteAbun)) +
+  geom_line(aes(linetype = siteAbun), linewidth = 1) +
+  labs(title =  bquote(paste(italic(t))[(-30~days)]), linetype = "Site-level abundance") +
+  #  geom_ribbon(aes(x = richness, ymin = conf.low, ymax = conf.high, fill = siteAbun), alpha = 0.2, colour = NA, show.legend = F) +
+  ylab("Predicted Bsal prevalence in\nfire salamanders") +
   xlab("Species richness") + 
-  guides(fill = guide_legend(title = "ln(Site-Level Abundance)")) +
+  scale_linetype_manual(values = c("solid", "longdash", "twodash")) +
+  scale_color_grey(start = 0.8, end = 0.2) +
   scale_x_continuous(labels = seq(0, 10, 1), breaks = seq(0, 10, 1)) + 
   scale_y_continuous(labels = scales::percent_format(accuracy = 1), limits = c(0, 0.65)) + 
-  ak_theme + theme(plot.tag.position = c(0.9, 0.9))
+  ak_theme + theme(plot.tag.position = c(0.96, 0.9)) + guides(colour = guide_legend("Site-level abundance"))
+
 
 m3_t1_p1 
-ggsave("m3_t1_AbunRich.tif", m3_t1_p1, device = "tiff", scale = 2, width = 1920, height = 1080, units = "px", 
-       path = file.path(dir, figpath), dpi = 300)
+#ggsave("m3_t1_AbunRich.tif", m3_t1_p1, device = "tiff", scale = 2, width = 1920, height = 1080, units = "px", 
+#       path = file.path(dir, figpath), dpi = 300)
 
 # T-2
-m3_t2_rich <- ggpredict(m3_t2,  terms = c("richness", "logsiteAbun"))
-m3_t2_rich$dummy <- as.factor(round(exp(as.numeric(m3_t2_rich$group)), 0))
+m3_t2_rich <- ggpredict(m3_t2,  terms = c("richness", "logsiteAbun")) %>%
+  rename("richness" = "x",
+         "logsiteAbun" = "group") %>%
+  mutate(richness = as.numeric(as.character(richness)),
+         logsiteAbun = as.numeric(as.character(logsiteAbun)),
+         # Convert scaled prediction to original data scale:
+         siteAbun = as.factor(round(exp(as.numeric(logsiteAbun)), 0)))
 
-
-m3_t2_p1 <- ggplot(m3_t2_rich, aes(x = x , y = predicted)) +
-  geom_line(aes(linetype = group), size = 1) +
-  labs(title = bquote(paste(italic(t))[(-60~days)]), linetype = "Site-level abundance") +
-  #  geom_errorbar(aes(ymin = exp(conf.low), ymax = (conf.high))) +
+m3_t2_p1 <- ggplot(m3_t2_rich, aes(x = richness , y = predicted, colour = siteAbun)) +
+  geom_line(aes(linetype = siteAbun), linewidth = 1) +
+  labs(title =  bquote(paste(italic(t))[(-60~days)]), linetype = "Site-level abundance") +
+  #  geom_ribbon(aes(x = richness, ymin = conf.low, ymax = conf.high, fill = siteAbun), alpha = 0.2, colour = NA, show.legend = F) +
   ylab("Predicted Bsal prevalence in fire salamanders") +
   xlab("Species richness") + 
-  guides(fill = guide_legend(title = "ln(Site-Level Abundance)")) +
+  scale_linetype_manual(values = c("solid", "longdash", "twodash")) +
+  scale_color_grey(start = 0.8, end = 0.2) +
   scale_x_continuous(labels = seq(0, 10, 1), breaks = seq(0, 10, 1)) + 
   scale_y_continuous(labels = scales::percent_format(accuracy = 1), limits = c(0, 0.65)) + 
-  ak_theme + theme(plot.tag.position = c(0.9, 0.9))
+  ak_theme + theme(plot.tag.position = c(0.96, 0.9)) + guides(colour = guide_legend("Site-level abundance"))
+
 
 m3_t2_p1 
-ggsave("m3_t1_AbunRich.tif", m3_t2_p1, device = "tiff", scale = 2, width = 1920, height = 1080, units = "px", 
-       path = file.path(dir, figpath), dpi = 300)
+#ggsave("m3_t2_AbunRich.tif", m3_t2_p1, device = "tiff", scale = 2, width = 1920, height = 1080, units = "px", 
+#       path = file.path(dir, figpath), dpi = 300)
 
 # 3 Panel Graph
-m3_p1_combined <- ggarrange(m3_t2_p1 + labs(tag = "A") + rremove("xlab"), 
-                            m3_t1_p1 + labs(tag = "B") + rremove("ylab"), 
-                            m3_t0_p1 + labs(tag = "C") + rremove("ylab") + rremove("xlab"), 
-                            labels = NULL,
-                            ncol = 3, nrow = 1,
-                            common.legend = TRUE, legend = "bottom",
-                            align = "hv", 
-                            font.label = list(size = 10, color = "black", face = "bold", family = NULL, position = "top"))
+m3_p1_combined <- ((m3_t2_p1 + labs(caption = NULL, x = NULL) + theme(legend.position = "none")) | 
+                   (m3_t1_p1 + labs(caption = NULL, y = NULL)) | 
+                   (m3_t0_p1 + labs(caption = NULL, y = NULL, x = NULL) + theme(legend.position = "none"))) + 
+                    plot_annotation(tag_levels = "A", 
+                    caption = "Timepoints above each graph indicate the time from the initial observation.",
+                    theme = theme(plot.caption = element_text(size = 12, hjust = 0)))
 
 m3_p1_combined
-ggsave("m3_AbunRich_combined.tif", m3_p1_combined, device = "tiff", scale = 2, width = 2600, height = 1200, units = "px", 
-       path = file.path(dir, figpath), dpi = 300)
+#ggsave("m3_AbunRich_combined.tif", m3_p1_combined, device = "tiff", scale = 2, width = 2600, height = 1500, units = "px", 
+#       path = file.path(dir, figpath), dpi = 300)
 
 
 ##      3c. Prevalence by Temperature & Soil Moisture Plots for T0, T-1, T-2 (Fire Salamanders Only)
 # T0
-m3_t0_weather <- ggpredict(m3_t0, terms = c("temp_date [all]", "soilMoisture_date"))
-m3_t0_weather <- m3_t0_weather %>%
+m3_t0_weather <- ggpredict(m3_t0, terms = c("temp_date [all]", "soilMoisture_date"))%>%
   rename("temp_date" = "x",
          "soilMoisture_date" = "group") %>%
   mutate(temp_date = as.numeric(as.character(temp_date)),
-         soilMoisture_date = as.numeric(as.character(soilMoisture_date)))
-
-# Convert scaled prediction to original data scale:
-m3_t0_w_unscaled <- m3_t0_weather
-m3_t0_w_unscaled$temp_date <- m3_t0_weather$temp_date * as.numeric(attr(dcbindScaled$temp_date, "scaled:scale")) +
-  as.numeric(attr(dcbindScaled$temp_date, "scaled:center"))
-m3_t0_w_unscaled$soilMoisture_date <- m3_t0_weather$soilMoisture * as.numeric(attr(dcbindScaled$soilMoisture_date,
-                                                                                   "scaled:scale")) +
-  as.numeric(attr(dcbindScaled$soilMoisture_date, "scaled:center"))
-m3_t0_w_unscaled$soilMoisture_date <- round(m3_t0_w_unscaled$soilMoisture_date, 2)
-
-
+         soilMoisture_date = as.numeric(as.character(soilMoisture_date)),
+         # Convert scaled prediction to original data scale:
+         temp_dateUnscaled = (temp_date * as.numeric(attr(dcbindScaled$temp_date, "scaled:scale")) + 
+                                as.numeric(attr(dcbindScaled$temp_date, "scaled:center"))),
+         soilMoistureUnscaled = as.factor((round(soilMoisture_date * as.numeric(attr(dcbindScaled$soilMoisture_date, "scaled:scale")) +
+                                                   as.numeric(attr(dcbindScaled$soilMoisture_date, "scaled:center")), 2)))) 
 # Create dummy column for soil moisture labels
-m3_t0_w_unscaled$dummy <- NA
-for(i in 1:nrow(m3_t0_w_unscaled)){
-  if(m3_t0_w_unscaled[i,6] == 5.53){
-    m3_t0_w_unscaled[i,7] <- "Low"
-  }
-  else if(m3_t0_w_unscaled[i,6] == 6.22){
-    m3_t0_w_unscaled[i,7] <- "Med"
-  }
-  else if(m3_t0_w_unscaled[i,6] == 6.91){
-    m3_t0_w_unscaled[i,7] <- "High"
-  }
-}
+m3_t0_weather <- create_dummy_col(m3_t0_weather)
 
-m3_t0_p2 <- ggplot(m3_t0_w_unscaled, aes(x = temp_date , y = predicted)) +
-  geom_line(aes(linetype = factor(dummy, levels  = c("Low", "Med", "High"))), size = 1) +
-  labs(title = bquote(paste(italic(t))[(0~days)]), linetype = bquote("Soil moisture")) +
-  #  geom_errorbar(aes(ymin = exp(conf.low), ymax = (conf.high))) +
-  ylab("Predicted Bsal Prevalence in Fire Salamanders") +
+
+m3_t0_p2 <- ggplot(m3_t0_weather, aes(x = temp_dateUnscaled , y = predicted, colour = dummy)) +
+  geom_line(aes(linetype = factor(dummy, levels  = c("Low", "Med", "High"))), linewidth = 1) +
+  #  geom_ribbon(aes(x = temp_dateUnscaled, ymin = conf.low, ymax = conf.high, fill = dummy), alpha = 0.2, colour = NA, show.legend = F) +
+  labs(title =  bquote(paste(italic(t))[(0~days)]), linetype = "Soil moisture") +
+  ylab("Predicted Bsal prevalence\nacross all salamander species") +
   xlab(expression("Temperature (°C)")) + 
   scale_linetype_manual(values = c("solid", "longdash", "twodash")) +
-  scale_x_continuous(labels = seq(-10, 30, 10), breaks = seq(-10, 30, 10), limits = c(-10, 30)) +  
-  scale_y_continuous(labels = scales::percent_format(accuracy = 1), limits = c(0, 0.7)) + 
-  ak_theme + theme(plot.tag.position = c(0.9, 0.9))
+  scale_color_viridis(option = "G", discrete = T, begin = 0.8, end = 0.3) +
+  scale_x_continuous(labels = seq(-10, 30, 10), breaks = seq(-10, 30, 10), limits = c(-10, 30)) + 
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1), limits = c(0, 0.65)) + 
+  ak_theme + theme(plot.tag.position = c(0.96, 0.9)) + guides(colour = guide_legend("Soil moisture"))
 
 m3_t0_p2 
-ggsave("m3_t0_weather.tif", m3_t0_p2, device = "tiff", scale = 2, width = 1920, height = 1080, units = "px", 
-       path = file.path(dir, figpath), dpi = 300)
+#ggsave("m3_t0_weather.tif", m3_t0_p2, device = "tiff", scale = 2, width = 1920, height = 1080, units = "px", 
+#       path = file.path(dir, figpath), dpi = 300)
 
 # T-1
-m3_t1_weather <- ggpredict(m3_t1, terms = c("temp_date_t1 [all]", "soilMoisture_date_t1"))
-m3_t1_weather <- m3_t1_weather %>%
+m3_t1_weather <- ggpredict(m3_t1, terms = c("temp_date_t1 [all]", "soilMoisture_date_t1"))%>%
   rename("temp_date_t1" = "x",
          "soilMoisture_date_t1" = "group") %>%
   mutate(temp_date_t1 = as.numeric(as.character(temp_date_t1)),
-         soilMoisture_date_t1 = as.numeric(as.character(soilMoisture_date_t1)))
-
-# Convert scaled prediction to original data scale:
-m3_t1_w_unscaled <- m3_t1_weather
-m3_t1_w_unscaled$temp_date_t1 <- m3_t1_weather$temp_date_t1 * as.numeric(attr(dcbindScaled$temp_date_t1, "scaled:scale")) +
-  as.numeric(attr(dcbindScaled$temp_date_t1, "scaled:center"))
-m3_t1_w_unscaled$soilMoisture_date_t1 <- m3_t1_weather$soilMoisture * as.numeric(attr(dcbindScaled$soilMoisture_date_t1,
-                                                                                      "scaled:scale")) +
-  as.numeric(attr(dcbindScaled$soilMoisture_date_t1, "scaled:center"))
-m3_t1_w_unscaled$soilMoisture_date_t1 <- round(m3_t1_w_unscaled$soilMoisture_date_t1, 2)
-
+         soilMoisture_date_t1 = as.numeric(as.character(soilMoisture_date_t1)),
+         # Convert scaled prediction to original data scale:
+         temp_date_t1Unscaled = (temp_date_t1 * as.numeric(attr(dcbindScaled$temp_date_t1, "scaled:scale")) + 
+                                   as.numeric(attr(dcbindScaled$temp_date_t1, "scaled:center"))),
+         soilMoistureUnscaled = as.factor((round(soilMoisture_date_t1 * as.numeric(attr(dcbindScaled$soilMoisture_date_t1, "scaled:scale")) +
+                                                   as.numeric(attr(dcbindScaled$soilMoisture_date_t1, "scaled:center")), 2)))) 
 # Create dummy column for soil moisture labels
-m3_t1_w_unscaled$dummy <- NA
-for(i in 1:nrow(m3_t1_w_unscaled)){
-  if(m3_t1_w_unscaled[i,6] == 5.52){
-    m3_t1_w_unscaled[i,7] <- "Low"
-  }
-  else if(m3_t1_w_unscaled[i,6] == 6.21){
-    m3_t1_w_unscaled[i,7] <- "Med"
-  }
-  else if(m3_t1_w_unscaled[i,6] == 6.89){
-    m3_t1_w_unscaled[i,7] <- "High"
-  }
-}
+m3_t1_weather <- create_dummy_col(m3_t1_weather)
 
 
-m3_t1_p2 <- ggplot(m3_t1_w_unscaled, aes(x = temp_date_t1, y = predicted)) +
-  geom_line(aes(linetype = factor(dummy, levels  = c("Low", "Med", "High"))), size = 1) +
-  labs(title = bquote(paste(italic(t))[(-30~days)]), linetype = bquote("Soil moisture")) +
-  #  geom_errorbar(aes(ymin = exp(conf.low), ymax = (conf.high))) +
-  ylab("Predicted Bsal prevalence in fire salamanders") +
+m3_t1_p2 <- ggplot(m3_t1_weather, aes(x = temp_date_t1Unscaled , y = predicted, colour = dummy)) +
+  geom_line(aes(linetype = factor(dummy, levels  = c("Low", "Med", "High"))), linewidth = 1) +
+  #  geom_ribbon(aes(x = temp_date_t1Unscaled, ymin = conf.low, ymax = conf.high, fill = dummy), alpha = 0.2, colour = NA, show.legend = F) +
+  labs(title =  bquote(paste(italic(t))[(-30~days)]), linetype = "Soil moisture") +
+  ylab("Predicted Bsal prevalence\nacross all salamander species") +
   xlab(expression("Temperature (°C)")) + 
   scale_linetype_manual(values = c("solid", "longdash", "twodash")) +
-  scale_x_continuous(labels = seq(-10, 30, 10), breaks = seq(-10, 30, 10), limits = c(-10, 30)) +  
-  scale_y_continuous(labels = scales::percent_format(accuracy = 1), limits = c(0, 0.7)) + 
-  ak_theme + theme(plot.tag.position = c(0.9, 0.9))
+  scale_color_viridis(option = "G", discrete = T, begin = 0.8, end = 0.3) +
+  scale_x_continuous(labels = seq(-10, 30, 10), breaks = seq(-10, 30, 10), limits = c(-10, 30)) + 
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1), limits = c(0, 0.65)) + 
+  ak_theme + theme(plot.tag.position = c(0.96, 0.9)) + guides(colour = guide_legend("Soil moisture"))
 
 m3_t1_p2 
+#ggsave("m3_t1_weather.tif", m3_t1_p2, device = "tiff", scale = 2, width = 1920, height = 1080, units = "px", 
+#       path = file.path(dir, figpath), dpi = 300)
 
-ggsave("m3_t1_weather.tif", m3_t1_p2, device = "tiff", scale = 2, width = 1920, height = 1080, units = "px", 
-       path = file.path(dir, figpath), dpi = 300)
 
 # T-2
-m3_t2_weather <- ggpredict(m3_t2, terms = c("temp_date_t2 [all]", "soilMoisture_date_t2"))
-m3_t2_weather <- m3_t2_weather %>%
+m3_t2_weather <- ggpredict(m3_t2, terms = c("temp_date_t2 [all]", "soilMoisture_date_t2"))%>%
   rename("temp_date_t2" = "x",
          "soilMoisture_date_t2" = "group") %>%
   mutate(temp_date_t2 = as.numeric(as.character(temp_date_t2)),
-         soilMoisture_date_t2 = as.numeric(as.character(soilMoisture_date_t2)))
-
-# Convert scaled prediction to original data scale:
-m3_t2_w_unscaled <- m3_t2_weather
-m3_t2_w_unscaled$temp_date_t2 <- m3_t2_weather$temp_date_t2 * as.numeric(attr(dcbindScaled$temp_date_t2, "scaled:scale")) +
-  as.numeric(attr(dcbindScaled$temp_date_t2, "scaled:center"))
-m3_t2_w_unscaled$soilMoisture_date_t2 <- m3_t2_weather$soilMoisture * as.numeric(attr(dcbindScaled$soilMoisture_date_t2,
-                                                                                      "scaled:scale")) +
-  as.numeric(attr(dcbindScaled$soilMoisture_date_t2, "scaled:center"))
-m3_t2_w_unscaled$soilMoisture_date_t2 <- round(m3_t2_w_unscaled$soilMoisture_date_t2, 2)
+         soilMoisture_date_t2 = as.numeric(as.character(soilMoisture_date_t2)),
+         # Convert scaled prediction to original data scale:
+         temp_date_t2Unscaled = (temp_date_t2 * as.numeric(attr(dcbindScaled$temp_date_t2, "scaled:scale")) + 
+                                   as.numeric(attr(dcbindScaled$temp_date_t2, "scaled:center"))),
+         soilMoistureUnscaled = as.factor((round(soilMoisture_date_t2 * as.numeric(attr(dcbindScaled$soilMoisture_date_t2, "scaled:scale")) +
+                                                   as.numeric(attr(dcbindScaled$soilMoisture_date_t2, "scaled:center")), 2)))) 
+# Create dummy column for soil moisture labels
+m3_t2_weather <- create_dummy_col(m3_t2_weather)
 
 
-m3_t2_w_unscaled$dummy <- NA
-for(i in 1:nrow(m3_t2_w_unscaled)){
-  if(m3_t2_w_unscaled[i,6] == 5.46){
-    m3_t2_w_unscaled[i,7] <- "Low"
-  }
-  else if(m3_t2_w_unscaled[i,6] == 6.18){
-    m3_t2_w_unscaled[i,7] <- "Med"
-  }
-  else if(m3_t2_w_unscaled[i,6] == 6.90){
-    m3_t2_w_unscaled[i,7] <- "High"
-  }
-}
-
-m3_t2_p2 <- ggplot(m3_t2_w_unscaled, aes(x = temp_date_t2, y = predicted)) +
-  geom_line(aes(linetype = factor(dummy, levels  = c("Low", "Med", "High"))), size = 1) +
-  labs(title = bquote(paste(italic(t))[(-60~days)]), linetype = bquote("Soil moisture")) +
-  #  geom_errorbar(aes(ymin = exp(conf.low), ymax = (conf.high))) +
-  ylab("Predicted Bsal prevalence in fire salamanders") +
+m3_t2_p2 <- ggplot(m3_t2_weather, aes(x = temp_date_t2Unscaled , y = predicted, colour = dummy)) +
+  geom_line(aes(linetype = factor(dummy, levels  = c("Low", "Med", "High"))), linewidth = 1) +
+  #  geom_ribbon(aes(x = temp_date_t2Unscaled, ymin = conf.low, ymax = conf.high, fill = dummy), alpha = 0.2, colour = NA, show.legend = F) +
+  labs(title =  bquote(paste(italic(t))[(-60~days)]), linetype = "Soil moisture") +
+  ylab("Predicted Bsal prevalence\nacross all salamander species") +
   xlab(expression("Temperature (°C)")) + 
   scale_linetype_manual(values = c("solid", "longdash", "twodash")) +
-  scale_x_continuous(labels = seq(-10, 30, 10), breaks = seq(-10, 30, 10), limits = c(-10, 30)) +  
-  scale_y_continuous(labels = scales::percent_format(accuracy = 1), limits = c(0, 0.7)) + 
-  ak_theme + theme(plot.tag.position = c(0.9, 0.9))
+  scale_color_viridis(option = "G", discrete = T, begin = 0.8, end = 0.3) +
+  scale_x_continuous(labels = seq(-10, 30, 10), breaks = seq(-10, 30, 10), limits = c(-10, 30)) + 
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1), limits = c(0, 0.65)) + 
+  ak_theme + theme(plot.tag.position = c(0.96, 0.9)) + guides(colour = guide_legend("Soil moisture"))
 
 m3_t2_p2 
-ggsave("m3_t2_weather.tif", m3_t2_p2, device = "tiff", scale = 2, width = 1920, height = 1080, units = "px", 
-       path = file.path(dir, figpath), dpi = 300)
+#ggsave("m3_t2_weather.tif", m3_t2_p2, device = "tiff", scale = 2, width = 1920, height = 1080, units = "px", 
+#       path = file.path(dir, figpath), dpi = 300)
 
 # 3 Panel Graph
-m3_p2_combined <- ggarrange((m3_t2_p2 + labs(tag = "A") + rremove("xlab")),
-                            (m3_t1_p2 + labs(tag = "B") + rremove("ylab")), 
-                            (m3_t0_p2 + labs(tag = "C") + rremove("ylab") + rremove("xlab")), 
-                            labels = NULL,
-                            ncol = 3, nrow = 1,
-                            common.legend = TRUE, legend = "bottom",
-                            align = "hv", 
-                            font.label = list(size = 10, color = "black", face = "bold", family = NULL, position = "top"))
+m3_p2_combined <- m2_p2_combined <- ((m3_t2_p2 + labs(caption = NULL, x = NULL) + theme(legend.position = "none")) | 
+                                     (m3_t1_p2 + labs(caption = NULL, y = NULL)) | 
+                                     (m3_t0_p2 + labs(caption = NULL, y = NULL, x = NULL) + theme(legend.position = "none"))) + 
+                                      plot_annotation(tag_levels = "A", 
+                                      caption = "Soil moisture ranged from 5.42-5.52 (kg/m"^2~"), 6.16-6.22 (kg/m"^2~"), and 6.89-6.92 (kg/m"^2~") for the Low, Medium, and High categories respectively. Timepoints above each graph indicate the time from the initial observation.",
+                                      theme = theme(plot.caption = element_text(size = 12, hjust = 0)))
 
-
-annotate_figure(m3_p2_combined, bottom = textGrob(bquote("Soil moisture ranged from 5.46-5.53 (kg/m"^2~"), 6.18-6.22 (kg/m"^2~"), and 6.89-6.91 (kg/m"^2~"), for the Low, Medium, and High categories respectively. Timepoints above each graph indicate the time from the initial observation."), x = 0, 
-                                                  hjust = 0, gp = gpar(fontsize = 12)))
-
-
-ggsave("m3_weather_combined.tif", m3_p2_combined, device = "tiff", scale = 2, width = 2600, height = 1200, units = "px", 
+m3_p2_combined
+ggsave("m3_weather_combined.tif", m3_p2_combined, device = "tiff", scale = 2, width = 2600, height = 1500, units = "px", 
        path = file.path(dir, figpath), dpi = 300)
+
+
+# Remove saved objects from the global environment to speed up processing
+rm(m3_p1_combined, m3_p2_combined, m3_t0_p1, m3_t0_p2, m3_t0_rich, m3_t0_weather, 
+   m3_t1_p1, m3_t1_p2, m3_t1_rich, m3_t1_weather, 
+   m3_t2_p1, m3_t2_p2, m3_t2_rich, m3_t2_weather)
+
+
 
 #### 4. Fatality models ####################################################
 # Remove any instances of NA within the fatal column & weather vars columns, as well as I. alpestris
@@ -993,7 +914,6 @@ d_fatal <- d_fatal %>%
 # bio12 == annual precip
 
 ##      4a.  Fatality of fire salamanders given an interaction between average monthly temperature (tavg) and if Bsal has ever been detected at a site. 
-# including Jaime's data
 m4_tavg <- glmmTMB(fatal ~ tavg*prev_above_0 + (1|Site),
                  family = "binomial",
                  data = filter(d_fatal, scientific == "Salamandra salamandra"),
@@ -1003,83 +923,32 @@ m4_tavg <- glmmTMB(fatal ~ tavg*prev_above_0 + (1|Site),
 summary(m4_tavg)
 Anova(m4_tavg)
 
-# excluding Jaime's data
-m4_tavg_noJB <- glmmTMB(fatal ~ tavg*prev_above_0 + (1|Site),
-                   family = "binomial",
-                   data = filter(d_fatal, scientific == "Salamandra salamandra" & collectorList != "Jaime Bosch"),
-                   control = glmmTMBControl(optimizer = optim,
-                                            optArgs = list(method = "BFGS")))
-
-summary(m4_tavg_noJB)
-Anova(m4_tavg_noJB)
-
 
 ##      4b. Plots
 # tavg - all data
-m4_tavg_predict <- ggpredict(m4_tavg, terms = c("tavg [all]", "prev_above_0"))
-m4_tavg_predict <- m4_tavg_predict %>%
+m4_tavg_predict <- ggpredict(m4_tavg, terms = c("tavg [all]", "prev_above_0")) %>%
   rename("tavg" = "x",
          "BsalDetected" = "group") %>%
   mutate(tavg = as.numeric(as.character(tavg)),
-         BsalDetected = ifelse(BsalDetected == 0, "No", "Yes"))
+         BsalDetected = as.factor(ifelse(BsalDetected == 0, "Bsal ( - )", "Bsal ( + )")),
+         # Convert scaled prediction to original data scale
+         tavgUnscaled = (tavg * as.numeric(attr(d_fatal$tavg, "scaled:scale")) + as.numeric(attr(d_fatal$tavg, "scaled:center"))))
+ 
 
-# Convert scaled prediction to original data scale:
-m4_tavg_unscaled <- m4_tavg_predict
-m4_tavg_unscaled$tavg <- m4_tavg_predict$tavg * as.numeric(attr(d_fatal$tavg, "scaled:scale")) +
-  as.numeric(attr(d_fatal$tavg, "scaled:center"))
-
-m4_tavg_plot <- ggplot(m4_tavg_unscaled, aes(x = tavg , y = predicted)) +
-  geom_line(aes(linetype = as.factor(BsalDetected))) +
-  labs(title = bquote(paste("Average monthly temperature")), linetype = "Bsal Positive") +
-  #  geom_errorbar(aes(ymin = exp(conf.low), ymax = (conf.high))) +
+m4_tavg_plot <- ggplot(m4_tavg_predict, aes(x = tavgUnscaled , y = predicted, colour = BsalDetected)) +
+  geom_line(aes(linetype = BsalDetected), linewidth = 1) +
+  labs(linetype = "Status") +
+#  geom_ribbon(aes(x = tavgUnscaled, ymin = conf.low, ymax = conf.high, fill = dummy), alpha = 0.2, colour = NA, show.legend = F) +
   ylab("Predicted fire salamander mortality (%)") +
-  xlab(expression("Temperature (°C)")) + 
+  xlab(expression("Average monthly temperature (°C)")) + 
+  scale_linetype_manual(values = c("solid", "longdash")) +
+  scale_color_manual(values = c("black", "#C23113")) +
   scale_x_continuous(labels = seq(0, 20, 5), breaks = seq(0, 20, 5), limits = c(0, 20)) +  
-  scale_y_continuous(breaks = seq(0, .015, .005),
-                     labels = scales::percent,
-                     limits = c(0, .015)) +
-  ak_theme + theme(plot.tag.position = c(0.9, 0.9))
-
+  scale_y_continuous(labels = scales::percent, limits = c(0, .0125)) +
+  ak_theme + theme(plot.tag.position = c(0.96, 0.9)) + guides(colour = guide_legend("Status"))
 
 m4_tavg_plot
-ggsave("m4_fatality.tif", m4_tavg_plot, device = "tiff", scale = 2, width = 1920, height = 1080, units = "px", 
-       path = file.path(dir, figpath), dpi = 300)
 
-
-
-# tavg_noJB - excluding Jaime's data
-m4_tavg_noJB_predict <- ggpredict(m4_tavg_noJB, terms = c("tavg [all]", "prev_above_0"))
-m4_tavg_noJB_predict <- m4_tavg_noJB_predict %>%
-  rename("tavg" = "x",
-         "BsalDetected" = "group") %>%
-  mutate(tavg = as.numeric(as.character(tavg)),
-         BsalDetected = ifelse(BsalDetected == 0, "No", "Yes"))
-
-# Convert scaled prediction to original data scale:
-m4_tavg_noJB_unscaled <- m4_tavg_noJB_predict
-m4_tavg_noJB_unscaled$tavg <- m4_tavg_noJB_predict$tavg * as.numeric(attr(d_fatal$tavg, "scaled:scale")) +
-  as.numeric(attr(d_fatal$tavg, "scaled:center"))
-
-m4_tavg_noJB_plot <- ggplot(m4_tavg_noJB_unscaled, aes(x = tavg, y = predicted)) +
-  geom_line(aes(linetype = as.factor(BsalDetected))) +
-  labs(title = bquote(paste("Average monthly temperature")), linetype = "Bsal Positive") +
-  #  geom_errorbar(aes(ymin = exp(conf.low), ymax = (conf.high))) +
-  ylab("Predicted fire salamander mortality (%)") +
-  xlab(expression("Temperature (°C)")) + 
-  scale_x_continuous(labels = seq(-10, 10, 5), breaks = seq(-10, 10, 5), limits = c(-10, 10)) +  
-  scale_y_continuous(breaks = seq(0, .015, .005),
-                     labels = scales::percent,
-                     limits = c(0, .015)) +
-  ak_theme + theme(plot.tag.position = c(0.9, 0.9)) +
-  labs(caption = c("The figure depicts the plot output for the same fatality model that the other figure describes, excluding Jaime Bosch's data."))
-  
-
-m4_tavg_noJB_plot
-
-ggsave("m4_fatality_noJB.tif", m4_tavg_noJB_plot, device = "tiff", scale = 2, width = 1920, height = 1080, units = "px", 
-       path = file.path(dir, figpath), dpi = 300)
-
-
-
-
+#ggsave("m4_fatality.tif", m4_tavg_plot, device = "tiff", scale = 2, width = 1920, height = 1080, units = "px", 
+#       path = file.path(dir, figpath), dpi = 300)
 
