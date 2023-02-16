@@ -43,11 +43,11 @@ analysis_pckgs <- c("tidyverse",
                     "glmmTMB", # glmmTMB()
                     "car", # Anova()
                     "DHARMa", # simulateResiduals(), testZeroInflation(), testDispersion()
-                    "lme4", # lm()
-                    "MASS", # negative binomial models
-                    "epiR",
-                    "sjPlot",
-                    "effects"# plot_model()
+                    "epiR", # 
+                    "sjPlot", #plot_model()
+                    "effects", 
+                    "parameters",
+                    "easystats" # bootstrap_model() 
 )
 
 
@@ -393,7 +393,8 @@ dcbindScaled <- dcbind_alpestris %>%
               "soilMoisture_date", "soilMoisture_date_t1", "soilMoisture_date_t2"), 
             ~(scale(., center = T, scale = T %>% as.numeric)))
 
-
+## Although there were significant predictors, the confidence intervals for each of my models were large so I decided to perform 
+## bootstrap model validation using the 'parameters' package in R. This will hopefully give us a better idea of the variability. 
 # T0
 m2_t0 <- glmmTMB(cbind(nPos_all, nNeg_all) ~  richness*logsiteAbun + temp_date*soilMoisture_date + (1|scientific),
                  data = dcbindScaled, family = "binomial",
@@ -402,7 +403,12 @@ m2_t0 <- glmmTMB(cbind(nPos_all, nNeg_all) ~  richness*logsiteAbun + temp_date*s
 
 summary(m2_t0)
 Anova(m2_t0)
+# Model parameters with CI, df and p-values based on Wald approximation
+m2_t0_params <- model_parameters(m2_t0, exponentiate = T)
 
+# Model parameters with CI, df, and p-values calculated by bootstrapping the model (bootstrap = 1000). 
+# Parameter estimates are also based on the Wald approximation.
+m2_t0_bootparams <- model_parameters(m2_t0, bootstrap = 100, effects = "all", exponentiate = T)
 
 # T-1
 m2_t1 <- glmmTMB(cbind(nPos_all, nNeg_all) ~  richness*logsiteAbun + temp_date_t1*soilMoisture_date_t1 + (1|scientific),
@@ -413,8 +419,6 @@ m2_t1 <- glmmTMB(cbind(nPos_all, nNeg_all) ~  richness*logsiteAbun + temp_date_t
 summary(m2_t1)
 Anova(m2_t1)
 
-
-
 # T-2
 m2_t2 <- glmmTMB(cbind(nPos_all, nNeg_all) ~  richness*logsiteAbun + temp_date_t2*soilMoisture_date_t2 + (1|scientific),
                  data = dcbindScaled, family = "binomial",
@@ -423,6 +427,24 @@ m2_t2 <- glmmTMB(cbind(nPos_all, nNeg_all) ~  richness*logsiteAbun + temp_date_t
 
 summary(m2_t2)
 Anova(m2_t2)
+
+
+
+
+
+
+
+#boot <- parameters::bootstrap_model(m2_t0, iterations = 100, type = "parametric", parallel = "snow", n_cpus = 1)
+#for(i in 1:nrow(boot)){
+#  boot.mod <- update(m2_t0)
+#  boot.params <- bootstrap_parameters(boot.mod)
+#  print(boot.params)
+#  
+#  if(require("emmeans")){
+#    est <- emmeans(boot.params, cbind(nPos_all, nNeg_all) ~ richness*logsiteAbun)
+#    print(model_parameters(est))
+#  }
+#}
 
 
 
@@ -937,6 +959,8 @@ m4_tavg_predict <- ggpredict(m4_tavg, terms = c("tavg [all]", "prev_above_0")) %
 
 m4_tavg_plot <- ggplot(m4_tavg_predict, aes(x = tavgUnscaled , y = predicted, colour = BsalDetected)) +
   geom_line(aes(linetype = BsalDetected), linewidth = 1) +
+#  geom_rug(data = dcbindScaled, aes(x = richness, y = 0), sides = "b", alpha = 0.5, 
+#           position = position_jitter(width = 0.4, height = 0.1), inherit.aes = F, na.rm = T) +
   labs(linetype = "Status") +
 #  geom_ribbon(aes(x = tavgUnscaled, ymin = conf.low, ymax = conf.high, fill = dummy), alpha = 0.2, colour = NA, show.legend = F) +
   ylab("Predicted fire salamander mortality (%)") +
