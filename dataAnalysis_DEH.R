@@ -1,53 +1,59 @@
 #remotes::install_version("Rttf2pt1", version = "1.3.8") # install this version, latest ver. not compatible
+#remotes::install_github("gorkang/html2latex") # convert sjPlot::tab_model() hmtl table to tex and pdf in .Rmd docs
 #extrafont::font_import() # load fonts before ggplot2; only need to do this once
 require(pacman)
 require(rstudioapi) # Set working directory to current file location
 require(extrafont) 
 extrafont::loadfonts(device = "win", quiet = T) # plot fonts
-#### Plot Specific Packages ####
-plot_pckgs <- c("tidyverse",
-                "sjPlot",
-                "ggeffects",
-                "Rttf2pt1", # to use with the extrafont package
-                "ggtext", # for text type/arrangements w/ ggplot2
-                "hrbrthemes", # plot colors
-                "patchwork", # arranging figures
-                "ggsignif", # adds labels to significant groups
-                "RColorBrewer",
-                "colorspace", # color scale
-                "viridis", # arranging figures
-                "gridExtra",
-                "grid",
-                "cowplot",
-                "ggpubr"
+#### Visualization Packages ####
+vis_pckgs <- c("colorspace", # color scale
+               "cowplot",
+               "ggpubr",
+               "ggsignif", # adds labels to significant groups
+               "ggtext", # for text type/arrangements w/ ggplot2
+               "grid",
+               "gridExtra",
+               "hrbrthemes", # plot colors
+#               "html2latex", # tex2Rmd(); will get this working later
+               "patchwork", # arranging figures
+               "RColorBrewer",
+               "Rttf2pt1", # to use with the extrafont package
+               "viridis", # arranging figures
+               # map specific pckgs
+               "concaveman",
+               "eurostat",
+               "geodata",
+               "ggpattern",
+               "ggmap",
+               "ggspatial", # north arrow and scale bar
+               "ggthemes",
+               "fields",
+               "leaflet",
+               "mapproj",
+               "raster", # raster data handling
+               "scales",
+               "sf", # vector data handling
+               "sp",
+               "terra"
 )
 
-#### Map Specific Packages ####
-map_pckgs <- c("tidyverse",
-               "htmltools",
-               "stars", # spatiotemporal data handling
-               "RColorBrewer",
-               "ggspatial", # north arrow and scale bar,
-               "raster", # raster data handling
-               "sf", # vector data handling
-               "sp", 
-               "geojsonio",
-               "geojsonlint",
-               "ggpubr",
-               "mapproj" 
-)
 
 #### Analysis Specific Packages ####
-analysis_pckgs <- c("tidyverse",
+analysis_pckgs <- c("car", # Anova()
                     "data.table", # data wrangling
-                    "glmmTMB", # glmmTMB()
-                    "car", # Anova()
                     "DHARMa", # simulateResiduals(), testZeroInflation(), testDispersion()
-                    "epiR", # 
-                    "sjPlot", #plot_model()
+                    "easystats", # bootstrap_model() 
                     "effects", 
+                    "epiR", # calculate prevalence & cis
+                    "ggeffects",
+                    "glmmTMB", # glmmTMB()
+                    "lme4",
                     "parameters",
-                    "easystats" # bootstrap_model() 
+                    "rgeos",
+                    "sjPlot", #plot_model()
+                    "sjmisc",
+                    "sjlabelled",
+                    "tidyverse"
 )
 
 
@@ -62,7 +68,7 @@ setwd(file.path(dir, csvpath))
 
 ## Load relevant packages
 pacman::p_load(analysis_pckgs, character.only = T)
-pacman::p_load(plot_pckgs, character.only = T)
+pacman::p_load(vis_pckgs, character.only = T)
 
 ## Load csv files
 d <- read.csv("bsalData_clean.csv", header = T, encoding = "UTF-8")
@@ -334,40 +340,76 @@ abun
 
 
 ##      1d. Maps
-# Code for Europe map with points for each site
+# Download shapefiles for each country
+shp_europe <- get_eurostat_geospatial(resolution = 20, nuts_level = 0, year = '2016')
 
 
-v.europe <- c("Norway", "Sweden", "Finland", "Denmark", "United Kingdom","Ireland", "Greece",
-              "Belgium", "Netherlands", "France", "Spain", "Portugal", "Luxembourg", "Croatia",
-              "Germany", "Switzerland", "Austria", "Slovenia", "Italy", "Bulgaria", "Romania",
-              "Czech Rep.", "Slovakia", "Hungary", "Poland", "Bosnia Hercegovina", "Serbia",
-              "Turkey", "Ukraine", "Moldova", "Belarus", "Estonia", "Latvia", "Lithuania",
-              "Montenegro", "Albania", "Macedonia", "UK")
+# Obtain shapefiles for countries belonging to the EU + the UK
+europe <- eu_countries %>% 
+  dplyr::select(geo = code, name) 
 
-wmap <- map_data("world") %>%
-  filter(region %in% v.europe)
+# Combine spatial information from "shp_europe" and "europe"
+bounds <- shp_europe %>%
+  dplyr::select(geo = NUTS_ID, geometry) %>%
+  inner_join(europe, by = "geo") %>%
+  arrange(geo) %>%
+  st_as_sf()
 
-# Aggregate observations to the site level
-d2 <- d %>%
+# Get elevation data to fill map
+elevation <- geodata::elevation_global(res = 2.5, path = dir)
+
+# Crop elevation to extent
+europe_elev <- raster::crop(elevation, bounds) %>%
+  methods::as(., "Raster") %>% # convert SpatRaster to Rasterstack
+  raster::rasterToPoints(.) # convert Rasterstack to matrix of points 
+# Convert raster matrix to a dataframe
+elev_df <- as.data.frame(europe_elev)
+colnames(elev_df) <- c("lon", "lat", "alt")
+
+# Aggregate sample observations to the site level
+obs <- d %>%
   group_by(Site, decimalLongitude, decimalLatitude) %>%
   summarize(Abundance = sum(individualCount),
             Richness = length(unique(scientific)),
             Bsal = ifelse(sum(BsalDetected) > 0,
                           "Detected",
-                          "Not detected"))
+                          "Not detected")) %>%
+  ungroup()
+
+
+# Map
+ggplot(elev_df, aes(x = lat, y = lon, fill = alt), alpha = 0.45) +
+  geom_raster() +
+  scale_fill_gradient(low = "#2f540a", high = "#d3b38b") +
+  geom_sf(bounds, aes(geometry), fill = NA) +
+  scale_x_continuous(limits = c(-10, 15)) +
+  scale_y_continuous(limits = c(35, 60)) +
+  theme_void()
+
+
+
+
+SampleSites
+
+
 
 # Adding the geom_rect for the inset box takes a bit; comment out for faster mapping
 ggplot(wmap, aes(x = long, y = lat)) +
-  geom_polygon(aes(group = group), fill = NA, colour = "grey60")+
-  geom_point(data = d2, aes(x = decimalLongitude, y = decimalLatitude,
-                            fill = Bsal, alpha = Bsal),
-             shape = 21, size = 3)+
-  scale_alpha_manual(values = c(1,.3))+
-  geom_rect(aes(xmin = 2.5, xmax = 11,
+  ggspatial::geom_sf(data = wmap, geometry = region) +
+  coord_sf(ylim = c(35,60), xlim = c(-10,15))
+
+
+geom_polygon(aes(group = group), fill = NA, colour = "grey60") +
+geom_point(data = obs, aes(x = decimalLongitude, y = decimalLatitude,
+                           fill = Bsal, alpha = Bsal),
+             shape = 21, size = 3) +
+scale_alpha_manual(values = c(1,.3)) +
+geom_rect(aes(xmin = 2.5, xmax = 11,
                 ymin = 49, ymax = 52.5),
-            color = "red", linewidth = 1, fill = NA)+
-  coord_map(ylim = c(35,60), xlim = c(-10,15))+
-  theme_bw()
+            color = "black", linewidth = 0.5, fill = NA) +
+coord_map() +
+theme_bw()
+
 
 
 ggplot(wmap, aes(x = long, y = lat)) +
@@ -378,6 +420,8 @@ ggplot(wmap, aes(x = long, y = lat)) +
   scale_alpha_manual(values = c(1,.3))+
   coord_map(ylim = c(49.1,52.1), xlim = c(3,11))+
   theme_bw()
+
+
 
 # Remove objects from global environment to speed up processing
 rm(abun, d2, descriptive, m1a, m1a_plot, m1a_predict, m1b_plot, m1c, m1c_plot, m1c_predict, m1c_rug, mean_sppAbun, p1abcombined, p1combined, tmp)
@@ -403,12 +447,12 @@ m2_t0 <- glmmTMB(cbind(nPos_all, nNeg_all) ~  richness*logsiteAbun + temp_date*s
 
 summary(m2_t0)
 Anova(m2_t0)
-# Model parameters with CI, df and p-values based on Wald approximation
-m2_t0_params <- model_parameters(m2_t0, exponentiate = T)
+## Model parameters with CI, df and p-values based on Wald approximation
+#m2_t0_params <- model_parameters(m2_t0, exponentiate = T)
 
-# Model parameters with CI, df, and p-values calculated by bootstrapping the model (bootstrap = 1000). 
+## Model parameters with CI, df, and p-values calculated by bootstrapping the model (bootstrap = 1000). 
 # Parameter estimates are also based on the Wald approximation.
-m2_t0_bootparams <- model_parameters(m2_t0, bootstrap = 100, effects = "all", exponentiate = T)
+#m2_t0_bootparams <- model_parameters(m2_t0, bootstrap = 100, effects = "all", exponentiate = T)
 
 # T-1
 m2_t1 <- glmmTMB(cbind(nPos_all, nNeg_all) ~  richness*logsiteAbun + temp_date_t1*soilMoisture_date_t1 + (1|scientific),
@@ -427,25 +471,6 @@ m2_t2 <- glmmTMB(cbind(nPos_all, nNeg_all) ~  richness*logsiteAbun + temp_date_t
 
 summary(m2_t2)
 Anova(m2_t2)
-
-
-
-
-
-
-
-#boot <- parameters::bootstrap_model(m2_t0, iterations = 100, type = "parametric", parallel = "snow", n_cpus = 1)
-#for(i in 1:nrow(boot)){
-#  boot.mod <- update(m2_t0)
-#  boot.params <- bootstrap_parameters(boot.mod)
-#  print(boot.params)
-#  
-#  if(require("emmeans")){
-#    est <- emmeans(boot.params, cbind(nPos_all, nNeg_all) ~ richness*logsiteAbun)
-#    print(model_parameters(est))
-#  }
-#}
-
 
 
 ##      2b. Prevalence by Abundance & Richness Plots for T0, T-1, T-2 
