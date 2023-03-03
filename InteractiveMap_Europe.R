@@ -1,6 +1,7 @@
 #### Map Specific Packages ####
 map_pckgs <- c("tidyverse",
                "htmltools",
+               "htmlwidgets", # save leaflet output as html file
                "stars", # spatiotemporal data handling
                "RColorBrewer",
                "ggspatial", # north arrow and scale bar,
@@ -14,10 +15,18 @@ map_pckgs <- c("tidyverse",
                "ggpubr"# validate GeoJSON and display it on a map
 )
 
+## Set working directory
+dir <- dirname(rstudioapi::getActiveDocumentContext()$path)
+csvpath <- (path.expand("/csvFiles"))
+setwd(file.path(dir, csvpath))
 
-##      1d. Maps (Interactive)
+## Load packages
 pacman::p_load(map_pckgs, character.only = T)
 
+## Load csv files
+d <- read.csv("bsalData_clean.csv", header = T, encoding = "UTF-8")
+
+##      1d. Maps (Interactive)
 d <- d %>%
   mutate(color = case_when(
     susceptibility == "1" ~ "Resistant",
@@ -72,3 +81,6 @@ map <- leaflet(data = d) %>%
                                         updateWhenIdle = TRUE))
 
 map
+
+
+saveWidget(map, file = "BsalMap.html")

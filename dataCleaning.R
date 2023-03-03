@@ -1,18 +1,21 @@
-library(tidyverse)
-library(devtools)
-library(reshape2)
-library(codyn) # species synchrony
-library(rgdal) # package for geospatial analysis
-library(lubridate)
-library(data.table)
-library(raster) # package for raster manipulation
-library(ncdf4) # for IMERG satellite data
-library(maptools) # package to create maps
-library(geodata) # cmip6; projected climate data
-library(gstat)
-library(sp)
-library(sf)
-library(fs) # construct relative paths to files/directories
+require(pacman)
+#### Packages ####
+pckgs <- c("tidyverse",
+           "devtools",
+           "reshape2",
+           "rgdal", # package for geospatial analysis
+           "lubridate",
+           "data.table",
+           "raster", # package for raster manipulation
+           "ncdf4", # for IMERG satellite data
+           "maptools", # package to create maps
+           "geodata", # cmip6; projected climate data
+           "gstat",
+           "sp",
+           "sf",
+           "fs" # construct relative paths to files/directories
+)
+
 
 
 
