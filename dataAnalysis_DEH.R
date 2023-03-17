@@ -125,19 +125,34 @@ m1a <- glmmTMB(logsppAbun ~ scientific + (1|Site),
                                         optArgs = list(method = "BFGS")))
 summary(m1a)
 Anova(m1a)
+
+
+textcol <- prev %>%
+  dplyr::select(scientific, susceptibility) %>% # subset relevant data
+  distinct()
+
 m1a_predict <- ggpredict(m1a, terms = "scientific") %>%
+  rename("scientific" = "x",
+         "expectedAbun" = "group") %>%
   mutate(predicted = exp(predicted),
          conf.low = exp(conf.low),
          conf.high = exp(conf.high),
-         group = round(predicted, 0))
+         expectedAbun = round(predicted, 0)) %>%
+  left_join(., textcol, by = "scientific") %>%
+  relocate(susceptibility, .after = scientific)
 
-m1a_plot <- ggplot(m1a_predict, aes(x , predicted)) +
-  geom_point() +
-  geom_errorbar(aes(ymin = conf.low, ymax = conf.high), width = 0.4) +
-  geom_label(aes(y = (conf.high + 0.25), label = paste0("n = ", group)), vjust = 0.4, hjust = 0, alpha = 0.5, size = 5, label.size = NA) +
+
+m1a_plot <- ggplot(m1a_predict, aes(scientific, predicted, colour = susceptibility)) +
+  geom_point(size = 3) +
+  geom_errorbar(aes(ymin = conf.low, ymax = conf.high), width = 0.5) +
+  geom_label(aes(y = (conf.high + 0.25), label = paste0("n = ", expectedAbun)), 
+             vjust = 0.4, hjust = 0, alpha = 0.5, size = 5, 
+             label.size = NA, fontface = "bold", show.legend = F) +
   coord_flip() +
   ylab("Abundance (site/date)") +
   xlab("Species") + 
+  scale_colour_manual(name = "Susceptibility",values = c("#8bd3c7", "#f8ae5d", "#b30000"),
+                      labels = c("Resistant", "Tolerant", "Susceptible")) +
   scale_y_continuous(labels = seq(0, 20, 5), breaks = seq(0, 20, 5), limits = c(0, 23)) +
   scale_x_discrete(expand = expansion(mult = c(0, 0.01), add = c(1, 0.5))) +
   ak_theme + theme(axis.text.y = element_text(face = "italic")) 
@@ -182,13 +197,17 @@ prev <- prev %>%
 
 
 # Descriptive plot showing disease prevalence values per species with a 95% ci
-m1b_plot <- ggplot(prev, aes(scientific, est)) +
-  geom_errorbar(aes(ymin = lowerCI, ymax = upperCI), width = 0.4) +
-  geom_point() +
-  geom_label(aes(y = (upperCI + 0.5), label = paste0("n = ", totalspp)), vjust = 0.4, hjust = 0, alpha = 0.5, size = 5, label.size = NA) +
+m1b_plot <- ggplot(prev, aes(scientific, est, col = susceptibility)) +
+  geom_point(size = 3) +
+  geom_errorbar(aes(ymin = lowerCI, ymax = upperCI), width = 0.5) +
+  geom_label(aes(y = (upperCI + 0.5), label = paste0("n = ", totalspp)), 
+             vjust = 0.4, hjust = 0, alpha = 0.5, size = 5, 
+             label.size = NA, fontface = "bold", show.legend = F) +
   coord_flip() +
   ylab("Disease prevalence (%)") +
   xlab("Species") + scale_x_discrete(expand = expansion(mult = c(0, 0.01), add = c(1, 0.5))) +
+  scale_colour_manual(name = "Susceptibility",values = c("#8bd3c7", "#f8ae5d", "#b30000"),
+                      labels = c("Resistant", "Tolerant", "Susceptible")) +
   scale_y_continuous(labels = scales::label_percent(scale = 1, suffix = "%"), breaks = seq(0, 100, 25), limit = c(0,105)) +
   ak_theme + theme(axis.text.y = element_text(face = "italic")) 
 #  labs(caption = c("Descriptive plot showing Bsal prevalence (*i.e.*, the proportion of individuals that tested positive for Bsal) for each species as a percent. Error bars represent 95% confidence intervals and 'n' represents the total number observations of that species in the dataset."))
@@ -200,11 +219,12 @@ ggsave("plot1b_prevalence.tif", m1b_plot, device = "tiff", scale = 2, width = 19
 p1abcombined <- ((m1b_plot + labs(caption = NULL) + theme(plot.tag.position = c(0.96, 0.95)))|
                (m1a_plot + labs(caption = NULL) + theme(axis.text.y = element_blank(), 
                                                        axis.title.y = element_blank(),
-                                                       plot.tag.position = c(0.93, 0.95)))) +
-                plot_annotation(tag_levels = "A") 
-                 
+                                                       plot.tag.position = c(0.93, 0.95)))) & theme(legend.position = "bottom")
+                
+plot_annotation(tag_levels = "A") + plot_layout(guides = "collect")                 
                 
 
+p1abcombined <- p1abcombined + plot_annotation(tag_levels = "A") + plot_layout(guides = "collect")
 p1abcombined
 ggsave("plots1ab_combined.tif", p1abcombined, device = "tiff", scale = 2, width = 2500, height = 1080, units = "px", 
        path = file.path(dir, figpath), dpi = 300)
@@ -223,7 +243,8 @@ Anova(m1c)
 m1c_predict <- ggpredict(m1c, terms = c("susceptibility")) %>%
   rename("susceptibility" = "x",
          "group" = "group") %>%
-  mutate(predicted = exp(as.numeric(predicted)),
+  mutate(susceptibility = as.factor(susceptibility),
+         predicted = exp(as.numeric(predicted)),
          conf.high = exp(as.numeric(conf.high)),
          conf.low = exp(as.numeric(conf.low)))
 
@@ -233,19 +254,18 @@ m1c_rug <- d %>%
 
 m1c_predict <- merge(m1c_predict, m1c_rug)
 
-tmp <- d %>% group_by(susceptibility, scientific) %>% count()
-View(tmp)
 
-m1c_plot <- ggplot(m1c_predict, aes(susceptibility , predicted)) +
+m1c_plot <- ggplot(m1c_predict, aes(susceptibility , predicted, color = susceptibility)) +
   geom_point(size = 5) +
   geom_errorbar(aes(ymin = conf.low, ymax = conf.high), width = 0.2, linewidth = 1) +
+  geom_label(aes(y = (conf.high + 0.5), label = paste0("n = ", n)), 
+             alpha = 0.5, size = 6, label.size = NA, fontface = "bold", show.legend = F) +
   scale_x_discrete(labels = c("Resistant", "Tolerant", "Susceptible")) +
   ylab("Species abundance") + scale_y_discrete(limits = factor(0:8), breaks = c("0", "2", "4", "6", "8")) +
   xlab("Susceptibility level") + 
-  annotate('text', x = 1, y = 3.5, label = 'n = 2007', size = 8) + 
-  annotate('text', x = 2, y = 3.5, label = 'n = 1776', size = 8) +
-  annotate('text', x = 3, y = 7.5, label = 'n = 3615', size = 8) +
-  ak_theme 
+  scale_colour_manual(name = "Susceptibility",values = c("#8bd3c7", "#f8ae5d", "#b30000"),
+                      labels = c("Resistant", "Tolerant", "Susceptible")) +
+  ak_theme + theme(legend.position = "none")
 #  labs(caption = c("Resistant = No to low infection and no clinical signs of disease; Tolerant = low infection loads with low or variable mortality; and Susceptible = High<br>
 #                   infection loads resulting in consistently high mortality. Error bars represent 95% confidence intervals and 'n' represents the number of animals from<br>
 #                   the dataset in each susceptibility category. In total, there were 11 species classified as 'Resistant', 4 species classified as 'Tolerant', and 4 species<br>
@@ -275,7 +295,7 @@ p1combined <- (((m1a_plot + labs(caption = NULL) + theme(plot.tag.position = c(0
                                                           plot.margin = margin(1, 2, .75, 0, "cm"), 
                                                           axis.ticks.length.y = unit(.25, "cm"),
                                                           axis.ticks = element_blank(),
-                                                          axis.title.y = element_text(margin = margin(r = -375), size = 26),
+                                                          axis.title.y = element_text(margin = margin(r = -450), size = 26),
                                                           axis.text.y = element_text(size = 22),
                                                           axis.title.x = element_text(size = 26),
                                                           axis.text.x = element_text(size = 22),
@@ -283,8 +303,9 @@ p1combined <- (((m1a_plot + labs(caption = NULL) + theme(plot.tag.position = c(0
   plot_annotation(tag_levels = "A")  +  plot_layout(widths = c(1, 2), heights = c(1,1))
 
 p1combined
-#ggsave("plots1abc_combined.tif", p1combined, device = "tiff", scale = 2, width = 2600, height = 2300, units = "px", 
-#       path = file.path(dir, figpath), dpi = 300)
+
+ggsave("plots1abc_combined.tif", p1combined, device = "tiff", scale = 2, width = 2600, height = 2300, units = "px", 
+       path = file.path(dir, figpath), dpi = 300)
 
 
 ## Descriptive (no stats)
@@ -434,7 +455,7 @@ Anova(m2_t2)
 tab_model(m2_t0, show.obs = T, collapse.ci = T,
           rm.terms = c("temp_date", "soilMoisture_date", "temp_date:soilMoisture_date"),
           dv.labels = "t(0)",
-          string.pred = "Cbind Models",
+          string.pred = "Terms",
           string.p = "P-Value",
           pred.labels = nicelabs,
           file = file.path(dir, figpath, "m2_t0_rich.html"))
@@ -448,7 +469,7 @@ webshot(file.path(dir, figpath, "m2_t0_rich.html"),file.path(dir, figpath, "m2_t
 tab_model(m2_t0, show.obs = T, collapse.ci = T,
           rm.terms = c("logsiteAbun", "richness", "richness:logsiteAbun"),
           dv.labels = "t(0)",
-          string.pred = "Cbind Models",
+          string.pred = "Terms",
           string.p = "P-Value",
           pred.labels = nicelabs,
           file = file.path(dir, figpath, "m2_t0_out.html"))
@@ -456,7 +477,7 @@ tab_model(m2_t0, show.obs = T, collapse.ci = T,
 tab_model(m2_t1, show.obs = T, collapse.ci = T,
           rm.terms = c("logsiteAbun", "richness", "richness:logsiteAbun"),
           dv.labels = "t(-30)",
-          string.pred = "Cbind Models",
+          string.pred = "Terms",
           string.p = "P-Value",
           pred.labels = nicelabs,
           file = file.path(dir, figpath, "m2_t1_out.html"))
@@ -464,7 +485,7 @@ tab_model(m2_t1, show.obs = T, collapse.ci = T,
 tab_model(m2_t2, show.obs = T, collapse.ci = T,
           rm.terms = c("logsiteAbun", "richness", "richness:logsiteAbun"),
           dv.labels = "t(-60)",
-          string.pred = "Cbind Models",
+          string.pred = "Terms",
           string.p = "P-Value",
           pred.labels = nicelabs,
           file = file.path(dir, figpath, "m2_t2_out.html"))
@@ -683,7 +704,7 @@ Anova(m3_t2)
 tab_model(m3_t0, show.obs = T, collapse.ci = T,
           rm.terms = c("temp_date", "soilMoisture_date", "temp_date:soilMoisture_date"),
           dv.labels = "t(0)",
-          string.pred = "Cbind Models",
+          string.pred = "Terms",
           string.p = "P-Value",
           pred.labels = nicelabs,
           file = file.path(dir, figpath, "m3_t0_rich.html"))
@@ -697,7 +718,7 @@ webshot(file.path(dir, figpath, "m3_t0_rich.html"),file.path(dir, figpath, "m3_t
 tab_model(m3_t0, show.obs = T, collapse.ci = T,
           rm.terms = c("logsiteAbun", "richness", "richness:logsiteAbun"),
           dv.labels = "t(0)",
-          string.pred = "Cbind Models",
+          string.pred = "Terms",
           string.p = "P-Value",
           pred.labels = nicelabs,
           file = file.path(dir, figpath, "m3_t0_out.html"))
@@ -705,7 +726,7 @@ tab_model(m3_t0, show.obs = T, collapse.ci = T,
 tab_model(m3_t1, show.obs = T, collapse.ci = T,
           rm.terms = c("logsiteAbun", "richness", "richness:logsiteAbun"),
           dv.labels = "t(-30)",
-          string.pred = "Cbind Models",
+          string.pred = "Terms",
           string.p = "P-Value",
           pred.labels = nicelabs,
           file = file.path(dir, figpath, "m3_t1_out.html"))
@@ -713,7 +734,7 @@ tab_model(m3_t1, show.obs = T, collapse.ci = T,
 tab_model(m3_t2, show.obs = T, collapse.ci = T,
           rm.terms = c("logsiteAbun", "richness", "richness:logsiteAbun"),
           dv.labels = "t(-60)",
-          string.pred = "Cbind Models",
+          string.pred = "Terms",
           string.p = "P-Value",
           pred.labels = nicelabs,
           file = file.path(dir, figpath, "m3_t2_out.html"))
@@ -877,7 +898,7 @@ rm(m3_p1_combined, m3_p2_combined, m3_t0_p1, m3_t0_p2, m3_t0_rich, m3_t0_weather
 
 
 
-#### 4. Fatality models ####################################################
+#### 4. Fatality model ####################################################
 # Remove any instances of NA within the fatal column & weather vars columns, as well as I. alpestris
 d_fatal <- d %>%
   tidyr::drop_na(any_of(c(31, 40:45))) %>%
@@ -900,7 +921,7 @@ Anova(m4)
 
 
 ##      4b. Plots
-# tavg - all data
+# bio1 - all data
 m4_predict <- ggpredict(m4, terms = c("bio1 [all]", "prev_above_0")) %>%
   rename("bio1" = "x",
          "BsalDetected" = "group") %>%
