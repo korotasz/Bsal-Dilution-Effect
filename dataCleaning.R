@@ -16,7 +16,8 @@ pckgs <- c("tidyverse",
            "fs" # construct relative paths to files/directories
 )
 
-
+## Load packages
+pacman::p_load(pckgs, character.only = T)
 
 
 dir <- dirname(rstudioapi::getActiveDocumentContext()$path)
@@ -36,7 +37,8 @@ prev <- rbind(belgium, euram, germany, uk)
 prev <- Filter(function(x)!all(is.na(x)), prev)
 
 prev <- prev %>%
-  mutate_all(na_if, "") %>%
+  # replace empty string with NA
+  replace(., . == "", NA) %>%
   # fieldNumber and lifeStage both have life stage data -- combine
   unite(., col = "lifeStage_merged", c("fieldNumber", "lifeStage"), 
         sep = "/", remove = TRUE, na.rm = TRUE) %>%
@@ -79,7 +81,7 @@ spain <- spain[, -c(8:9, 32:54, 56)]
 spain <- spain[, c(2, 3:10, 1, 11:13, 15, 14, 27:29, 26, 18, 
                    20:24, 16, 17, 19, 25, 30:32)]
 spain <- spain %>%
-  mutate_all(na_if, "") %>%
+  replace(., . == "", NA) %>%
   rename(specimenFate = specimenDisposition) %>%
   mutate(sampleRemarks = NA, principalInvestigator = "An Martel") %>%
   relocate(c("sampleRemarks", "principalInvestigator"), .after = "diagnosticLab")
@@ -280,67 +282,67 @@ weather2 <- weather %>%
 ## Import DAILY temperature & soil moisture data from NASA's EarthData website (citation below)
    ## Li, B., H. Beaudoing, and M. Rodell, NASA/GSFC/HSL (2020), GLDAS Catchment Land Surface Model L4 daily 0.25 x 0.25 degree GRACE-DA1 V2.2, 
    ## Greenbelt, Maryland, USA, Goddard Earth Sciences Data and Information Services Center (GES DISC), Accessed: 2022-09-08.
-gldas_daily <- read.csv("weather_merged.csv", header = T, encoding = "UTF-8")
-
-gldas_daily <- gldas_daily %>%
-  unite(c("yearCollected", "monthCollected", "dayCollected"), sep = "-", col = "date", remove = F) %>%
-  rename(soilMoisture = "SOILMOIST_kgm.21",
-         temp = "SURFTEMP_K1") %>%
-  dplyr::select(decimalLatitude, decimalLongitude, timepoint, date, soilMoisture, temp) %>%
-  unite(decimalLatitude, decimalLongitude, sep = ", ", col = "LatLon", remove = F) 
-
-
-# Copy separate temp and soilMoisture
-tmp <- gldas_daily
-tmp <- gldas_daily[!(is.na(gldas_daily$temp)|gldas_daily$temp ==""),]
-
-# Add temp data back into gldas df
-gldas_daily$temp = tmp$temp[base::match(paste(gldas_daily$decimalLatitude, gldas_daily$decimalLongitude, gldas_daily$date),
-                                     paste(tmp$decimalLatitude, tmp$decimalLongitude, tmp$date))]
-
-gldas_daily <- gldas_daily %>%
-  na.omit() %>%
-  mutate(row = row_number()) %>%
-  mutate(date = as.Date(date, format = "%Y-%m-%d")) %>%
-  dplyr::group_by(decimalLatitude, decimalLongitude, timepoint) %>%
-  pivot_wider(names_from = timepoint, values_from = date)
-  
-  
-# separate daily temporal data by timepoint
-gldas_d_t0 <- gldas_daily %>% # 809 entries -- some missing
-  dplyr::select(LatLon, decimalLatitude, decimalLongitude, soilMoisture, temp, date) %>%
-  na.omit
-gldas_d_t1 <- gldas_daily %>% # 804 entries -- some missing
-  dplyr::select(LatLon, decimalLatitude, decimalLongitude, soilMoisture, temp, date_t1) %>%
-  na.omit
-gldas_d_t2 <- gldas_daily %>% # 805 entries -- some missing
-  dplyr::select(LatLon, decimalLatitude, decimalLongitude, soilMoisture, temp, date_t2) %>%
-  na.omit
-
-
-## Add back into weather df to prepare to left_join back into prev df
-weather <- weather[, -c(7:11)]
-weather <- weather %>%
-  dplyr::mutate(sm_d_t0 = NA, sm_d_t1 = NA, sm_d_t2 = NA,
-                temp_d_t0 = NA, temp_d_t1 = NA, temp_d_t2 = NA)
-
-# Soil Moisture (kg/m^2)
-weather$sm_d_t0 = gldas_d_t0$soilMoisture[base::match(paste(weather$LatLon, weather$date),
-                                                      paste(gldas_d_t0$LatLon, gldas_d_t0$date))]
-weather$sm_d_t1 = gldas_d_t1$soilMoisture[base::match(paste(weather$LatLon, weather$date_t1),
-                                                      paste(gldas_d_t1$LatLon, gldas_d_t1$date_t1))]
-weather$sm_d_t2 = gldas_d_t2$soilMoisture[base::match(paste(weather$LatLon, weather$date_t2),
-                                                      paste(gldas_d_t2$LatLon, gldas_d_t2$date_t2))]
-
-# Temperature (K)
-weather$temp_d_t0 = gldas_d_t0$temp[base::match(paste(weather$LatLon, weather$date),
-                                                paste(gldas_d_t0$LatLon, gldas_d_t0$date))]
-weather$temp_d_t1 = gldas_d_t1$temp[base::match(paste(weather$LatLon, weather$date_t1),
-                                                      paste(gldas_d_t1$LatLon, gldas_d_t1$date_t1))]
-weather$temp_d_t2 = gldas_d_t2$temp[base::match(paste(weather$LatLon, weather$date_t2),
-                                                      paste(gldas_d_t2$LatLon, gldas_d_t2$date_t2))]
-
-
+# gldas_daily <- read.csv("weather_merged.csv", header = T, encoding = "UTF-8")
+# 
+# gldas_daily <- gldas_daily %>%
+#   unite(c("yearCollected", "monthCollected", "dayCollected"), sep = "-", col = "date", remove = F) %>%
+#   rename(soilMoisture = "SOILMOIST_kgm.21",
+#          temp = "SURFTEMP_K1") %>%
+#   dplyr::select(decimalLatitude, decimalLongitude, timepoint, date, soilMoisture, temp) %>%
+#   unite(decimalLatitude, decimalLongitude, sep = ", ", col = "LatLon", remove = F) 
+# 
+# 
+# # Copy separate temp and soilMoisture
+# tmp <- gldas_daily
+# tmp <- gldas_daily[!(is.na(gldas_daily$temp)|gldas_daily$temp ==""),]
+# 
+# # Add temp data back into gldas df
+# gldas_daily$temp = tmp$temp[base::match(paste(gldas_daily$decimalLatitude, gldas_daily$decimalLongitude, gldas_daily$date),
+#                                      paste(tmp$decimalLatitude, tmp$decimalLongitude, tmp$date))]
+# 
+# gldas_daily <- gldas_daily %>%
+#   na.omit() %>%
+#   mutate(row = row_number()) %>%
+#   mutate(date = as.Date(date, format = "%Y-%m-%d")) %>%
+#   dplyr::group_by(decimalLatitude, decimalLongitude, timepoint) %>%
+#   pivot_wider(names_from = timepoint, values_from = date)
+#   
+#   
+# # separate daily temporal data by timepoint
+# gldas_d_t0 <- gldas_daily %>% # 809 entries -- some missing
+#   dplyr::select(LatLon, decimalLatitude, decimalLongitude, soilMoisture, temp, date) %>%
+#   na.omit
+# gldas_d_t1 <- gldas_daily %>% # 804 entries -- some missing
+#   dplyr::select(LatLon, decimalLatitude, decimalLongitude, soilMoisture, temp, date_t1) %>%
+#   na.omit
+# gldas_d_t2 <- gldas_daily %>% # 805 entries -- some missing
+#   dplyr::select(LatLon, decimalLatitude, decimalLongitude, soilMoisture, temp, date_t2) %>%
+#   na.omit
+# 
+# 
+# ## Add back into weather df to prepare to left_join back into prev df
+# weather <- weather[, -c(7:11)]
+# weather <- weather %>%
+#   dplyr::mutate(sm_d_t0 = NA, sm_d_t1 = NA, sm_d_t2 = NA,
+#                 temp_d_t0 = NA, temp_d_t1 = NA, temp_d_t2 = NA)
+# 
+# # Soil Moisture (kg/m^2)
+# weather$sm_d_t0 = gldas_d_t0$soilMoisture[base::match(paste(weather$LatLon, weather$date),
+#                                                       paste(gldas_d_t0$LatLon, gldas_d_t0$date))]
+# weather$sm_d_t1 = gldas_d_t1$soilMoisture[base::match(paste(weather$LatLon, weather$date_t1),
+#                                                       paste(gldas_d_t1$LatLon, gldas_d_t1$date_t1))]
+# weather$sm_d_t2 = gldas_d_t2$soilMoisture[base::match(paste(weather$LatLon, weather$date_t2),
+#                                                       paste(gldas_d_t2$LatLon, gldas_d_t2$date_t2))]
+# 
+# # Temperature (K)
+# weather$temp_d_t0 = gldas_d_t0$temp[base::match(paste(weather$LatLon, weather$date),
+#                                                 paste(gldas_d_t0$LatLon, gldas_d_t0$date))]
+# weather$temp_d_t1 = gldas_d_t1$temp[base::match(paste(weather$LatLon, weather$date_t1),
+#                                                       paste(gldas_d_t1$LatLon, gldas_d_t1$date_t1))]
+# weather$temp_d_t2 = gldas_d_t2$temp[base::match(paste(weather$LatLon, weather$date_t2),
+#                                                       paste(gldas_d_t2$LatLon, gldas_d_t2$date_t2))]
+# 
+# 
 
 ## Import MONTHLY temperature, precip, & soil moisture data from NASA's EarthData website (citation below)
 ## Beaudoing, H. and M. Rodell, NASA/GSFC/HSL (2020), GLDAS Noah Land Surface Model L4 monthly 0.25 x 0.25 degree V2.1,
@@ -363,105 +365,91 @@ gldas_monthly <- gldas_monthly %>%
 # Copy separate temp from precip and soilMoisture
 temp_m <- gldas_monthly %>%
   dplyr::select(decimalLatitude, decimalLongitude, date, timepoint, temp) %>%
+  # exclude rows with sM and precip data, as well as any NAs in the temp data
+  drop_na() %>%
+  group_by(decimalLatitude, decimalLongitude, timepoint) %>%
+  distinct_all() %>%
+  # assign row # for matching purposes
+  mutate(row = row_number(),
+         date = as.Date(date, format = "%Y-%m-%d"),
+         # Convert temp from K to C
+         temp = as.numeric(temp - 273.15)) %>%
+  dplyr::group_by(decimalLatitude, decimalLongitude, timepoint) %>%
+  pivot_wider(names_from = timepoint, values_from = c(date, temp)) %>%
+  rename(date_t2 = "date_date_t2",
+         date_t1 = "date_date_t1",
+         date = "date_date",
+         temp_m_t2 = "temp_date_t2",
+         temp_m_t1 = "temp_date_t1",
+         temp_m = "temp_date")
+
+precip_m <- gldas_monthly %>%
+  dplyr::select(decimalLatitude, decimalLongitude, date, timepoint, precip) %>%
   drop_na() %>%
   group_by(decimalLatitude, decimalLongitude, timepoint) %>%
   distinct_all() %>%
   mutate(row = row_number(),
          date = as.Date(date, format = "%Y-%m-%d")) %>%
   dplyr::group_by(decimalLatitude, decimalLongitude, timepoint) %>%
-  pivot_wider(names_from = timepoint, values_from = c(date, temp))
+  pivot_wider(names_from = timepoint, values_from = c(date, precip)) %>%
+  rename(date_t2 = "date_date_t2",
+         date_t1 = "date_date_t1",
+         date = "date_date",
+         precip_t2 = "precip_date_t2",
+         precip_t1 = "precip_date_t1",
+         precip_m = "precip_date")
 
-precip_m <- gldas_monthly %>%
-  dplyr::select(decimalLatitude, decimalLongitude, date, timepoint, precip) %>%
-  drop_na() %>%
-  group_by(decimalLatitude, decimalLongitude, timepoint) %>%
-  distinct()
 
 gldas_monthly <- gldas_monthly %>%
   dplyr::select(decimalLatitude, decimalLongitude, date, timepoint, soilMoisture) %>%
   drop_na() %>%
   group_by(decimalLatitude, decimalLongitude, timepoint) %>%
-  distinct()
-
-# Add temp and precip data back into gldas_monthly df in preparation to add it back to the main df.
-gldas_monthly <- left_join(gldas_monthly, precip_m, by = c("decimalLatitude", "decimalLongitude", "date", "timepoint"))
-gldas_monthly <- left_join(gldas_monthly, temp_m, by = c("decimalLatitude", "decimalLongitude", "date", "timepoint"))
-
-# Pivot wider so that 'timepoint' is a column header
-gldas_monthly <- gldas_monthly %>%
-  na.omit() %>%
+  distinct_all() %>%
   mutate(row = row_number(),
          date = as.Date(date, format = "%Y-%m-%d")) %>%
   dplyr::group_by(decimalLatitude, decimalLongitude, timepoint) %>%
-  pivot_wider(names_from = timepoint, values_from = date)
+  pivot_wider(names_from = timepoint, values_from = c(date, soilMoisture)) %>%
+  rename(date_t2 = "date_date_t2",
+         date_t1 = "date_date_t1",
+         date = "date_date",
+         sMoist_t2 = "soilMoisture_date_t2",
+         sMoist_t1 = "soilMoisture_date_t1",
+         sMoist_m = "soilMoisture_date")
 
 
-# separate daily temporal data by timepoint
-gldas_m_t0 <- gldas_monthly %>% # 824 entries -- some missing
-  dplyr::select(LatLon, decimalLatitude, decimalLongitude, soilMoisture, temp, precip, date) %>%
-  na.omit
-gldas_m_t1 <- gldas_monthly %>% # 815 entries -- some missing
-  dplyr::select(LatLon, decimalLatitude, decimalLongitude, soilMoisture, temp, precip, date_t1) %>%
-  na.omit
-gldas_m_t2 <- gldas_monthly %>% # 662 entries -- some missing
-  dplyr::select(LatLon, decimalLatitude, decimalLongitude, soilMoisture, temp, precip, date_t2) %>%
-  na.omit
-
-## Add monthly weather data back into weather df to prepare to left_join back into prev df
-weather <- weather %>%
-  dplyr::mutate(sm_m_t0 = NA, sm_m_t1 = NA, sm_m_t2 = NA,
-                temp_m_t0 = NA, temp_m_t1 = NA, temp_m_t2 = NA,
-                precip_m_t0 = NA, precip_m_t1 = NA, precip_m_t2 = NA)
-
-# MONTHLY Soil Moisture (kg/m^2)
-weather$sm_m_t0 = gldas_m_t0$soilMoisture[base::match(paste(weather$LatLon, weather$date),
-                                                      paste(gldas_m_t0$LatLon, gldas_m_t0$date))]
-weather$sm_m_t1 = gldas_m_t1$soilMoisture[base::match(paste(weather$LatLon, weather$date_t1),
-                                                      paste(gldas_m_t1$LatLon, gldas_m_t1$date_t1))]
-weather$sm_m_t2 = gldas_m_t2$soilMoisture[base::match(paste(weather$LatLon, weather$date_t2),
-                                                      paste(gldas_m_t2$LatLon, gldas_m_t2$date_t2))]
-
-# MONTHLY Temperature (K)
-weather$temp_m_t0 = gldas_m_t0$temp[base::match(paste(weather$LatLon, weather$date),
-                                                paste(gldas_m_t0$LatLon, gldas_m_t0$date))]
-weather$temp_m_t1 = gldas_m_t1$temp[base::match(paste(weather$LatLon, weather$date_t1),
-                                                paste(gldas_m_t1$LatLon, gldas_m_t1$date_t1))]
-weather$temp_m_t2 = gldas_m_t2$temp[base::match(paste(weather$LatLon, weather$date_t2),
-                                                paste(gldas_m_t2$LatLon, gldas_m_t2$date_t2))]
-
-# MONTHLY Precip (kg/m^2/s)
-weather$precip_m_t0 = gldas_m_t0$precip[base::match(paste(weather$LatLon, weather$date),
-                                                    paste(gldas_m_t0$LatLon, gldas_m_t0$date))]
-weather$precip_m_t1 = gldas_m_t1$precip[base::match(paste(weather$LatLon, weather$date_t1),
-                                                    paste(gldas_m_t1$LatLon, gldas_m_t1$date_t1))]
-weather$precip_m_t2 = gldas_m_t2$precip[base::match(paste(weather$LatLon, weather$date_t2),
-                                                    paste(gldas_m_t2$LatLon, gldas_m_t2$date_t2))]
-
-
-
-## Import precip data from NASA's EarthData website (citation below)
-## Huffman, G.J., E.F. Stocker, D.T. Bolvin, E.J. Nelkin, Jackson Tan (2019), GPM IMERG Late Precipitation L3 1 day 0.1 degree x 0.1 degree V06, 
-## Edited by Andrey Savtchenko, Greenbelt, MD, Goddard Earth Sciences Data and Information Services Center (GES DISC), Accessed: 2022-09-08, 
-##10.5067/GPM/IMERGDL/DAY/06
-# Write function for processing multiple .nc4 files
+# Add temp and precip data back into gldas_monthly df in preparation to add it back to the main df.
+gldas_monthly <- left_join(gldas_monthly, precip_m, by = c("decimalLatitude", "decimalLongitude", "date", "date_t1", "date_t2", "row"))
+gldas_monthly <- left_join(gldas_monthly, temp_m, by = c("decimalLatitude", "decimalLongitude", "date", "date_t1", "date_t2", "row"))
 
 
 
 
 
-# Create file path to where nc4 files are at (Work in progress)
-#imerg_path <- path('E:/', '01_GradSchool', '_DissertationWork', 'Chapter4', '03_code', 'Weather','sample_data')
-
+# # MONTHLY Soil Moisture (kg/m^2)
+# weather$sm_m_t0 = gldas_m_t0$soilMoisture[base::match(paste(weather$LatLon, weather$date),
+#                                                       paste(gldas_m_t0$LatLon, gldas_m_t0$date))]
+# weather$sm_m_t1 = gldas_m_t1$soilMoisture[base::match(paste(weather$LatLon, weather$date_t1),
+#                                                       paste(gldas_m_t1$LatLon, gldas_m_t1$date_t1))]
+# weather$sm_m_t2 = gldas_m_t2$soilMoisture[base::match(paste(weather$LatLon, weather$date_t2),
+#                                                       paste(gldas_m_t2$LatLon, gldas_m_t2$date_t2))]
 # 
+# # MONTHLY Temperature (K)
+# weather$temp_m_t0 = gldas_m_t0$temp[base::match(paste(weather$LatLon, weather$date),
+#                                                 paste(gldas_m_t0$LatLon, gldas_m_t0$date))]
+# weather$temp_m_t1 = gldas_m_t1$temp[base::match(paste(weather$LatLon, weather$date_t1),
+#                                                 paste(gldas_m_t1$LatLon, gldas_m_t1$date_t1))]
+# weather$temp_m_t2 = gldas_m_t2$temp[base::match(paste(weather$LatLon, weather$date_t2),
+#                                                 paste(gldas_m_t2$LatLon, gldas_m_t2$date_t2))]
+# 
+# # MONTHLY Precip (kg/m^2/s)
+# weather$precip_m_t0 = gldas_m_t0$precip[base::match(paste(weather$LatLon, weather$date),
+#                                                     paste(gldas_m_t0$LatLon, gldas_m_t0$date))]
+# weather$precip_m_t1 = gldas_m_t1$precip[base::match(paste(weather$LatLon, weather$date_t1),
+#                                                     paste(gldas_m_t1$LatLon, gldas_m_t1$date_t1))]
+# weather$precip_m_t2 = gldas_m_t2$precip[base::match(paste(weather$LatLon, weather$date_t2),
+#                                                     paste(gldas_m_t2$LatLon, gldas_m_t2$date_t2))]
 
 
-#imerg <- nc_open('gimms3g_ndvi_1982-2012.nc4')
-# Save the print(nc) dump to a text file
-#{
-#  sink('gimms3g_ndvi_1982-2012_metadata.txt')
-#  print(nc_data)
-#  sink()
-#}
 
 ## Add weather data to main dataframe
 prev$soilMoisture_date = weather$soilMoisture_date[base::match(paste(prev$decimalLatitude, prev$decimalLongitude, prev$date),
@@ -480,7 +468,7 @@ prev$temp_date_t2 = weather$temp_date_t2[base::match(paste(prev$decimalLatitude,
 
 prev <- prev[, c(1:6, 38, 10:12, 7:9, 13:29, 39:48, 30:37)]
 
-# Convert temp from K to C
+
 prev$temp_date <- prev$temp_date - 273.15
 prev$temp_date_t1 <- prev$temp_date_t1 - 273.15
 prev$temp_date_t2 <- prev$temp_date_t2 - 273.15
