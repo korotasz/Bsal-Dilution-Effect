@@ -79,9 +79,7 @@ ak_theme <- theme_ipsum() +
 d <- read.csv("bsalData_clean.csv", header = T, encoding = "UTF-8")
 dcbind <- read.csv("bsalData_cbind.csv", header = T, encoding = "UTF-8")
 
-## Include Pelophylax perezi data (5 rows) into Pelophylax sp.
-d$scientific <- gsub(d$scientific, pattern = "Pelophylax perezi",
-                     replacement = "Pelophylax sp.")
+
 
 # log transform + scale vars
 d <- d %>%
@@ -90,8 +88,8 @@ d <- d %>%
          scientific = as.factor(scientific),
          susceptibility = as.factor(susceptibility)) %>%
   relocate(c(logsppAbun, logsiteAbun), .after = sppAbun) %>%
-  subset(scientific != "Calotriton asper" & # Only one observation with NA vals for date
-           scientific != "Ichthyosaura alpestris") # invasive 
+ 
+ #          scientific != "Ichthyosaura alpestris") # invasive 
 
 
 dcbind <- dcbind %>%
@@ -140,7 +138,7 @@ m1a_predict <- ggpredict(m1a, terms = "scientific") %>%
          expectedAbun = round(predicted, 0)) %>%
   left_join(., textcol, by = "scientific") %>%
   relocate(susceptibility, .after = scientific)
-
+m1a_predict$susceptibility <- as.factor(m1a_predict$susceptibility)
 
 m1a_plot <- ggplot(m1a_predict, aes(scientific, predicted, colour = susceptibility)) +
   geom_point(size = 3) +
