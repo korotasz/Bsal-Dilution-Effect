@@ -199,8 +199,8 @@ prev <- prev %>%
   mutate(BdDetected = as.factor(BdDetected),
          BsalDetected = as.factor(BsalDetected),
          fatal = as.factor(fatal)) %>%
-  mutate(case_match(BdDetected, NA ~ "FALSE"),
-         case_match(BsalDetected, NA ~ "FALSE")) 
+  mutate(BdDetected = tidyr::replace_na(BdDetected, "FALSE"),
+         BsalDetected = tidyr::replace_na(BsalDetected, "FALSE"))
 
 
 prev$fatal <- toupper(prev$fatal)
@@ -1179,7 +1179,7 @@ dcbind <- Bsalpos_FS %>%
 dcbind <- with(dcbind, dcbind[order(Site, scientific), ])
 
 
-#setwd(file.path(dir, csvpath))
+setwd(file.path(dir, csvpath))
 ## File for final prev dataframe:
 write.csv(prev, file = "bsalData_clean.csv", row.names = FALSE)
 
