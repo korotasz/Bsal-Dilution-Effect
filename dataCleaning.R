@@ -199,15 +199,17 @@ prev <- prev %>%
   mutate(BdDetected = as.factor(BdDetected),
          BsalDetected = as.factor(BsalDetected),
          fatal = as.factor(fatal)) %>%
-  mutate(BdDetected = coalesce(NA, "FALSE"),
-         BsalDetected = coalesce(NA, "FALSE")) 
+  mutate(case_match(BdDetected, NA ~ "FALSE"),
+         case_match(BsalDetected, NA ~ "FALSE")) 
 
 
 prev$fatal <- toupper(prev$fatal)
 prev$specimenFate <- toupper(prev$specimenFate)
 
 ## Convert factors with two levels to binary integers
+prev$BdDetected <- as.factor(prev$BdDetected)
 levels(prev$BdDetected) <- c(0,1) #0 = F, 1 = T
+prev$BsalDetected <- as.factor(prev$BsalDetected)
 levels(prev$BsalDetected) <- c(0,1) #0 = F, 1 = T
 prev$fatal <- as.factor(prev$fatal)
 levels(prev$fatal) <- c(0,1) #0 = F, 1 = T
@@ -446,7 +448,7 @@ prev <- prev %>%
 
 ## Convert characters to factors with two levels to binary integers
 prev$diseaseDetected <- as.factor(prev$diseaseDetected)
-#levels(prev$diseaseDetected) <- c(0,1) #0 = F, 1 = T
+levels(prev$diseaseDetected) <- c(0,1) #0 = F, 1 = T
 
 
 ## Climate data from geodata package
@@ -1179,10 +1181,10 @@ dcbind <- with(dcbind, dcbind[order(Site, scientific), ])
 
 #setwd(file.path(dir, csvpath))
 ## File for final prev dataframe:
-#write.csv(prev, file = "bsalData_clean.csv", row.names = FALSE)
+write.csv(prev, file = "bsalData_clean.csv", row.names = FALSE)
 
 ## File for cbind model:
-#write.csv(dcbind, file = "bsalData_cbind.csv", row.names = FALSE)
+write.csv(dcbind, file = "bsalData_cbind.csv", row.names = FALSE)
 
 
 

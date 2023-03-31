@@ -87,9 +87,8 @@ d <- d %>%
          logsiteAbun = log(siteAbun),
          scientific = as.factor(scientific),
          susceptibility = as.factor(susceptibility)) %>%
-  relocate(c(logsppAbun, logsiteAbun), .after = sppAbun) %>%
- 
- #          scientific != "Ichthyosaura alpestris") # invasive 
+         relocate(c(logsppAbun, logsiteAbun), .after = sppAbun) %>%
+         filter(scientific != "Ichthyosaura alpestris") # invasive 
 
 
 dcbind <- dcbind %>%
@@ -97,9 +96,8 @@ dcbind <- dcbind %>%
          logsiteAbun = log(siteAbun),
          scientific = as.factor(scientific),
          susceptibility = as.factor(susceptibility)) %>%
-  relocate(c(logsppAbun, logsiteAbun), .after = sppAbun) %>%
-  subset(scientific != "Calotriton asper" &  # Only one observation with NA vals for date
-         scientific != "Ichthyosaura alpestris") # invasive
+         relocate(c(logsppAbun, logsiteAbun), .after = sppAbun) %>%
+         filter(scientific != "Ichthyosaura alpestris") # invasive
 
 ## Vector of cleaner labels for model output table
 nicelabs <- c(`(Intercept)` = "Intercept",
@@ -125,9 +123,15 @@ summary(m1a)
 Anova(m1a)
 
 
-textcol <- prev %>%
-  dplyr::select(scientific, susceptibility) %>% # subset relevant data
-  distinct()
+textcol <- d %>%
+  dplyr::select(scientific, susceptibility, Site) %>% # subset relevant data
+  mutate(Site = as.factor(Site)) %>%
+  group_by(scientific) %>%
+  mutate(No.Sites = length(unique(Site))) %>%
+  ungroup() %>%
+  dplyr::select(!Site) %>%
+  unique()
+
 
 m1a_predict <- ggpredict(m1a, terms = "scientific") %>%
   rename("scientific" = "x",
@@ -140,18 +144,19 @@ m1a_predict <- ggpredict(m1a, terms = "scientific") %>%
   relocate(susceptibility, .after = scientific)
 m1a_predict$susceptibility <- as.factor(m1a_predict$susceptibility)
 
+
 m1a_plot <- ggplot(m1a_predict, aes(scientific, predicted, colour = susceptibility)) +
   geom_point(size = 3) +
   geom_errorbar(aes(ymin = conf.low, ymax = conf.high), width = 0.5) +
-  geom_label(aes(y = (conf.high + 0.25), label = paste0("n = ", expectedAbun)), 
-             vjust = 0.4, hjust = 0, alpha = 0.5, size = 5, 
+  geom_richtext(aes(y = (conf.high + 0.25), label = paste("n<sub>sites</sub>=", No.Sites)), #Site #s 
+             vjust = 0.4, hjust = 0, alpha = 0.75, size = 5, 
              label.size = NA, fontface = "bold", show.legend = F) +
   coord_flip() +
-  ylab("Abundance (site/date)") +
+  ylab("Abundance") +
   xlab("Species") + 
   scale_colour_manual(name = "Susceptibility",values = c("#8bd3c7", "#f8ae5d", "#b30000"),
                       labels = c("Resistant", "Tolerant", "Susceptible")) +
-  scale_y_continuous(labels = seq(0, 20, 5), breaks = seq(0, 20, 5), limits = c(0, 23)) +
+  scale_y_continuous(labels = seq(0, 20, 5), breaks = seq(0, 20, 5), limits = c(0, 20)) +
   scale_x_discrete(expand = expansion(mult = c(0, 0.01), add = c(1, 0.5))) +
   ak_theme + theme(axis.text.y = element_text(face = "italic")) 
 #  labs(caption = c("Predicted species abundance at a given site and sampling occurrence. Error bars represent 95% confidence intervals and 'n' represents the predicted species abundance given by the model."))
@@ -198,7 +203,7 @@ prev <- prev %>%
 m1b_plot <- ggplot(prev, aes(scientific, est, col = susceptibility)) +
   geom_point(size = 3) +
   geom_errorbar(aes(ymin = lowerCI, ymax = upperCI), width = 0.5) +
-  geom_label(aes(y = (upperCI + 0.5), label = paste0("n = ", totalspp)), 
+  geom_richtext(aes(y = (upperCI + 0.5), label = paste("n<sub>obs</obs>=", totalspp)), 
              vjust = 0.4, hjust = 0, alpha = 0.5, size = 5, 
              label.size = NA, fontface = "bold", show.legend = F) +
   coord_flip() +
@@ -206,11 +211,12 @@ m1b_plot <- ggplot(prev, aes(scientific, est, col = susceptibility)) +
   xlab("Species") + scale_x_discrete(expand = expansion(mult = c(0, 0.01), add = c(1, 0.5))) +
   scale_colour_manual(name = "Susceptibility",values = c("#8bd3c7", "#f8ae5d", "#b30000"),
                       labels = c("Resistant", "Tolerant", "Susceptible")) +
-  scale_y_continuous(labels = scales::label_percent(scale = 1, suffix = "%"), breaks = seq(0, 100, 25), limit = c(0,105)) +
+  scale_y_continuous(labels = scales::label_percent(scale = 1, suffix = "%"), breaks = seq(0, 60, 15), limit = c(0,65)) +
   ak_theme + theme(axis.text.y = element_text(face = "italic")) 
 #  labs(caption = c("Descriptive plot showing Bsal prevalence (*i.e.*, the proportion of individuals that tested positive for Bsal) for each species as a percent. Error bars represent 95% confidence intervals and 'n' represents the total number observations of that species in the dataset."))
 
-m1b_plot
+# m1b_plot
+
 ggsave("plot1b_prevalence.tif", m1b_plot, device = "tiff", scale = 2, width = 1920, height = 1080, units = "px", 
        path = file.path(dir, figpath), dpi = 300)
 
@@ -218,8 +224,6 @@ p1abcombined <- ((m1b_plot + labs(caption = NULL) + theme(plot.tag.position = c(
                (m1a_plot + labs(caption = NULL) + theme(axis.text.y = element_blank(), 
                                                        axis.title.y = element_blank(),
                                                        plot.tag.position = c(0.93, 0.95)))) & theme(legend.position = "bottom")
-                
-plot_annotation(tag_levels = "A") + plot_layout(guides = "collect")                 
                 
 
 p1abcombined <- p1abcombined + plot_annotation(tag_levels = "A") + plot_layout(guides = "collect")
@@ -256,7 +260,7 @@ m1c_predict <- merge(m1c_predict, m1c_rug)
 m1c_plot <- ggplot(m1c_predict, aes(susceptibility , predicted, color = susceptibility)) +
   geom_point(size = 5) +
   geom_errorbar(aes(ymin = conf.low, ymax = conf.high), width = 0.2, linewidth = 1) +
-  geom_label(aes(y = (conf.high + 0.5), label = paste0("n = ", n)), 
+  geom_richtext(aes(y = (conf.high + 0.75), label = paste0("n<sub>total obs</sub>= ", n)), 
              alpha = 0.5, size = 6, label.size = NA, fontface = "bold", show.legend = F) +
   scale_x_discrete(labels = c("Resistant", "Tolerant", "Susceptible")) +
   ylab("Species abundance") + scale_y_discrete(limits = factor(0:8), breaks = c("0", "2", "4", "6", "8")) +
@@ -339,8 +343,8 @@ abun <-ggplot(descriptive, aes(x = Site, y = scientific, size = meanSppAbun, col
 #  labs(caption = c("Abundance of individual species at each site. Outliers (*e.g.*, instances of a single mass die-off) were<br>removed to better highlight data. Size of each point indicates the site abundance (*i.e.*, how many<br>species total there are at a site for  all sampling occurrences). Color indicates the susceptibility level<br>of each species: Resistant (blue) = No to low infection and no clinical signs of disease;<br> Tolerant (orange) = low infection loads with low or variable mortality; and Susceptible (red) = High<br> infection loads resulting in consistently high mortality."))
 
 abun
-#ggsave("sppAbunxSite.tif", abun, device = "tiff", scale = 2, width = 2600, height = 1300, units = "px", 
-#       path = file.path(dir, figpath), dpi = 300)
+ggsave("sppAbunxSite.tif", abun, device = "tiff", scale = 2, width = 2600, height = 1300, units = "px", 
+       path = file.path(dir, figpath), dpi = 300)
 
 
 ##      1d. Maps
@@ -408,20 +412,23 @@ rm(abun, d2, descriptive, m1a, m1a_plot, m1a_predict, m1b_plot, m1c, m1c_plot, m
 #### 2. Cbind models for all salamander spp. ####################################################
 ##      2a. T0 (At time of observation); T-1 (30 days prior to initial obs.); T-2 (60 days prior to initial obs.)
 # Drop rows with NA vals in weather data
-dcbind <- tidyr::drop_na(dcbind, any_of(c(25:30)))
+dcbindScaled <- tidyr::drop_na(dcbind, any_of(c(21:36))) %>%
+  filter(scientific != "Ichthyosaura alpestris")
 
 # Scale relevant vars
-dcbindScaled <- dcbind %>%
-  mutate_at(c("temp_date", "temp_date_t1", "temp_date_t2",
-              "soilMoisture_date", "soilMoisture_date_t1", "soilMoisture_date_t2",
-              "bio1", "bio12", "tavg", "prec"), 
+dcbindScaled <- dcbindScaled %>%
+  mutate_at(c("temp_d", "temp_m", "temp_m_t1", "temp_m_t2",
+              "sMoist_d", "sMoist_m", "sMoist_m_t1", "sMoist_m_t2",
+              "precip_m", "precip_m_t1", "precip_m_t2",
+              "bio1_wc", "bio12_wc", "tavg_wc", "prec_wc"), 
             ~(scale(., center = T, scale = T %>% as.numeric)))
+
 
 ## Although there were significant predictors, the confidence intervals for each of my models were large so I decided to perform 
 ## bootstrap model validation using the 'parameters' package in R. This will hopefully give us a better idea of the variability. 
 # T0
-m2_t0 <- glmmTMB(cbind(nPos_all, nNeg_all) ~  richness*logsiteAbun + temp_date*soilMoisture_date + (1|scientific),
-                 data = dcbindScaled, family = "binomial",
+m2_t0 <- glmmTMB(cbind(nPos_all, nNeg_all) ~  richness*logsiteAbun + temp_d*sMoist_d + (1|scientific),
+                 data = dcbind, family = "binomial",
                  control = glmmTMBControl(optimizer = optim, 
                                           optArgs = list(method = "BFGS")))
 
