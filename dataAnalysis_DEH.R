@@ -104,12 +104,12 @@ nicelabs <- c(`(Intercept)` = "Intercept",
               richness = "Richness",
               logsiteAbun = "log(Site abundance)",
               "richness:logsiteAbun" = "Richness:log(Site abundance)",
-              temp_date = "Temp (t0)", temp_date_t1 = "Temp (t-30)", temp_date_t2 = "Temp (t-60)",
-              soilMoisture_date = "Soil moisture (t0)", soilMoisture_date_t1 = "Soil moisture (t-30)",
-              soilMoisture_date_t2 = "Soil moisture (t-60)",
-              "temp_date:soilMoisture_date" = "Temp (t0):Soil moisture (t0)",
-              "temp_date_t1:soilMoisture_date_t1" = "Temp (t-30):Soil moisture (t-30)",
-              "temp_date_t2:soilMoisture_date_t2" = "Temp (t-60):Soil moisture (t-60)")
+              temp_d = "Temp (t0)", temp_m_t1 = "Temp (t-30)", temp_m_t2 = "Temp (t-60)",
+              sMoist_d = "Soil moisture (t0)", sMoist_m_t1 = "Soil moisture (t-30)",
+              sMoist_m_t2 = "Soil moisture (t-60)",
+              "temp_d:sMoist_d" = "Temp (t0):Soil moisture (t0)",
+              "temp_m_t1:sMoist_m_t1" = "Temp (t-30):Soil moisture (t-30)",
+              "temp_m_t2:sMoist_m_t2" = "Temp (t-60):Soil moisture (t-60)")
 
 
 
@@ -226,8 +226,7 @@ p1abcombined <- ((m1b_plot + labs(caption = NULL) + theme(plot.tag.position = c(
                                                        plot.tag.position = c(0.93, 0.95)))) & theme(legend.position = "bottom")
                 
 
-p1abcombined <- p1abcombined + plot_annotation(tag_levels = "A") + plot_layout(guides = "collect")
-p1abcombined
+
 ggsave("plots1ab_combined.tif", p1abcombined, device = "tiff", scale = 2, width = 2500, height = 1080, units = "px", 
        path = file.path(dir, figpath), dpi = 300)
 
@@ -304,48 +303,48 @@ p1combined <- (((m1a_plot + labs(caption = NULL) + theme(plot.tag.position = c(0
                                                           plot.tag.position = c(0.96, 0.95)))) +
   plot_annotation(tag_levels = "A")  +  plot_layout(widths = c(1, 2), heights = c(1,1))
 
-p1combined
+
 
 ggsave("plots1abc_combined.tif", p1combined, device = "tiff", scale = 2, width = 2600, height = 2300, units = "px", 
        path = file.path(dir, figpath), dpi = 300)
-
-
-## Descriptive (no stats)
-# mean spp. abundance by site
-mean_sppAbun <- aggregate(individualCount ~ scientific+Site, d, mean)
-names(mean_sppAbun)[names(mean_sppAbun) == 'individualCount'] <- 'meanSppAbun'
-
-
-descriptive <-d %>%
-  group_by(Site, date, scientific, susceptibility, individualCount, richness, sppAbun, siteAbun) %>%
-  dplyr::summarize(count = n()) %>%
-  mutate(susceptibility = as.factor(susceptibility)) %>% 
-  left_join(mean_sppAbun, by = c("scientific", "Site")) %>%
-  mutate(meanSppAbun = round(meanSppAbun, )) %>%
-  arrange(Site) %>%
-  subset(individualCount != 208 & individualCount != 72)
-
-# mean spp. abundance by site with susceptibility level noted
-jitter <- position_jitter(width = 0.2, height = 0.25)
-
-abun <-ggplot(descriptive, aes(x = Site, y = scientific, size = meanSppAbun, colour = susceptibility)) +
-  geom_point(aes(size = meanSppAbun), alpha = 0.4, position = jitter) +
-  scale_size_continuous(name = "Mean Species Abundance", limits = c(1, 24), breaks = c(1, 12, 24), range = c(2, 9)) +
-  scale_colour_manual(name = "Susceptibility",values = c("#8bd3c7", "#f8ae5d", "#b30000"),
-                      labels = c("Resistant", "Tolerant", "Susceptible")) +
-  scale_x_discrete(limits = factor(c(0:400)), breaks = c(0, 25, 50, 75, 100, 125, 150, 175, 200, 
-                                                         225, 250, 275, 300, 325, 350, 375, 400),
-                   labels = c("0", "", "", "", "100", "", "", "", "200", "", "", "", "300", "", "", "", "400")) +
-  ylab("Species") +
-  xlab("Site #") + guides(color = guide_legend(override.aes = list(size = 10))) + # increase size of 'susceptibility' legend icons
-  ak_theme + theme(plot.margin = margin(2, 16, 2, 2, "pt"),
-                   axis.text.y = element_text(face = "italic")) 
-#  labs(caption = c("Abundance of individual species at each site. Outliers (*e.g.*, instances of a single mass die-off) were<br>removed to better highlight data. Size of each point indicates the site abundance (*i.e.*, how many<br>species total there are at a site for  all sampling occurrences). Color indicates the susceptibility level<br>of each species: Resistant (blue) = No to low infection and no clinical signs of disease;<br> Tolerant (orange) = low infection loads with low or variable mortality; and Susceptible (red) = High<br> infection loads resulting in consistently high mortality."))
-
-abun
-ggsave("sppAbunxSite.tif", abun, device = "tiff", scale = 2, width = 2600, height = 1300, units = "px", 
-       path = file.path(dir, figpath), dpi = 300)
-
+# 
+# 
+# ## Descriptive (no stats)
+# # mean spp. abundance by site
+# mean_sppAbun <- aggregate(individualCount ~ scientific+Site, d, mean)
+# names(mean_sppAbun)[names(mean_sppAbun) == 'individualCount'] <- 'meanSppAbun'
+# 
+# 
+# descriptive <-d %>%
+#   group_by(Site, date, scientific, susceptibility, individualCount, richness, sppAbun, siteAbun) %>%
+#   dplyr::summarize(count = n()) %>%
+#   mutate(susceptibility = as.factor(susceptibility)) %>% 
+#   left_join(mean_sppAbun, by = c("scientific", "Site")) %>%
+#   mutate(meanSppAbun = round(meanSppAbun, )) %>%
+#   arrange(Site) %>%
+#   subset(individualCount != 208 & individualCount != 72)
+# 
+# # mean spp. abundance by site with susceptibility level noted
+# jitter <- position_jitter(width = 0.2, height = 0.25)
+# 
+# abun <-ggplot(descriptive, aes(x = Site, y = scientific, size = meanSppAbun, colour = susceptibility)) +
+#   geom_point(aes(size = meanSppAbun), alpha = 0.4, position = jitter) +
+#   scale_size_continuous(name = "Mean Species Abundance", limits = c(1, 24), breaks = c(1, 12, 24), range = c(2, 9)) +
+#   scale_colour_manual(name = "Susceptibility",values = c("#8bd3c7", "#f8ae5d", "#b30000"),
+#                       labels = c("Resistant", "Tolerant", "Susceptible")) +
+#   scale_x_discrete(limits = factor(c(0:400)), breaks = c(0, 25, 50, 75, 100, 125, 150, 175, 200, 
+#                                                          225, 250, 275, 300, 325, 350, 375, 400),
+#                    labels = c("0", "", "", "", "100", "", "", "", "200", "", "", "", "300", "", "", "", "400")) +
+#   ylab("Species") +
+#   xlab("Site #") + guides(color = guide_legend(override.aes = list(size = 10))) + # increase size of 'susceptibility' legend icons
+#   ak_theme + theme(plot.margin = margin(2, 16, 2, 2, "pt"),
+#                    axis.text.y = element_text(face = "italic")) 
+# #  labs(caption = c("Abundance of individual species at each site. Outliers (*e.g.*, instances of a single mass die-off) were<br>removed to better highlight data. Size of each point indicates the site abundance (*i.e.*, how many<br>species total there are at a site for  all sampling occurrences). Color indicates the susceptibility level<br>of each species: Resistant (blue) = No to low infection and no clinical signs of disease;<br> Tolerant (orange) = low infection loads with low or variable mortality; and Susceptible (red) = High<br> infection loads resulting in consistently high mortality."))
+# 
+# abun
+# ggsave("sppAbunxSite.tif", abun, device = "tiff", scale = 2, width = 2600, height = 1300, units = "px", 
+#        path = file.path(dir, figpath), dpi = 300)
+# 
 
 ##      1d. Maps
 pivot_by_country <- function(data) {
@@ -407,7 +406,7 @@ d %>%
   summarise(n = n())
 
 # Remove objects from global environment to speed up processing
-rm(abun, d2, descriptive, m1a, m1a_plot, m1a_predict, m1b_plot, m1c, m1c_plot, m1c_predict, m1c_rug, mean_sppAbun, p1abcombined, p1combined, tmp)
+rm(m1a, m1a_plot, m1a_predict, m1b_plot, m1c, m1c_plot, m1c_predict, m1c_rug, p1abcombined, p1combined, tmp)
 
 #### 2. Cbind models for all salamander spp. ####################################################
 ##      2a. T0 (At time of observation); T-1 (30 days prior to initial obs.); T-2 (60 days prior to initial obs.)
@@ -424,11 +423,9 @@ dcbindScaled <- dcbindScaled %>%
             ~(scale(., center = T, scale = T %>% as.numeric)))
 
 
-## Although there were significant predictors, the confidence intervals for each of my models were large so I decided to perform 
-## bootstrap model validation using the 'parameters' package in R. This will hopefully give us a better idea of the variability. 
 # T0
 m2_t0 <- glmmTMB(cbind(nPos_all, nNeg_all) ~  richness*logsiteAbun + temp_d*sMoist_d + (1|scientific),
-                 data = dcbind, family = "binomial",
+                 data = dcbindScaled, family = "binomial",
                  control = glmmTMBControl(optimizer = optim, 
                                           optArgs = list(method = "BFGS")))
 
@@ -437,7 +434,7 @@ Anova(m2_t0)
 
 
 # T-1
-m2_t1 <- glmmTMB(cbind(nPos_all, nNeg_all) ~  richness*logsiteAbun + temp_date_t1*soilMoisture_date_t1 + (1|scientific),
+m2_t1 <- glmmTMB(cbind(nPos_all, nNeg_all) ~  richness*logsiteAbun + temp_m_t1*sMoist_m_t1 + (1|scientific),
                  data = dcbindScaled, family = "binomial",
                  control = glmmTMBControl(optimizer = optim, 
                                           optArgs = list(method = "BFGS")))
@@ -446,7 +443,7 @@ summary(m2_t1)
 Anova(m2_t1)
 
 # T-2
-m2_t2 <- glmmTMB(cbind(nPos_all, nNeg_all) ~  richness*logsiteAbun + temp_date_t2*soilMoisture_date_t2 + (1|scientific),
+m2_t2 <- glmmTMB(cbind(nPos_all, nNeg_all) ~  richness*logsiteAbun + temp_m_t2*sMoist_m_t2 + (1|scientific),
                  data = dcbindScaled, family = "binomial",
                  control = glmmTMBControl(optimizer = optim, 
                                           optArgs = list(method = "BFGS")))
@@ -458,7 +455,7 @@ Anova(m2_t2)
 #### Clean model outputs
 ## ABUNDANCE x RICHNESS
 tab_model(m2_t0, show.obs = T, collapse.ci = T,
-          rm.terms = c("temp_date", "soilMoisture_date", "temp_date:soilMoisture_date"),
+          rm.terms = c("temp_d", "sMoist_d", "temp_d:sMoist_d"),
           dv.labels = "t(0)",
           string.pred = "Terms",
           string.p = "P-Value",
@@ -530,7 +527,7 @@ m2_t0_p1 <- ggplot(m2_t0_rich, aes(x = richness, y = predicted, colour = siteAbu
   scale_linetype_manual(values = c("solid", "longdash", "twodash")) +
   scale_color_grey(start = 0.8, end = 0.2) +
   scale_x_continuous(labels = seq(0, 10, 1), breaks = seq(0, 10, 1)) + 
-  scale_y_continuous(labels = scales::percent_format(accuracy = 0.1), breaks = seq(0, .02, 0.005), limits = c(0, 0.018)) + 
+  scale_y_continuous(labels = scales::percent_format(accuracy = 0.1), breaks = seq(0, .02, 0.005), limits = c(0, 0.022)) + 
   ak_theme + theme(plot.tag.position = c(0.96, 0.9)) + guides(colour = guide_legend("Site-level abundance"))
 
 m2_t0_p1 
@@ -554,25 +551,25 @@ create_dummy_col <- function(df){
 }
 
 # T0
-m2_t0_weather <- ggpredict(m2_t0, terms = c("temp_date [all]", "soilMoisture_date"))%>%
-  rename("temp_date" = "x",
-         "soilMoisture_date" = "group") %>%
-  mutate(temp_date = as.numeric(as.character(temp_date)),
-         soilMoisture_date = as.numeric(as.character(soilMoisture_date)),
+m2_t0_weather <- ggpredict(m2_t0, terms = c("temp_d [all]", "sMoist_d"))%>%
+  rename("temp_d" = "x",
+         "sMoist_d" = "group") %>%
+  mutate(temp_d = as.numeric(as.character(temp_d)),
+         sMoist_d = as.numeric(as.character(sMoist_d)),
   # Convert scaled prediction to original data scale:
-         temp_dateUnscaled = (temp_date * as.numeric(attr(dcbindScaled$temp_date, "scaled:scale")) + 
-                              as.numeric(attr(dcbindScaled$temp_date, "scaled:center"))),
-         soilMoistureUnscaled = as.factor((round(soilMoisture_date * as.numeric(attr(dcbindScaled$soilMoisture_date, "scaled:scale")) +
-                                 as.numeric(attr(dcbindScaled$soilMoisture_date, "scaled:center")), 2)))) 
+         temp_dUnscaled = (temp_d * as.numeric(attr(dcbindScaled$temp_d, "scaled:scale")) + 
+                              as.numeric(attr(dcbindScaled$temp_d, "scaled:center"))),
+         sMoistUnscaled = as.factor((round(sMoist_d * as.numeric(attr(dcbindScaled$sMoist_d, "scaled:scale")) +
+                                 as.numeric(attr(dcbindScaled$sMoist_d, "scaled:center")), 2)))) 
 # Create dummy column for soil moisture labels 
 m2_t0_weather <- create_dummy_col(m2_t0_weather)
 
 
-m2_t0_p2 <- ggplot(m2_t0_weather, aes(x = temp_dateUnscaled , y = predicted, colour = dummy)) +
+m2_t0_p2 <- ggplot(m2_t0_weather, aes(x = temp_dUnscaled , y = predicted, colour = dummy)) +
   geom_line(aes(linetype = factor(dummy, levels  = c("Low", "Med", "High"))), linewidth = 1) +
-  geom_rug(data = dcbindScaled, aes(x = temp_date, y = 0), sides = "b", alpha = 0.5,
+  geom_rug(data = dcbindScaled, aes(x = temp_d, y = 0), sides = "b", alpha = 0.5,
            position = position_jitter(width = 0.4, height = 0.1), inherit.aes = F, na.rm = T) +
-#  geom_ribbon(aes(x = temp_dateUnscaled, ymin = conf.low, ymax = conf.high, fill = dummy), alpha = 0.2, colour = NA, show.legend = F) +
+#  geom_ribbon(aes(x = temp_dUnscaled, ymin = conf.low, ymax = conf.high, fill = dummy), alpha = 0.2, colour = NA, show.legend = F) +
   labs(title =  bquote(paste(italic(t))[(0~days)]), linetype = "Soil moisture") +
   ylab("Bsal prevalence\nacross all salamander species (%)") +
   xlab(expression("Temperature (°C)")) + 
@@ -588,24 +585,24 @@ ggsave("m2_t0_weather.tif", m2_t0_p2, device = "tiff", scale = 2, width = 1920, 
 
 
 # T-1
-m2_t1_weather <- ggpredict(m2_t1, terms = c("temp_date_t1 [all]", "soilMoisture_date_t1")) %>%
-  rename("temp_date_t1" = "x",
-         "soilMoisture_date_t1" = "group") %>%
-  mutate(temp_date_t1 = as.numeric(as.character(temp_date_t1)),
-         soilMoisture_date_t1 = as.numeric(as.character(soilMoisture_date_t1)),
-         temp_date_t1Unscaled = temp_date_t1 * as.numeric(attr(dcbindScaled$temp_date_t1, "scaled:scale")) + 
-                                 as.numeric(attr(dcbindScaled$temp_date_t1, "scaled:center")),
-         soilMoisture_t1Unscaled = as.factor(round(soilMoisture_date_t1 * as.numeric(attr(dcbindScaled$soilMoisture_date_t1, "scaled:scale")) +
-                  as.numeric(attr(dcbindScaled$soilMoisture_date_t1, "scaled:center")), 2)))
+m2_t1_weather <- ggpredict(m2_t1, terms = c("temp_m_t1 [all]", "sMoist_m_t1")) %>%
+  rename("temp_m_t1" = "x",
+         "sMoist_m_t1" = "group") %>%
+  mutate(temp_m_t1 = as.numeric(as.character(temp_m_t1)),
+         sMoist_m_t1 = as.numeric(as.character(sMoist_m_t1)),
+         temp_m_t1Unscaled = temp_m_t1 * as.numeric(attr(dcbindScaled$temp_m_t1, "scaled:scale")) + 
+                                 as.numeric(attr(dcbindScaled$temp_m_t1, "scaled:center")),
+         sMoist_t1Unscaled = as.factor(round(sMoist_m_t1 * as.numeric(attr(dcbindScaled$sMoist_m_t1, "scaled:scale")) +
+                  as.numeric(attr(dcbindScaled$sMoist_m_t1, "scaled:center")), 2)))
 # Create dummy column for soil moisture labels
 m2_t1_weather <- create_dummy_col(m2_t1_weather)
 
 
-m2_t1_p2 <- ggplot(m2_t1_weather, aes(x = temp_date_t1Unscaled , y = predicted, colour = dummy)) +
-  geom_line(aes(linetype = factor(dummy, levels  = c("Low", "Med", "High"))), size = 1) +
-  geom_rug(data = dcbindScaled, aes(x = temp_date_t1, y = 0), sides = "b", alpha = 0.5,
+m2_t1_p2 <- ggplot(m2_t1_weather, aes(x = temp_m_t1Unscaled , y = predicted, colour = dummy)) +
+  geom_line(aes(linetype = factor(dummy, levels  = c("Low", "Med", "High"))), linewidth = 1) +
+  geom_rug(data = dcbindScaled, aes(x = temp_m_t1, y = 0), sides = "b", alpha = 0.5,
            position = position_jitter(width = 0.4, height = 0.1), inherit.aes = F, na.rm = T) +
-#  geom_ribbon(aes(x = temp_date_t1Unscaled, ymin = conf.low, ymax = conf.high, fill = dummy), alpha = 0.2, colour = NA, show.legend = F) +
+#  geom_ribbon(aes(x = temp_m_t1Unscaled, ymin = conf.low, ymax = conf.high, fill = dummy), alpha = 0.2, colour = NA, show.legend = F) +
   labs(title = bquote(paste(italic(t))[(-30~days)]), linetype = bquote("Soil moisture")) +
   ylab("Bsal prevalence\nacross all salamander species (%)") +
   xlab(expression("Temperature (°C)")) + 
@@ -621,24 +618,24 @@ ggsave("m2_t1_weather.tif", m2_t1_p2, device = "tiff", scale = 2, width = 1920, 
 
 
 # T-2
-m2_t2_weather <- ggpredict(m2_t2, terms = c("temp_date_t2 [all]", "soilMoisture_date_t2")) %>%
-  rename("temp_date_t2" = "x",
-         "soilMoisture_date_t2" = "group") %>%
-  mutate(temp_date_t2 = as.numeric(as.character(temp_date_t2)),
-         soilMoisture_date_t2 = as.numeric(as.character(soilMoisture_date_t2)),
-         temp_date_t2Unscaled = (temp_date_t2 * as.numeric(attr(dcbindScaled$temp_date_t2, "scaled:scale")) +
-                                 as.numeric(attr(dcbindScaled$temp_date_t2, "scaled:center"))),
-         soilMoisture_t2Unscaled = as.factor((round(soilMoisture_date_t2 * as.numeric(attr(dcbindScaled$soilMoisture_date_t2, "scaled:scale")) +
-                                            as.numeric(attr(dcbindScaled$soilMoisture_date_t2, "scaled:center")), 2))))
+m2_t2_weather <- ggpredict(m2_t2, terms = c("temp_m_t2 [all]", "sMoist_m_t2")) %>%
+  rename("temp_m_t2" = "x",
+         "sMoist_m_t2" = "group") %>%
+  mutate(temp_m_t2 = as.numeric(as.character(temp_m_t2)),
+         sMoist_m_t2 = as.numeric(as.character(sMoist_m_t2)),
+         temp_m_t2Unscaled = (temp_m_t2 * as.numeric(attr(dcbindScaled$temp_m_t2, "scaled:scale")) +
+                                 as.numeric(attr(dcbindScaled$temp_m_t2, "scaled:center"))),
+         sMoist_t2Unscaled = as.factor((round(sMoist_m_t2 * as.numeric(attr(dcbindScaled$sMoist_m_t2, "scaled:scale")) +
+                                            as.numeric(attr(dcbindScaled$sMoist_m_t2, "scaled:center")), 2))))
 # Create dummy column for soil moisture labels
 m2_t2_weather <- create_dummy_col(m2_t2_weather)
 
 
-m2_t2_p2 <- ggplot(m2_t2_weather, aes(x = temp_date_t2Unscaled , y = predicted, colour = dummy)) +
+m2_t2_p2 <- ggplot(m2_t2_weather, aes(x = temp_m_t2Unscaled , y = predicted, colour = dummy)) +
   geom_line(aes(linetype = factor(dummy, levels  = c("Low", "Med", "High"))), size = 1) +
-  geom_rug(data = dcbindScaled, aes(x = temp_date_t2, y = 0), sides = "b", alpha = 0.5,
+  geom_rug(data = dcbindScaled, aes(x = temp_m_t2, y = 0), sides = "b", alpha = 0.5,
            position = position_jitter(width = 0.4, height = 0.1), inherit.aes = F, na.rm = T) +
-#  geom_ribbon(aes(x = temp_date_t2Unscaled, ymin = conf.low, ymax = conf.high, fill = dummy), alpha = 0.2, colour = NA, show.legend = F) +
+#  geom_ribbon(aes(x = temp_m_t2Unscaled, ymin = conf.low, ymax = conf.high, fill = dummy), alpha = 0.2, colour = NA, show.legend = F) +
   labs(title = bquote(paste(italic(t))[(-60~days)]), linetype = bquote("Soil moisture")) +
   ylab("Bsal prevalence across all\nsalamander species (%)") +
   xlab(expression("Temperature (°C)")) + 
@@ -666,16 +663,15 @@ ggsave("m2_weather_combined.tif", m2_p2_combined, device = "tiff", scale = 2, wi
 
 
 # Remove saved objects from the global environment to speed up processing
-rm(m2_p1_combined, m2_p2_combined, m2_t0_p1, m2_t0_p2, m2_t0_rich, m2_t0_weather, 
-                                             m2_t1_p2, m2_t1_weather, 
-                                             m2_t2_p2, m2_t2_weather)
+rm(m2_p2_combined, m2_t0_p1, m2_t0_p2, m2_t0_rich, m2_t0_weather, 
+   m2_t1_p2, m2_t1_weather, m2_t2_p2, m2_t2_weather)
 
 
 
 #### 3. Cbind models for fire salamanders only ####################################################
 ##      3a. T0 (At time of observation); T-1 (30 days prior to initial obs.); T-2 (60 days prior to initial obs.)
 # T0
-m3_t0 <- glmmTMB(cbind(nPos_FS, nNeg_FS) ~  richness*logsiteAbun + temp_date*soilMoisture_date + (1|scientific),
+m3_t0 <- glmmTMB(cbind(nPos_FS, nNeg_FS) ~  richness*logsiteAbun + temp_d*sMoist_d + (1|scientific),
                  data = subset(dcbindScaled, scientific =="Salamandra salamandra"), family = "binomial",
                  control = glmmTMBControl(optimizer = optim, 
                                           optArgs = list(method = "BFGS")))
@@ -685,7 +681,7 @@ Anova(m3_t0)
 
 
 # T-1
-m3_t1 <- glmmTMB(cbind(nPos_FS, nNeg_FS) ~  richness*logsiteAbun + temp_date_t1*soilMoisture_date_t1 + (1|scientific),
+m3_t1 <- glmmTMB(cbind(nPos_FS, nNeg_FS) ~  richness*logsiteAbun + temp_m_t1*sMoist_m_t1 + (1|scientific),
                  data = subset(dcbindScaled, scientific =="Salamandra salamandra"), family = "binomial",
                  control = glmmTMBControl(optimizer = optim, 
                                           optArgs = list(method = "BFGS")))
@@ -696,7 +692,7 @@ Anova(m3_t1)
 
 
 # T-2
-m3_t2 <- glmmTMB(cbind(nPos_FS, nNeg_FS) ~  richness*logsiteAbun + temp_date_t2*soilMoisture_date_t2 + (1|scientific),
+m3_t2 <- glmmTMB(cbind(nPos_FS, nNeg_FS) ~  richness*logsiteAbun + temp_m_t2*sMoist_m_t2 + (1|scientific),
                  data = subset(dcbindScaled, scientific =="Salamandra salamandra"), family = "binomial",
                  control = glmmTMBControl(optimizer = optim, 
                                           optArgs = list(method = "BFGS")))
@@ -707,7 +703,7 @@ Anova(m3_t2)
 #### Clean model outputs
 ## ABUNDANCE x RICHNESS
 tab_model(m3_t0, show.obs = T, collapse.ci = T,
-          rm.terms = c("temp_date", "soilMoisture_date", "temp_date:soilMoisture_date"),
+          rm.terms = c("temp_d", "sMoist_d", "temp_d:sMoist_d"),
           dv.labels = "t(0)",
           string.pred = "Terms",
           string.p = "P-Value",
@@ -784,25 +780,25 @@ ggsave("m3_t0_AbunRich.tif", m3_t0_p1, device = "tiff", scale = 2, width = 1920,
 
 ##      3c. Prevalence by Temperature & Soil Moisture Plots for T0, T-1, T-2 (Fire Salamanders Only)
 # T0
-m3_t0_weather <- ggpredict(m3_t0, terms = c("temp_date [all]", "soilMoisture_date"))%>%
-  rename("temp_date" = "x",
-         "soilMoisture_date" = "group") %>%
-  mutate(temp_date = as.numeric(as.character(temp_date)),
-         soilMoisture_date = as.numeric(as.character(soilMoisture_date)),
+m3_t0_weather <- ggpredict(m3_t0, terms = c("temp_d [all]", "sMoist_d"))%>%
+  rename("temp_d" = "x",
+         "sMoist_d" = "group") %>%
+  mutate(temp_d = as.numeric(as.character(temp_d)),
+         sMoist_d = as.numeric(as.character(sMoist_d)),
          # Convert scaled prediction to original data scale:
-         temp_dateUnscaled = (temp_date * as.numeric(attr(dcbindScaled$temp_date, "scaled:scale")) + 
-                                as.numeric(attr(dcbindScaled$temp_date, "scaled:center"))),
-         soilMoistureUnscaled = as.factor((round(soilMoisture_date * as.numeric(attr(dcbindScaled$soilMoisture_date, "scaled:scale")) +
-                                                   as.numeric(attr(dcbindScaled$soilMoisture_date, "scaled:center")), 2)))) 
+         temp_dUnscaled = (temp_d * as.numeric(attr(dcbindScaled$temp_d, "scaled:scale")) + 
+                                as.numeric(attr(dcbindScaled$temp_d, "scaled:center"))),
+         sMoistUnscaled = as.factor((round(sMoist_d * as.numeric(attr(dcbindScaled$sMoist_d, "scaled:scale")) +
+                                                   as.numeric(attr(dcbindScaled$sMoist_d, "scaled:center")), 2)))) 
 # Create dummy column for soil moisture labels
 m3_t0_weather <- create_dummy_col(m3_t0_weather)
 
 
-m3_t0_p2 <- ggplot(m3_t0_weather, aes(x = temp_dateUnscaled , y = predicted, colour = dummy)) +
+m3_t0_p2 <- ggplot(m3_t0_weather, aes(x = temp_dUnscaled , y = predicted, colour = dummy)) +
   geom_line(aes(linetype = factor(dummy, levels  = c("Low", "Med", "High"))), linewidth = 1) +
-  geom_rug(data = subset(dcbindScaled, scientific =="Salamandra salamandra"), aes(x = temp_date, y = 0), sides = "b", alpha = 0.5,
+  geom_rug(data = subset(dcbindScaled, scientific =="Salamandra salamandra"), aes(x = temp_d, y = 0), sides = "b", alpha = 0.5,
            position = position_jitter(width = 0.4, height = 0.1), inherit.aes = F, na.rm = T) +
-  #  geom_ribbon(aes(x = temp_dateUnscaled, ymin = conf.low, ymax = conf.high, fill = dummy), alpha = 0.2, colour = NA, show.legend = F) +
+  #  geom_ribbon(aes(x = temp_dUnscaled, ymin = conf.low, ymax = conf.high, fill = dummy), alpha = 0.2, colour = NA, show.legend = F) +
   labs(title =  bquote(paste(italic(t))[(0~days)]), linetype = "Soil moisture") +
   ylab("Fire salamander Bsal prevalence (%)") +
   xlab(expression("Temperature (°C)")) + 
@@ -817,25 +813,25 @@ ggsave("m3_t0_weather.tif", m3_t0_p2, device = "tiff", scale = 2, width = 1920, 
        path = file.path(dir, figpath), dpi = 300)
 
 # T-1
-m3_t1_weather <- ggpredict(m3_t1, terms = c("temp_date_t1 [all]", "soilMoisture_date_t1"))%>%
-  rename("temp_date_t1" = "x",
-         "soilMoisture_date_t1" = "group") %>%
-  mutate(temp_date_t1 = as.numeric(as.character(temp_date_t1)),
-         soilMoisture_date_t1 = as.numeric(as.character(soilMoisture_date_t1)),
+m3_t1_weather <- ggpredict(m3_t1, terms = c("temp_m_t1 [all]", "sMoist_m_t1"))%>%
+  rename("temp_m_t1" = "x",
+         "sMoist_m_t1" = "group") %>%
+  mutate(temp_m_t1 = as.numeric(as.character(temp_m_t1)),
+         sMoist_m_t1 = as.numeric(as.character(sMoist_m_t1)),
          # Convert scaled prediction to original data scale:
-         temp_date_t1Unscaled = (temp_date_t1 * as.numeric(attr(dcbindScaled$temp_date_t1, "scaled:scale")) + 
-                                   as.numeric(attr(dcbindScaled$temp_date_t1, "scaled:center"))),
-         soilMoistureUnscaled = as.factor((round(soilMoisture_date_t1 * as.numeric(attr(dcbindScaled$soilMoisture_date_t1, "scaled:scale")) +
-                                                   as.numeric(attr(dcbindScaled$soilMoisture_date_t1, "scaled:center")), 2)))) 
+         temp_m_t1Unscaled = (temp_m_t1 * as.numeric(attr(dcbindScaled$temp_m_t1, "scaled:scale")) + 
+                                   as.numeric(attr(dcbindScaled$temp_m_t1, "scaled:center"))),
+         sMoistUnscaled = as.factor((round(sMoist_m_t1 * as.numeric(attr(dcbindScaled$sMoist_m_t1, "scaled:scale")) +
+                                                   as.numeric(attr(dcbindScaled$sMoist_m_t1, "scaled:center")), 2)))) 
 # Create dummy column for soil moisture labels
 m3_t1_weather <- create_dummy_col(m3_t1_weather)
 
 
-m3_t1_p2 <- ggplot(m3_t1_weather, aes(x = temp_date_t1Unscaled , y = predicted, colour = dummy)) +
+m3_t1_p2 <- ggplot(m3_t1_weather, aes(x = temp_m_t1Unscaled , y = predicted, colour = dummy)) +
   geom_line(aes(linetype = factor(dummy, levels  = c("Low", "Med", "High"))), linewidth = 1) +
-  geom_rug(data = subset(dcbindScaled, scientific =="Salamandra salamandra"), aes(x = temp_date_t1, y = 0), sides = "b", alpha = 0.5,
+  geom_rug(data = subset(dcbindScaled, scientific =="Salamandra salamandra"), aes(x = temp_m_t1, y = 0), sides = "b", alpha = 0.5,
            position = position_jitter(width = 0.4, height = 0.1), inherit.aes = F, na.rm = T) +
-  #  geom_ribbon(aes(x = temp_date_t1Unscaled, ymin = conf.low, ymax = conf.high, fill = dummy), alpha = 0.2, colour = NA, show.legend = F) +
+  #  geom_ribbon(aes(x = temp_m_t1Unscaled, ymin = conf.low, ymax = conf.high, fill = dummy), alpha = 0.2, colour = NA, show.legend = F) +
   labs(title =  bquote(paste(italic(t))[(-30~days)]), linetype = "Soil moisture") +
   ylab("Fire salamander Bsal prevalence (%)") +
   xlab(expression("Temperature (°C)")) + 
@@ -851,25 +847,25 @@ ggsave("m3_t1_weather.tif", m3_t1_p2, device = "tiff", scale = 2, width = 1920, 
 
 
 # T-2
-m3_t2_weather <- ggpredict(m3_t2, terms = c("temp_date_t2 [all]", "soilMoisture_date_t2"))%>%
-  rename("temp_date_t2" = "x",
-         "soilMoisture_date_t2" = "group") %>%
-  mutate(temp_date_t2 = as.numeric(as.character(temp_date_t2)),
-         soilMoisture_date_t2 = as.numeric(as.character(soilMoisture_date_t2)),
+m3_t2_weather <- ggpredict(m3_t2, terms = c("temp_m_t2 [all]", "sMoist_m_t2"))%>%
+  rename("temp_m_t2" = "x",
+         "sMoist_m_t2" = "group") %>%
+  mutate(temp_m_t2 = as.numeric(as.character(temp_m_t2)),
+         sMoist_m_t2 = as.numeric(as.character(sMoist_m_t2)),
          # Convert scaled prediction to original data scale:
-         temp_date_t2Unscaled = (temp_date_t2 * as.numeric(attr(dcbindScaled$temp_date_t2, "scaled:scale")) + 
-                                   as.numeric(attr(dcbindScaled$temp_date_t2, "scaled:center"))),
-         soilMoistureUnscaled = as.factor((round(soilMoisture_date_t2 * as.numeric(attr(dcbindScaled$soilMoisture_date_t2, "scaled:scale")) +
-                                                   as.numeric(attr(dcbindScaled$soilMoisture_date_t2, "scaled:center")), 2)))) 
+         temp_m_t2Unscaled = (temp_m_t2 * as.numeric(attr(dcbindScaled$temp_m_t2, "scaled:scale")) + 
+                                   as.numeric(attr(dcbindScaled$temp_m_t2, "scaled:center"))),
+         sMoistUnscaled = as.factor((round(sMoist_m_t2 * as.numeric(attr(dcbindScaled$sMoist_m_t2, "scaled:scale")) +
+                                                   as.numeric(attr(dcbindScaled$sMoist_m_t2, "scaled:center")), 2)))) 
 # Create dummy column for soil moisture labels
 m3_t2_weather <- create_dummy_col(m3_t2_weather)
 
 
-m3_t2_p2 <- ggplot(m3_t2_weather, aes(x = temp_date_t2Unscaled , y = predicted, colour = dummy)) +
+m3_t2_p2 <- ggplot(m3_t2_weather, aes(x = temp_m_t2Unscaled , y = predicted, colour = dummy)) +
   geom_line(aes(linetype = factor(dummy, levels  = c("Low", "Med", "High"))), linewidth = 1) +
-  geom_rug(data = subset(dcbindScaled, scientific =="Salamandra salamandra"), aes(x = temp_date_t2, y = 0), sides = "b", alpha = 0.5,
+  geom_rug(data = subset(dcbindScaled, scientific =="Salamandra salamandra"), aes(x = temp_m_t2, y = 0), sides = "b", alpha = 0.5,
            position = position_jitter(width = 0.4, height = 0.1), inherit.aes = F, na.rm = T) +
-  #  geom_ribbon(aes(x = temp_date_t2Unscaled, ymin = conf.low, ymax = conf.high, fill = dummy), alpha = 0.2, colour = NA, show.legend = F) +
+  #  geom_ribbon(aes(x = temp_d_t2Unscaled, ymin = conf.low, ymax = conf.high, fill = dummy), alpha = 0.2, colour = NA, show.legend = F) +
   labs(title =  bquote(paste(italic(t))[(-60~days)]), linetype = "Soil moisture") +
   ylab("Fire salamander Bsal prevalence (%)") +
   xlab(expression("Temperature (°C)")) + 
@@ -897,9 +893,8 @@ ggsave("m3_weather_combined.tif", m3_p2_combined, device = "tiff", scale = 2, wi
 
 
 # Remove saved objects from the global environment to speed up processing
-rm(m3_p1_combined, m3_p2_combined, m3_t0_p1, m3_t0_p2, m3_t0_rich, m3_t0_weather, 
-   m3_t1_p1, m3_t1_p2, m3_t1_rich, m3_t1_weather, 
-   m3_t2_p1, m3_t2_p2, m3_t2_rich, m3_t2_weather)
+rm(m3_p2_combined, m3_t0_p1, m3_t0_p2, m3_t0_rich, m3_t0_weather, m3_t1_p2, 
+   m3_t1_weather,m3_t2_p2, m3_t2_rich, m3_t2_weather)
 
 
 
@@ -909,13 +904,13 @@ d_fatal <- d %>%
   tidyr::drop_na(any_of(c(31, 40:45))) %>%
   subset(scientific != "Ichthyosaura alpestris") %>%
 # Scale relevant vars
-  mutate_at(c("tavg", "tmin", "tmax", "prec", "bio1", "bio12"), 
+  mutate_at(c("tavg_wc", "tmin_wc", "tmax_wc", "prec_wc", "bio1_wc", "bio12_wc", "bio1_wc"), 
             ~(scale(., center = T, scale = T %>% as.numeric)))
 # bio1 == annual mean temp
 # bio12 == annual precip
 
 ##      4a.  Fatality of fire salamanders given an interaction between average monthly temperature (tavg) and if Bsal has ever been detected at a site. 
-m4 <- glmmTMB(fatal ~ bio1*prev_above_0 + (1|Site),
+m4 <- glmmTMB(fatal ~ bio1_wc*prev_above_0 + (1|Site),
                  family = "binomial",
                  data = filter(d, scientific == "Salamandra salamandra"),
                  control = glmmTMBControl(optimizer = optim,
@@ -927,16 +922,16 @@ Anova(m4)
 
 ##      4b. Plots
 # bio1 - all data
-m4_predict <- ggpredict(m4, terms = c("bio1 [all]", "prev_above_0")) %>%
-  rename("bio1" = "x",
+m4_predict <- ggpredict(m4, terms = c("bio1_wc [all]", "prev_above_0")) %>%
+  rename("bio1_wc" = "x",
          "BsalDetected" = "group") %>%
-  mutate(bio1 = as.numeric(as.character(bio1)),
+  mutate(bio1_wc = as.numeric(as.character(bio1_wc)),
          BsalDetected = as.factor(ifelse(BsalDetected == 0, "Bsal ( - )", "Bsal ( + )")),
          # Convert scaled prediction to original data scale
-         bio1Unscaled = (bio1 * as.numeric(attr(d_fatal$bio1, "scaled:scale")) + as.numeric(attr(d_fatal$bio1, "scaled:center"))))
+         bio1_wcUnscaled = (bio1_wc * as.numeric(attr(d_fatal$bio1_wc, "scaled:scale")) + as.numeric(attr(d_fatal$bio1_wc, "scaled:center"))))
  
 
-m4_plot <- ggplot(m4_predict, aes(x = bio1Unscaled , y = predicted, colour = BsalDetected)) +
+m4_plot <- ggplot(m4_predict, aes(x = sMoist_dUnscaled , y = predicted, colour = BsalDetected)) +
   geom_line(aes(linetype = BsalDetected), linewidth = 1) +
 #  geom_rug(data = dcbindScaled, aes(x = richness, y = 0), sides = "b", alpha = 0.5, 
 #           position = position_jitter(width = 0.4, height = 0.1), inherit.aes = F, na.rm = T) +
