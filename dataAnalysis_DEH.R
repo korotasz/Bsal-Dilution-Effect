@@ -40,7 +40,7 @@ pckgs <- c("ggsignif", # adds labels to significant groups
 )
 
 ## Load packages
-pacman::p_load(pckgs, character.only = T)
+pacman::p_load(pckgs, update = TRUE, character.only = T)
 
 
 ## Set working directory
@@ -112,6 +112,17 @@ nicelabs <- c(`(Intercept)` = "Intercept",
               "temp_m_t2:sMoist_m_t2" = "Temp (t-60):Soil moisture (t-60)")
 
 
+## Function to populate dummy columns with uniform labels in ggpredict dataframe
+create_dummy_col <- function(df){
+  values <- c("Low", "Med", "High")
+  keys <-  unique(df[,8])
+  index <- setNames(as.list(values), keys)
+  
+  df$dummy <- dplyr::recode(df[,8], !!!index)
+  
+  return(df)
+}
+
 
 #### 1) Descriptive Figures ####################################################
 ##      1a. Species ~ Abundance
@@ -141,12 +152,13 @@ m1a_predict <- ggpredict(m1a, terms = "scientific") %>%
          conf.high = exp(conf.high),
          expectedAbun = round(predicted, 0)) %>%
   left_join(., textcol, by = "scientific") %>%
-  relocate(susceptibility, .after = scientific)
-m1a_predict$susceptibility <- as.factor(m1a_predict$susceptibility)
+  relocate(susceptibility, .after = scientific) %>%
+  mutate(susceptibility = as.factor(susceptibility))
+
 
 
 m1a_plot <- ggplot(m1a_predict, aes(scientific, predicted, colour = susceptibility)) +
-  geom_point(size = 3) +
+  geom_point(aes(x = factor(scientific, level = sppOrder)), size = 3) +
   geom_errorbar(aes(ymin = conf.low, ymax = conf.high), width = 0.5) +
   geom_richtext(aes(y = (conf.high + 0.25), label = paste("n<sub>sites</sub>=", No.Sites)), #Site #s 
              vjust = 0.4, hjust = 0, alpha = 0.75, size = 5, 
@@ -196,8 +208,10 @@ names(tmp)[names(tmp) == 'individualCount'] <- 'totalspp'
 
 prev <- prev %>% 
   left_join(., tmp, by = "scientific") %>%
-  relocate(totalspp, .after = individualCount)
-
+  relocate(totalspp, .after = individualCount) %>%
+  dplyr::select(scientific, susceptibility, est, lowerCI, upperCI, totalspp) %>%
+  unique()
+  
 
 # Descriptive plot showing disease prevalence values per species with a 95% ci
 m1b_plot <- ggplot(prev, aes(scientific, est, col = susceptibility)) +
@@ -215,7 +229,7 @@ m1b_plot <- ggplot(prev, aes(scientific, est, col = susceptibility)) +
   ak_theme + theme(axis.text.y = element_text(face = "italic")) 
 #  labs(caption = c("Descriptive plot showing Bsal prevalence (*i.e.*, the proportion of individuals that tested positive for Bsal) for each species as a percent. Error bars represent 95% confidence intervals and 'n' represents the total number observations of that species in the dataset."))
 
-# m1b_plot
+m1b_plot
 
 ggsave("plot1b_prevalence.tif", m1b_plot, device = "tiff", scale = 2, width = 1920, height = 1080, units = "px", 
        path = file.path(dir, figpath), dpi = 300)
@@ -259,7 +273,7 @@ m1c_predict <- merge(m1c_predict, m1c_rug)
 m1c_plot <- ggplot(m1c_predict, aes(susceptibility , predicted, color = susceptibility)) +
   geom_point(size = 5) +
   geom_errorbar(aes(ymin = conf.low, ymax = conf.high), width = 0.2, linewidth = 1) +
-  geom_richtext(aes(y = (conf.high + 0.75), label = paste0("n<sub>total obs</sub>= ", n)), 
+  geom_richtext(aes(y = (conf.high + 0.75), label = paste0("n<sub>obs</sub>= ", n)), 
              alpha = 0.5, size = 6, label.size = NA, fontface = "bold", show.legend = F) +
   scale_x_discrete(labels = c("Resistant", "Tolerant", "Susceptible")) +
   ylab("Species abundance") + scale_y_discrete(limits = factor(0:8), breaks = c("0", "2", "4", "6", "8")) +
@@ -394,7 +408,11 @@ map <- ggplot(worldmap) +
             inherit.aes = TRUE) +
   labs(x = "Longitude", y = "Latitude") +
   ak_theme + theme(legend.title = element_blank(),
-                   legend.position = "right")
+                   legend.position = "right",
+                   # legend.spacing = unit(1, "cm"), # Space legend labels
+                   legend.key.size = unit(1,"cm"), 
+                   legend.text.align = 0,
+                   legend.text = element_text(size = 16, hjust = 0))
 
 map
 
@@ -501,9 +519,6 @@ webshot(file.path(dir, figpath, "m2_t2_out.html"),file.path(dir, figpath, "m2_t2
 
 
 
-
-
-
 ##      2b. Prevalence by Abundance & Richness Plots for T0
 # T0
 m2_t0_rich <- ggpredict(m2_t0,  terms = c("richness", "logsiteAbun")) %>%
@@ -539,17 +554,6 @@ ggsave("m2_t0_AbunRich.tif", m2_t0_p1, device = "tiff", scale = 2, width = 1920,
 
 
 ##      2c. Prevalence by Temperature & Soil Moisture Plots for T0, T-1, T-2 
-# Write function to populate the dummy column in each df
-create_dummy_col <- function(df){
-  values <- c("Low", "Med", "High")
-  keys <-  unique(df[,8])
-  index <- setNames(as.list(values), keys)
-  
-  df$dummy <- dplyr::recode(df[,8], !!!index)
-  
-  return(df)
-}
-
 # T0
 m2_t0_weather <- ggpredict(m2_t0, terms = c("temp_d [all]", "sMoist_d"))%>%
   rename("temp_d" = "x",
@@ -571,7 +575,7 @@ m2_t0_p2 <- ggplot(m2_t0_weather, aes(x = temp_dUnscaled , y = predicted, colour
            position = position_jitter(width = 0.4, height = 0.1), inherit.aes = F, na.rm = T) +
 #  geom_ribbon(aes(x = temp_dUnscaled, ymin = conf.low, ymax = conf.high, fill = dummy), alpha = 0.2, colour = NA, show.legend = F) +
   labs(title =  bquote(paste(italic(t))[(0~days)]), linetype = "Soil moisture") +
-  ylab("Bsal prevalence\nacross all salamander species (%)") +
+  ylab("Bsal prevalence across\nall salamander species (%)") +
   xlab(expression("Temperature (°C)")) + 
   scale_linetype_manual(values = c("solid", "longdash", "twodash")) +
   scale_color_viridis(option = "G", discrete = T, begin = 0.8, end = 0.3) +
@@ -604,7 +608,7 @@ m2_t1_p2 <- ggplot(m2_t1_weather, aes(x = temp_m_t1Unscaled , y = predicted, col
            position = position_jitter(width = 0.4, height = 0.1), inherit.aes = F, na.rm = T) +
 #  geom_ribbon(aes(x = temp_m_t1Unscaled, ymin = conf.low, ymax = conf.high, fill = dummy), alpha = 0.2, colour = NA, show.legend = F) +
   labs(title = bquote(paste(italic(t))[(-30~days)]), linetype = bquote("Soil moisture")) +
-  ylab("Bsal prevalence\nacross all salamander species (%)") +
+  ylab("Bsal prevalence acrossn\all salamander species (%)") +
   xlab(expression("Temperature (°C)")) + 
   scale_linetype_manual(values = c("solid", "longdash", "twodash")) +
   scale_color_viridis(option = "G", discrete = T, begin = 0.8, end = 0.3) +
@@ -632,12 +636,12 @@ m2_t2_weather <- create_dummy_col(m2_t2_weather)
 
 
 m2_t2_p2 <- ggplot(m2_t2_weather, aes(x = temp_m_t2Unscaled , y = predicted, colour = dummy)) +
-  geom_line(aes(linetype = factor(dummy, levels  = c("Low", "Med", "High"))), size = 1) +
+  geom_line(aes(linetype = factor(dummy, levels  = c("Low", "Med", "High"))), linewidth = 1) +
   geom_rug(data = dcbindScaled, aes(x = temp_m_t2, y = 0), sides = "b", alpha = 0.5,
            position = position_jitter(width = 0.4, height = 0.1), inherit.aes = F, na.rm = T) +
 #  geom_ribbon(aes(x = temp_m_t2Unscaled, ymin = conf.low, ymax = conf.high, fill = dummy), alpha = 0.2, colour = NA, show.legend = F) +
   labs(title = bquote(paste(italic(t))[(-60~days)]), linetype = bquote("Soil moisture")) +
-  ylab("Bsal prevalence across all\nsalamander species (%)") +
+  ylab("Bsal prevalence across\nall salamander species (%)") +
   xlab(expression("Temperature (°C)")) + 
   scale_linetype_manual(values = c("solid", "longdash", "twodash")) +
   scale_color_viridis(option = "G", discrete = T, begin = 0.8, end = 0.3) +
