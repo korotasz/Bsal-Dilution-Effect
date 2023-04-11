@@ -51,12 +51,12 @@ setwd(file.path(dir, csvpath))
 
 ## Set plot theme 
 ak_theme <- theme_ipsum() +
-  theme(axis.text.x = element_text(size = 22),
-        axis.title.x = element_text(size = 26, hjust = 0.5, 
+  theme(axis.text.x = element_text(size = 24),
+        axis.title.x = element_text(size = 28, hjust = 0.5, 
                                     margin = margin(t = 10, r = 0, b = 0, l = 0), 
                                     face = "plain"),
-        axis.text.y = element_text(size = 22),
-        axis.title.y = element_text(size = 26, hjust = 0.5, 
+        axis.text.y = element_text(size = 24),
+        axis.title.y = element_text(size = 28, hjust = 0.5, 
                                     margin = margin(t = 0, r = 15, b = 0, l = 5), 
                                     face = "plain"),
         axis.ticks.length = unit(.25, "cm"),
@@ -69,12 +69,13 @@ ak_theme <- theme_ipsum() +
         plot.caption.position = "plot",
         legend.position = "bottom", 
 #        legend.spacing = unit(1, "cm"), # Space legend labels
-        legend.key.size = unit(1,"cm"), 
+        legend.key.size = unit(2,"cm"), 
         legend.text.align = 1,
-        legend.text = element_text(size = 16, hjust = -1),
-        legend.title = element_text(size = 16, face = "bold"), 
+        legend.text = element_text(size = 18, hjust = -1),
+        legend.title = element_text(size = 18, face = "bold"), 
         panel.border = element_blank(),
         panel.background = element_blank(),
+        panel.spacing.y = unit(1.5,"cm"),
         strip.text = element_text(size = 14, face = "bold", hjust = 0.5),
         axis.line = element_line(color = 'black'))
 
@@ -166,9 +167,9 @@ m1a_plot <- ggplot(m1a_predict, aes(scientific, predicted, colour = susceptibili
   geom_errorbar(aes(ymin = conf.low, ymax = conf.high), width = 0.5) +
   geom_richtext(aes(y = (conf.high + 0.25), 
                     label = paste("n<sub>sites</sub>=", No.Sites)), #Site #s 
-                vjust = 0.4, hjust = 0, alpha = 1, size = 6, 
+                vjust = 0.4, hjust = 0, alpha = 0.5, size = 5.5,
                 label.size = NA, fontface = "bold", show.legend = F) +
-  coord_flip() +
+  coord_flip(clip = "off") +
   ylab("Abundance") +
   xlab("Species") + 
   scale_colour_manual(name = "Susceptibility",
@@ -176,7 +177,7 @@ m1a_plot <- ggplot(m1a_predict, aes(scientific, predicted, colour = susceptibili
                       labels = c("Resistant", "Tolerant", "Susceptible")) +
   scale_y_continuous(labels = seq(0, 20, 5), 
                      breaks = seq(0, 20, 5), 
-                     limits = c(0, 21)) +
+                     limits = c(0, 22)) +
   scale_x_discrete(expand = expansion(mult = c(0, 0.01), add = c(1, 0.5))) +
   ak_theme + theme(axis.text.y = element_text(face = "italic")) 
 #  labs(caption = c("Predicted species abundance at a given site and sampling 
@@ -185,7 +186,7 @@ m1a_plot <- ggplot(m1a_predict, aes(scientific, predicted, colour = susceptibili
 
 m1a_plot
 ggsave("plot1a_sppAbun.tif", m1a_plot, device = "tiff", scale = 2, 
-       width = 1920, height = 1080, units = "px", 
+       width = 2200, height = 1200, units = "px", 
        path = file.path(dir, figpath), dpi = 300)
 
 
@@ -230,9 +231,9 @@ m1b_plot <- ggplot(prev, aes(scientific, est, col = susceptibility)) +
   geom_point(size = 3) +
   geom_errorbar(aes(ymin = lowerCI, ymax = upperCI), width = 0.5) +
   geom_richtext(aes(y = (upperCI + 0.5), label = paste("n<sub>obs</sub> =", totalspp)), 
-             vjust = 0.4, hjust = 0, alpha = 1, size = 6, 
+             vjust = 0.4, hjust = 0, alpha = 0.5, size = 5.5, 
              label.size = NA, fontface = "bold", show.legend = F) +
-  coord_flip() +
+  coord_flip(clip = "off") +
   ylab("Disease prevalence (%)") + 
   xlab("Species") + 
   scale_colour_manual(name = "Susceptibility",
@@ -240,7 +241,7 @@ m1b_plot <- ggplot(prev, aes(scientific, est, col = susceptibility)) +
                       labels = c("Resistant", "Tolerant", "Susceptible")) +
   scale_x_discrete(expand = expansion(mult = c(0, 0.01), add = c(1, 0.5))) +
   scale_y_continuous(labels = scales::label_percent(scale = 1, suffix = "%"), 
-                     breaks = seq(0, 60, 15), limit = c(0,65)) +
+                     breaks = seq(0, 65, 20), limit = c(0, 70)) +
   ak_theme + theme(axis.text.y = element_text(face = "italic")) 
 #  labs(caption = c("Descriptive plot showing Bsal prevalence (*i.e.*, the 
 #       proportion of individuals that tested positive for Bsal) for each species 
@@ -248,24 +249,26 @@ m1b_plot <- ggplot(prev, aes(scientific, est, col = susceptibility)) +
 #       represents the total number observations of that species in the dataset."))
 
 m1b_plot
-
 ggsave("plot1b_prevalence.tif", m1b_plot, device = "tiff", scale = 2, 
-       width = 1920, height = 1080, units = "px", 
+       width = 2200, height = 1200, units = "px", 
        path = file.path(dir, figpath), dpi = 300)
 
+
 p1abcombined <- ((m1b_plot + labs(caption = NULL) + 
-                    theme(plot.tag.position = c(0.96, 0.95)))|
+                    theme(plot.tag.position = c(0.96, 0.95)) +
+                    expand_limits(y = c(0, 70)))|
                  (m1a_plot + labs(caption = NULL) + 
                     theme(axis.text.y = element_blank(), 
                           axis.title.y = element_blank(),
-                          plot.tag.position = c(0.93, 0.95)))) & 
-                    theme(legend.position = "bottom")
+                          plot.tag.position = c(0.93, 0.95)) +
+                    expand_limits(y = c(0, 25)))) & 
+                    theme(legend.position = "top")
 p1abcombined <- p1abcombined + plot_layout(guides = "collect")
                 
 
 p1abcombined
 ggsave("plots1ab_combined.tif", p1abcombined, device = "tiff", scale = 2, 
-       width = 2500, height = 1080, units = "px", 
+       width = 2600, height = 1200, units = "px", 
        path = file.path(dir, figpath), dpi = 300)
 
 
@@ -298,7 +301,7 @@ m1c_plot <- ggplot(m1c_predict, aes(susceptibility, predicted, color = susceptib
   geom_point(size = 5) +
   geom_errorbar(aes(ymin = conf.low, ymax = conf.high), width = 0.2, linewidth = 1) +
   geom_richtext(aes(y = (conf.high + 0.75), label = paste0("n<sub>obs</sub>= ", n)), 
-             alpha = 1, size = 6, label.size = NA, fontface = "bold", show.legend = F) +
+             alpha = 0.6, size = 6, label.size = NA, fontface = "bold", show.legend = F) +
   annotate("text", x = 3, y = 6.4, label = "***", size = 10, fontface = "bold", 
            colour = "#b30000") +
   scale_x_discrete(labels = c("Resistant", "Tolerant", "Susceptible")) +
@@ -351,8 +354,8 @@ p1combined <- (((m1a_plot + labs(caption = NULL) +
                           plot.margin = margin(1, 2, .75, 0, "cm"), 
                           axis.ticks.length.y = unit(.25, "cm"),
                           axis.ticks = element_blank(),
-                          axis.title.y = element_text(margin = margin(r = -350), 
-                                                      size = 26),
+                          axis.title.y = element_text(margin = margin(r = -450), 
+                                                      size = 28),
                           axis.text.y = element_text(size = 22),
                           axis.title.x = element_text(size = 26),
                           axis.text.x = element_text(size = 22),
@@ -363,7 +366,8 @@ p1combined <- p1combined + plot_annotation(tag_levels = "A") +
 
 
 p1combined
-ggsave("plots1abc_combined.tif", p1combined, device = "tiff", scale = 2, width = 2600, height = 2300, units = "px", 
+ggsave("plots1abc_combined.tif", p1combined, device = "tiff", scale = 2, 
+       width = 2600, height = 2300, units = "px", 
        path = file.path(dir, figpath), dpi = 300)
 # 
 # 
@@ -407,7 +411,8 @@ ggsave("plots1abc_combined.tif", p1combined, device = "tiff", scale = 2, width =
 ##      1d. Maps
 pivot_by_country <- function(data) {
   
-  s1 = reshape2::melt(data, id = c("country", "BsalDetected"), measure.vars = "individualCount")
+  s1 = reshape2::melt(data, id = c("country", "BsalDetected"), 
+                      measure.vars = "individualCount")
   s2 = reshape2::dcast(s1, country ~ BsalDetected, sum)
   
   s2$Total = rowSums(s2[,2:NCOL(s2)])
@@ -424,14 +429,15 @@ obs <- d %>%
 
 pivotted_data <- obs %>%
   pivot_by_country() %>%
-  dplyr::rename("Bsal ( + )" = "1","Bsal ( - )" = "0")
+  dplyr::rename("Bsal positive" = "1","Bsal negative" = "0")
 
 # Getting the coordinates of each country
 country_lookup <- read.csv("countries.csv", stringsAsFactors = F)
 names(country_lookup)[1] <- "country_code"
 
 # Combining data
-final_data <- merge(x = pivotted_data, y = country_lookup, by.x = "country", by.y = "name", all.x = T)
+final_data <- merge(x = pivotted_data, y = country_lookup, 
+                    by.x = "country", by.y = "name", all.x = T)
 
 # Data cleaning for plotting
 final_data <- unique(final_data)
@@ -442,17 +448,19 @@ map <- ggplot(worldmap) +
            col = "white", fill = "#B2BEB5") +
   scale_x_continuous(limits = c(-13, 15)) +
   scale_y_continuous(limits = c(35, 60)) +
-  geom_scatterpie(data = final_data, aes(x = longitude, y = latitude, group = country, r = 1),
+  geom_scatterpie(data = final_data, aes(x = longitude, y = latitude, 
+                                         group = country, r = 1),
                   cols = colnames(final_data[,c(2:3)])) +
   coord_fixed() +
   scale_fill_manual(values = c("gray40", "#C23113")) +
-  geom_text(aes(x=longitude, y=latitude, group = country, label = country), data = final_data, stat = "identity",
+  geom_text(aes(x=longitude, y=latitude, group = country, label = country), 
+            data = final_data, stat = "identity",
             hjust = 1.5, vjust = -1.5, size = 5.5,
             check_overlap = TRUE, na.rm = FALSE, show.legend = NA,
             inherit.aes = TRUE) +
   labs(x = "Longitude", y = "Latitude") +
   ak_theme + theme(legend.title = element_blank(),
-                   legend.position = "right",
+                   legend.position = "top",
                    # legend.spacing = unit(1, "cm"), # Space legend labels
                    legend.key.size = unit(1,"cm"), 
                    legend.text.align = 0,
@@ -460,7 +468,8 @@ map <- ggplot(worldmap) +
 
 map
 
-ggsave("map.tif", map, device = "tiff", scale = 2, width = 2000, height = 2000, units = "px",
+ggsave("map.tif", map, device = "tiff", scale = 2, 
+       width = 2000, height = 2000, units = "px",
        path = file.path(dir, figpath), dpi = 300)
 
 d %>%
@@ -468,10 +477,13 @@ d %>%
   summarise(n = n())
 
 # Remove objects from global environment to speed up processing
-rm(m1a, m1a_plot, m1a_predict, m1b_plot, m1c, m1c_plot, m1c_predict, m1c_rug, p1abcombined, p1combined, tmp)
+rm(country_lookup, final_data, m1a, m1a_plot, m1a_predict, m1b_plot, m1c, m1c_plot, 
+   m1c_predict, m1c_rug, map, obs, p1abcombined, p1combined, pivotted_data, prev, 
+   tmp, textcol, worldmap)
 
 #### 2. Cbind models for all salamander spp. ####################################################
-##      2a. T0 (At time of observation); T-1 (30 days prior to initial obs.); T-2 (60 days prior to initial obs.)
+##      2a. T0 (At time of observation); T-1 (1 month prior to initial obs.); 
+##          T-2 (2 months prior to initial obs.)
 # Drop rows with NA vals in weather data
 dcbindScaled <- tidyr::drop_na(dcbind, any_of(c(21:36))) %>%
   filter(scientific != "Ichthyosaura alpestris")
@@ -486,7 +498,8 @@ dcbindScaled <- dcbindScaled %>%
 
 
 # T0
-m2_t0 <- glmmTMB(cbind(nPos_all, nNeg_all) ~  richness*logsiteAbun + temp_d*sMoist_d + (1|scientific),
+m2_t0 <- glmmTMB(cbind(nPos_all, nNeg_all) ~  richness*logsiteAbun + 
+                   temp_d*sMoist_d + (1|scientific),
                  data = dcbindScaled, family = "binomial",
                  control = glmmTMBControl(optimizer = optim, 
                                           optArgs = list(method = "BFGS")))
@@ -496,7 +509,8 @@ Anova(m2_t0)
 
 
 # T-1
-m2_t1 <- glmmTMB(cbind(nPos_all, nNeg_all) ~  richness*logsiteAbun + temp_m_t1*sMoist_m_t1 + (1|scientific),
+m2_t1 <- glmmTMB(cbind(nPos_all, nNeg_all) ~  richness*logsiteAbun + 
+                   temp_m_t1*sMoist_m_t1 + (1|scientific),
                  data = dcbindScaled, family = "binomial",
                  control = glmmTMBControl(optimizer = optim, 
                                           optArgs = list(method = "BFGS")))
@@ -505,7 +519,8 @@ summary(m2_t1)
 Anova(m2_t1)
 
 # T-2
-m2_t2 <- glmmTMB(cbind(nPos_all, nNeg_all) ~  richness*logsiteAbun + temp_m_t2*sMoist_m_t2 + (1|scientific),
+m2_t2 <- glmmTMB(cbind(nPos_all, nNeg_all) ~  richness*logsiteAbun + 
+                   temp_m_t2*sMoist_m_t2 + (1|scientific),
                  data = dcbindScaled, family = "binomial",
                  control = glmmTMBControl(optimizer = optim, 
                                           optArgs = list(method = "BFGS")))
@@ -518,7 +533,7 @@ Anova(m2_t2)
 ## ABUNDANCE x RICHNESS
 tab_model(m2_t0, show.obs = T, collapse.ci = T,
           rm.terms = c("temp_d", "sMoist_d", "temp_d:sMoist_d"),
-          dv.labels = "t(0)",
+          dv.labels = "Sample date",
           string.pred = "Terms",
           string.p = "P-Value",
           pred.labels = nicelabs,
@@ -526,13 +541,15 @@ tab_model(m2_t0, show.obs = T, collapse.ci = T,
 
 
 # take html file and make .png file
-webshot(file.path(dir, figpath, "m2_t0_rich.html"),file.path(dir, figpath, "m2_t0_rich.png"))
+webshot(file.path(dir, figpath, "m2_t0_rich.html"),
+        file.path(dir, figpath, "m2_t0_rich.png"),
+        vwidth = 365, vheight = 500)
 
 
 ## TEMP x SOIL MOISTURE
 tab_model(m2_t0, show.obs = T, collapse.ci = T,
           rm.terms = c("logsiteAbun", "richness", "richness:logsiteAbun"),
-          dv.labels = "t(0)",
+          dv.labels = "Sample date",
           string.pred = "Terms",
           string.p = "P-Value",
           pred.labels = nicelabs,
@@ -540,7 +557,7 @@ tab_model(m2_t0, show.obs = T, collapse.ci = T,
 
 tab_model(m2_t1, show.obs = T, collapse.ci = T,
           rm.terms = c("logsiteAbun", "richness", "richness:logsiteAbun"),
-          dv.labels = "t(-30)",
+          dv.labels = "One month prior",
           string.pred = "Terms",
           string.p = "P-Value",
           pred.labels = nicelabs,
@@ -548,7 +565,7 @@ tab_model(m2_t1, show.obs = T, collapse.ci = T,
 
 tab_model(m2_t2, show.obs = T, collapse.ci = T,
           rm.terms = c("logsiteAbun", "richness", "richness:logsiteAbun"),
-          dv.labels = "t(-60)",
+          dv.labels = "Two months prior",
           string.pred = "Terms",
           string.p = "P-Value",
           pred.labels = nicelabs,
@@ -556,9 +573,15 @@ tab_model(m2_t2, show.obs = T, collapse.ci = T,
 
 
 # take html file and make .png file
-webshot(file.path(dir, figpath, "m2_t0_out.html"),file.path(dir, figpath, "m2_t0_out.png"))
-webshot(file.path(dir, figpath, "m2_t1_out.html"),file.path(dir, figpath, "m2_t1_out.png"))
-webshot(file.path(dir, figpath, "m2_t2_out.html"),file.path(dir, figpath, "m2_t2_out.png"))
+webshot(file.path(dir, figpath, "m2_t0_out.html"),
+        file.path(dir, figpath, "m2_t0_out.png"),
+        vwidth = 365, vheight = 500)
+webshot(file.path(dir, figpath, "m2_t1_out.html"),
+        file.path(dir, figpath, "m2_t1_out.png"),
+        vwidth = 365, vheight = 500)
+webshot(file.path(dir, figpath, "m2_t2_out.html"),
+        file.path(dir, figpath, "m2_t2_out.png"),
+        vwidth = 365, vheight = 500)
 
 
 
@@ -574,24 +597,30 @@ m2_t0_rich <- ggpredict(m2_t0,  terms = c("richness", "logsiteAbun")) %>%
          siteAbun = as.factor(round(exp(as.numeric(logsiteAbun)), 0)))
 
 
-m2_t0_p1 <- ggplot(m2_t0_rich, aes(x = richness, y = predicted, colour = siteAbun)) +
+m2_t0_p1 <- ggplot(m2_t0_rich, aes(x = richness, y = predicted, 
+                                   colour = siteAbun)) +
   geom_line(aes(linetype = siteAbun), linewidth = 1) +
-  geom_rug(data = dcbindScaled, aes(x = richness, y = 0), sides = "b", alpha = 0.5, 
-           position = position_jitter(width = 0.4, height = 0.1), inherit.aes = F, na.rm = T) +
+  geom_rug(data = dcbindScaled, aes(x = richness, y = 0), sides = "b", 
+           alpha = 0.5, position = position_jitter(width = 0.4, height = 0.1), 
+           inherit.aes = F, na.rm = T) +
   labs(x = "Species richness",
        y = "Bsal prevalence across\nall salamander species (%)",
        title = bquote(paste(italic(t))[(0~days)]), 
        linetype = "Site-level abundance") +
-#  geom_ribbon(aes(x = richness, ymin = conf.low, ymax = conf.high, fill = siteAbun), alpha = 0.2, colour = NA, show.legend = F) +
+#  geom_ribbon(aes(x = richness, ymin = conf.low, ymax = conf.high, 
+#              fill = siteAbun), alpha = 0.2, colour = NA, show.legend = F) +
   scale_linetype_manual(values = c("solid", "longdash", "twodash")) +
   scale_color_grey(start = 0.8, end = 0.2) +
   scale_x_continuous(labels = seq(0, 10, 1), breaks = seq(0, 10, 1)) + 
-  scale_y_continuous(labels = scales::percent_format(accuracy = 0.1), breaks = seq(0, .02, 0.005), limits = c(0, 0.022)) + 
-  ak_theme + theme(plot.tag.position = c(0.96, 0.9)) + guides(colour = guide_legend("Site-level abundance"))
+  scale_y_continuous(labels = scales::percent_format(accuracy = 0.1), 
+                     breaks = seq(0, .02, 0.005), limits = c(0, 0.022)) + 
+  ak_theme + theme(plot.tag.position = c(0.96, 0.9)) + 
+  guides(colour = guide_legend("Site-level abundance"))
 
 m2_t0_p1 
 
-ggsave("m2_t0_AbunRich.tif", m2_t0_p1, device = "tiff", scale = 2, width = 1920, height = 1080, units = "px", 
+ggsave("m2_t0_AbunRich.tif", m2_t0_p1, device = "tiff", scale = 2, 
+       width = 1920, height = 1080, units = "px", 
        path = file.path(dir, figpath), dpi = 300)
 
 
@@ -613,22 +642,32 @@ m2_t0_weather <- ggpredict(m2_t0, terms = c("temp_d [all]", "sMoist_d"))%>%
 m2_t0_weather <- create_dummy_col(m2_t0_weather)
 
 
-m2_t0_p2 <- ggplot(m2_t0_weather, aes(x = temp_dUnscaled , y = predicted, colour = dummy)) +
-  geom_line(aes(linetype = factor(dummy, levels  = c("Low", "Med", "High"))), linewidth = 1) +
+m2_t0_p2 <- ggplot(m2_t0_weather, aes(x = temp_dUnscaled , y = predicted, 
+                                      colour = dummy)) +
+  geom_line(aes(linetype = factor(dummy, 
+                                  levels  = c("Low", "Med", "High"))), 
+                                  linewidth = 1) +
   geom_rug(data = dcbindScaled, aes(x = temp_d, y = 0), sides = "b", alpha = 0.5,
-           position = position_jitter(width = 0.4, height = 0.1), inherit.aes = F, na.rm = T) +
-#  geom_ribbon(aes(x = temp_dUnscaled, ymin = conf.low, ymax = conf.high, fill = dummy), alpha = 0.2, colour = NA, show.legend = F) +
+           position = position_jitter(width = 0.4, height = 0.1), inherit.aes = F, 
+           na.rm = T) +
+#  geom_ribbon(aes(x = temp_dUnscaled, ymin = conf.low, ymax = conf.high, 
+#              fill = dummy), alpha = 0.2, colour = NA, show.legend = F) +
   labs(title =  bquote(paste(italic(t))[(0~days)]), linetype = "Soil moisture") +
   ylab("Bsal prevalence across\nall salamander species (%)") +
   xlab(expression("Temperature (°C)")) + 
   scale_linetype_manual(values = c("solid", "longdash", "twodash")) +
   scale_color_viridis(option = "G", discrete = T, begin = 0.8, end = 0.3) +
-  scale_x_continuous(labels = seq(-10, 30, 10), breaks = seq(-10, 30, 10), limits = c(-10, 30)) + 
-  scale_y_continuous(labels = scales::percent_format(accuracy = 1), limits = c(0, 0.1)) + 
-  ak_theme + theme(plot.tag.position = c(0.96, 0.9)) + guides(colour = guide_legend("Soil moisture"))
+  scale_x_continuous(labels = seq(-10, 30, 10), 
+                     breaks = seq(-10, 30, 10), 
+                     limits = c(-10, 30)) + 
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1), 
+                     limits = c(0, 0.1)) + 
+  ak_theme + theme(plot.tag.position = c(0.96, 0.9)) + 
+  guides(colour = guide_legend("Soil moisture"))
 
 m2_t0_p2 
-ggsave("m2_t0_weather.tif", m2_t0_p2, device = "tiff", scale = 2, width = 1920, height = 1080, units = "px", 
+ggsave("m2_t0_weather.tif", m2_t0_p2, device = "tiff", scale = 2, 
+       width = 1920, height = 1080, units = "px", 
        path = file.path(dir, figpath), dpi = 300)
 
 
