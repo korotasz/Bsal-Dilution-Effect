@@ -139,33 +139,31 @@ m1a <- glmmTMB(logsppAbun ~ scientific + (1|Site),
 summary(m1a)
 Anova(m1a)
 
-## Post-hoc comparison
-m1a_ph <- pairs(emmeans(m1a, "scientific"), simple = "each")
-m1a_ph 
 
 textcol <- d %>%
-  dplyr::select(scientific, susceptibility, Site) %>% # subset relevant data
-  mutate(Site = as.factor(Site)) %>%
-  group_by(scientific) %>%
-  mutate(No.Sites = length(unique(Site))) %>%
-  ungroup() %>%
-  dplyr::select(!Site) %>%
-  unique()
+dplyr::select(scientific, susceptibility, Site) %>% # subset relevant data
+mutate(Site = as.factor(Site)) %>%
+group_by(scientific) %>%
+mutate(No.Sites = length(unique(Site))) %>%
+ungroup() %>%
+dplyr::select(!Site) %>%
+unique()
 
 
 m1a_predict <- ggpredict(m1a, terms = "scientific") %>%
   rename("scientific" = "x",
          "expectedAbun" = "group") %>%
-  mutate(expectedAbun = round(exp(predicted),0),
+  mutate(predicted = exp(predicted),
          conf.low = exp(conf.low),
-         conf.high = exp(conf.high)) %>%
+         conf.high = exp(conf.high),
+         expectedAbun = round(predicted,0)) %>%
   left_join(., textcol, by = "scientific") %>%
   relocate(susceptibility, .after = scientific) %>%
   mutate(susceptibility = as.factor(susceptibility))
 
 
 ## Alternative Yellow/orange -> #E37830
-m1a_plot <- ggplot(m1a_predict, aes(scientific, expectedAbun, colour = susceptibility)) +
+m1a_plot <- ggplot(m1a_predict, aes(scientific, predicted, colour = susceptibility)) +
   geom_point(size = 3) +
   geom_errorbar(aes(ymin = conf.low, ymax = conf.high), width = 0.5) +
   geom_richtext(aes(y = (conf.high + 0.25), 
@@ -536,7 +534,7 @@ Anova(m2_t2)
 ## ABUNDANCE x RICHNESS
 tab_model(m2_t0, show.obs = T, collapse.ci = T,
           rm.terms = c("temp_d", "sMoist_d", "temp_d:sMoist_d"),
-          dv.labels = "Sample date",
+          dv.labels = "All spp.",
           string.pred = "Terms",
           string.p = "P-Value",
           pred.labels = nicelabs,
@@ -608,7 +606,7 @@ m2_t0_p1 <- ggplot(m2_t0_rich, aes(x = richness, y = predicted,
            inherit.aes = F, na.rm = T) +
   labs(x = "Species richness",
        y = "Bsal prevalence across\nall salamander species (%)",
-       title = bquote(paste(italic(t))[(0~days)]), 
+       title = "All spp. model", 
        linetype = "Site-level abundance") +
 #  geom_ribbon(aes(x = richness, ymin = conf.low, ymax = conf.high, 
 #              fill = siteAbun), alpha = 0.2, colour = NA, show.legend = F) +
@@ -794,7 +792,7 @@ Anova(m3_t2)
 ## ABUNDANCE x RICHNESS
 tab_model(m3_t0, show.obs = T, collapse.ci = T,
           rm.terms = c("temp_d", "sMoist_d", "temp_d:sMoist_d"),
-          dv.labels = "t(0)",
+          dv.labels = "Fire salamanders",
           string.pred = "Terms",
           string.p = "P-Value",
           pred.labels = nicelabs,
@@ -802,7 +800,9 @@ tab_model(m3_t0, show.obs = T, collapse.ci = T,
 
 
 # take html file and make .png file
-webshot(file.path(dir, figpath, "m3_t0_rich.html"),file.path(dir, figpath, "m3_t0_rich.png"))
+webshot(file.path(dir, figpath, "m3_t0_rich.html"),
+        file.path(dir, figpath, "m3_t0_rich.png"),
+        vwidth = 365, vheight = 500)
 
 
 ## TEMP x SOIL MOISTURE
@@ -851,9 +851,9 @@ m3_t0_p1 <- ggplot(m3_t0_rich, aes(x = richness , y = predicted, colour = siteAb
   geom_line(aes(linetype = siteAbun), linewidth = 1) +
   geom_rug(data = subset(dcbindScaled, scientific =="Salamandra salamandra"), aes(x = richness, y = 0), sides = "b", alpha = 0.5,
            position = position_jitter(width = 0.4, height = 0.1), inherit.aes = F, na.rm = T) +
-  labs(title =  bquote(paste(italic(t))[(0~days)]), linetype = "Site-level abundance") +
+  labs(title =  "Fire salamander model", linetype = "Site-level abundance") +
   #  geom_ribbon(aes(x = richness, ymin = conf.low, ymax = conf.high, fill = siteAbun), alpha = 0.2, colour = NA, show.legend = F) +
-  ylab("Fire salamander Bsal prevalence (%)") +
+  ylab("Fire salamander\nBsal prevalence (%)") +
   xlab("Species richness") +
   scale_linetype_manual(values = c("solid", "longdash", "twodash")) +
   scale_color_grey(start = 0.8, end = 0.2) +
