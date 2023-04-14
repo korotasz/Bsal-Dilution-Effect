@@ -31,6 +31,7 @@ pckgs <- c("ggsignif", # adds labels to significant groups
 #### Analysis Specific Packages ####
           "tidyverse", # data wrangling/manipulation
             "glmmTMB", # glmmTMB()
+            "emmeans", # lsmeans()
                 "car", # Anova()
              "DHARMa", # simulateResiduals(), testZeroInflation(), testDispersion() 
               "MuMIn", # model.sel()
@@ -138,6 +139,9 @@ m1a <- glmmTMB(logsppAbun ~ scientific + (1|Site),
 summary(m1a)
 Anova(m1a)
 
+## Post-hoc comparison
+m1a_ph <- pairs(emmeans(m1a, "scientific"), simple = "each")
+m1a_ph 
 
 textcol <- d %>%
   dplyr::select(scientific, susceptibility, Site) %>% # subset relevant data
@@ -152,17 +156,16 @@ textcol <- d %>%
 m1a_predict <- ggpredict(m1a, terms = "scientific") %>%
   rename("scientific" = "x",
          "expectedAbun" = "group") %>%
-  mutate(predicted = exp(predicted),
+  mutate(expectedAbun = round(exp(predicted),0),
          conf.low = exp(conf.low),
-         conf.high = exp(conf.high),
-         expectedAbun = round(predicted, 0)) %>%
+         conf.high = exp(conf.high)) %>%
   left_join(., textcol, by = "scientific") %>%
   relocate(susceptibility, .after = scientific) %>%
   mutate(susceptibility = as.factor(susceptibility))
 
 
 ## Alternative Yellow/orange -> #E37830
-m1a_plot <- ggplot(m1a_predict, aes(scientific, predicted, colour = susceptibility)) +
+m1a_plot <- ggplot(m1a_predict, aes(scientific, expectedAbun, colour = susceptibility)) +
   geom_point(size = 3) +
   geom_errorbar(aes(ymin = conf.low, ymax = conf.high), width = 0.5) +
   geom_richtext(aes(y = (conf.high + 0.25), 
