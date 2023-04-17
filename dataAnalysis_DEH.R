@@ -509,6 +509,19 @@ summary(m2_t0)
 Anova(m2_t0)
 
 
+
+# TEST
+test <- dcbindScaled %>%
+  filter(country != "United Kingdom" & scientific == "Salamandra salamandra")
+
+tmp <- glmmTMB(cbind(nPos_all, nNeg_all) ~  richness*logsiteAbun + 
+                   temp_d*sMoist_d + (1|scientific),
+                 data = test, family = "binomial",
+                 control = glmmTMBControl(optimizer = optim, 
+                                          optArgs = list(method = "BFGS")))
+summary(tmp)
+Anova(tmp)
+
 # T-1
 m2_t1 <- glmmTMB(cbind(nPos_all, nNeg_all) ~  richness*logsiteAbun + 
                    temp_m_t1*sMoist_m_t1 + (1|scientific),
@@ -759,7 +772,7 @@ rm(m2_p2_combined, m2_t0_p1, m2_t0_p2, m2_t0_rich, m2_t0_weather,
 #### 3. Cbind models for fire salamanders only ####################################################
 ##      3a. T0 (At time of observation); T-1 (30 days prior to initial obs.); T-2 (60 days prior to initial obs.)
 # T0
-m3_t0 <- glmmTMB(cbind(nPos_FS, nNeg_FS) ~  richness*logsiteAbun + temp_d*sMoist_d + (1|scientific),
+m3_t0 <- glmmTMB(cbind(nPos_FS, nNeg_FS) ~  richness*logsppAbun + temp_d*sMoist_d + (1|scientific),
                  data = subset(dcbindScaled, scientific =="Salamandra salamandra"), family = "binomial",
                  control = glmmTMBControl(optimizer = optim, 
                                           optArgs = list(method = "BFGS")))
