@@ -27,7 +27,6 @@ pckgs <- c("ggsignif", # adds labels to significant groups
              "sjPlot", # plot_model(), tab_model()
           "htmltools", # visualizes model outputs as html tables
             "webshot", # converts .html object to .jpg
-          "phantomjs", # dependency of webshot
 #### Analysis Specific Packages ####
           "tidyverse", # data wrangling/manipulation
             "glmmTMB", # glmmTMB()
@@ -41,7 +40,7 @@ pckgs <- c("ggsignif", # adds labels to significant groups
 )
 
 ## Load packages
-pacman::p_load(pckgs, update = TRUE, character.only = T)
+pacman::p_load(pckgs, update = FALSE, character.only = T)
 
 
 ## Set working directory
@@ -152,18 +151,19 @@ unique()
 
 m1a_predict <- ggpredict(m1a, terms = "scientific") %>%
   rename("scientific" = "x",
+         "logsppAbun" = "predicted",
          "expectedAbun" = "group") %>%
-  mutate(predicted = exp(predicted),
-         conf.low = exp(conf.low),
-         conf.high = exp(conf.high),
-         expectedAbun = round(predicted,0)) %>%
   left_join(., textcol, by = "scientific") %>%
-  relocate(susceptibility, .after = scientific) %>%
-  mutate(susceptibility = as.factor(susceptibility))
+  plyr::mutate(sppAbun = exp(logsppAbun),
+          conf.low = exp(conf.low),
+          conf.high = exp(conf.high),
+          expectedAbun = round(sppAbun, 0),
+          susceptibility = as.factor(susceptibility))
+
 
 
 ## Alternative Yellow/orange -> #E37830
-m1a_plot <- ggplot(m1a_predict, aes(scientific, predicted, colour = susceptibility)) +
+m1a_plot <- ggplot(m1a_predict, aes(scientific, logsppAbun, colour = susceptibility)) +
   geom_point(size = 3) +
   geom_errorbar(aes(ymin = conf.low, ymax = conf.high), width = 0.5) +
   geom_richtext(aes(y = (conf.high + 0.25), 
@@ -176,10 +176,10 @@ m1a_plot <- ggplot(m1a_predict, aes(scientific, predicted, colour = susceptibili
   scale_colour_manual(name = "Susceptibility",
                       values = c("#548078", "#E3A630", "#b30000"),
                       labels = c("Resistant", "Tolerant", "Susceptible")) +
-  scale_y_continuous(labels = seq(0, 20, 5), 
-                     breaks = seq(0, 20, 5), 
-                     limits = c(0, 22)) +
-  scale_x_discrete(expand = expansion(mult = c(0, 0.01), add = c(1, 0.5))) +
+  # scale_y_continuous(labels = seq(0, 20, 5), 
+  #                    breaks = seq(0, 20, 5), 
+  #                    limits = c(0, 22)) +
+  # scale_x_discrete(expand = expansion(mult = c(0, 0.01), add = c(1, 0.5))) +
   ak_theme + theme(axis.text.y = element_text(face = "italic")) 
 #  labs(caption = c("Predicted species abundance at a given site and sampling 
 #       occurrence. Error bars represent 95% confidence intervals and 'n'  
