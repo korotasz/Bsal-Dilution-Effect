@@ -1,19 +1,18 @@
 require(pacman)
 #### Packages ####
-pckgs <- c("tidyverse",
-           "devtools",
-           "reshape2",
-           "rgdal", # package for geospatial analysis
-           "lubridate",
-           "data.table",
-           "raster", # package for raster manipulation
-           "ncdf4", # for IMERG satellite data
-           "maptools", # package to create maps
-           "geodata", # cmip6; projected climate data
-           "gstat",
-           "sp",
-           "sf",
-           "fs" # construct relative paths to files/directories
+pckgs <- c("renv", # create environment lock for R to ensure code reproducibility
+      "tidyverse", # data wrangling/manipulation
+       "reshape2", # data wrangling/manipulation
+          "rgdal", # geospatial analyses
+      "lubridate", # deals with dates
+     "data.table", # 
+         "raster", # raster manipulation/working with geospatial data
+          "ncdf4", # download and work with EarthData satellite data
+       "maptools", # package to create maps
+          "gstat", # spatio-temporal geostatistical modelling
+             "sp", # working with geospatial data
+             "sf", # workin with geospatial data
+             "fs"  # construct relative paths to files/directories
 )
 
 ## Load packages
