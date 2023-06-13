@@ -4,7 +4,8 @@
 require(pacman)
 require(rstudioapi) # Set working directory to current file location
 require(extrafont) 
-extrafont::loadfonts(device = "win", quiet = T) # plot fonts 
+extrafont::loadfonts(device = "all", quiet = T) # plot fonts 
+
 
 #### Visualization Packages ####
 pckgs <- c("ggsignif", # adds labels to significant groups
@@ -17,6 +18,7 @@ pckgs <- c("ggsignif", # adds labels to significant groups
          "hrbrthemes", # plot colors
        "RColorBrewer", # plot colors
             "viridis", # plot colors
+           "showtext", # unique font types
            "eurostat", # obtain spatial data from europe
             "geodata", # obtain geographic data (world map)
               "ggmap", # creates maps
@@ -26,7 +28,7 @@ pckgs <- c("ggsignif", # adds labels to significant groups
              "ggpubr", # prepares plots to be ready for publication
              "sjPlot", # plot_model(), tab_model()
                "ragg", # converts plots to tiff files
-          "htmltools", # visualizes model outputs as html tables\
+          "htmltools", # visualizes model outputs as html tables
             "webshot", # converts html files to png
 #### Analysis Specific Packages ####
           "tidyverse", # data wrangling/manipulation
@@ -65,7 +67,7 @@ ak_theme <- theme_ipsum() +
         plot.tag = element_text(size = 32, face = "plain"),
         plot.title = element_text(size = 32, hjust = 0.5, face = "plain"),
         plot.subtitle = element_markdown(size = 12, face = "plain"),
-        plot.margin = margin(6, 12, 2, 2, "pt"), 
+        plot.margin = margin(1, 1, 1.5, 1.2, "cm"), 
         plot.caption = element_markdown(hjust = 0, size = 14, face = "plain"),
         plot.caption.position = "plot",
         legend.position = "top", 
@@ -87,7 +89,7 @@ dcbind <- read.csv("bsalData_cbind.csv", header = T, encoding = "UTF-8")
 
 
 
-# log transform + scale vars
+# log transform vars
 d <- d %>%
   mutate(logsppAbun = log(sppAbun),
          logsiteAbun = log(siteAbun),
@@ -185,9 +187,8 @@ map <- ggplot() +
 
 map
 
-# ggsave("map", map, device = "pdf", scale = 2, width = 2000, height = 2000, units = "px", 
-#        path = file.path(dir, figpath), dpi = 300)
-
+ggsave("map.tiff", map, device = "tiff", path = file.path(dir, figpath),
+       width = 2000, height = 2000, scale = 2, units = "px", dpi = 300, limitsize = F)
 
 #### 2) Testing assumptions of the dilution effect hypothesis ##################
 ##      2a. Hosts differ in their reservoir competence.
@@ -201,45 +202,33 @@ prev <- d %>%
   dplyr::select(scientific, susceptibility, ncas_Bsal, Bsal_prev, npop) %>%
   unique()
 
-# # Use a matrix containing number of cases (ncas) and population size (npop) to 
-# # calculate the prevalence of disease in each population and its 95% confint
-# tmp <- as.matrix(cbind(prev$ncas_Bsal, prev$npop))
-# tmp <- epi.conf(tmp, ctype = "prevalence", method = "clopper-pearson", N = 1000, 
-#                 design = 1, conf.level = 0.95) * 100
-# tmp <- tmp %>% 
-#   dplyr::rename(lowerCI = lower,
-#                 upperCI = upper)
-# 
-# # Add back to dataframe
-# prev <- cbind(prev, tmp)
-# prev <- prev[sort.list(prev$est),]
-# prev <- prev %>%
-#   relocate(c(est, lowerCI, upperCI), .after = npop)
 
-
-# Descriptive plot showing disease prevalence values per species with a 95% ci
+# Descriptive plot showing disease prevalence values per species
 prev_plot <- ggplot(prev, aes(scientific, sapply(Bsal_prev, FUN = function(x) ifelse(x == 0, 0.1, x)), 
                               fill = susceptibility, label = paste(sprintf(Bsal_prev, fmt = '%#.1f'), "%"))) +
   geom_col(position = "identity") +
-  geom_text(aes(colour = susceptibility), nudge_y = 1.25, size = 5.5) +
+  geom_text(aes(colour = susceptibility), nudge_y = 4, size = 5.5) +
   coord_flip(clip = "off") +
   ylab("Disease prevalence (%)") + 
   xlab("Species") + 
   scale_colour_manual(name = "Susceptibility",
                     values = c("#548078", "#E3A630", "#b30000"),
-                    labels = c("Resistant", "Tolerant", "Susceptible")) +
+                    labels = c("Resistant", "Tolerant", "Susceptible"),
+                    guide = "none") +
   scale_fill_manual(name = "Susceptibility",
-                      values = c("#548078", "#E3A630", "#b30000"),
-                      labels = c("Resistant", "Tolerant", "Susceptible")) +
+                    values = c("#548078", "#E3A630", "#b30000"),
+                    labels = c("Resistant", "Tolerant", "Susceptible"),
+                    guide = "none") +
   scale_x_discrete(expand = expansion(mult = c(0, 0.01), add = c(1, 0.5))) +
   scale_y_continuous(labels = scales::label_percent(scale = 1, suffix = "%"), 
-                     breaks = seq(0, 40, 10), limit = c(0, 40)) +
-  ak_theme + theme(axis.text.y = element_text(face = "italic")) 
+                     breaks = seq(0, 40, 10), limit = c(0, 43)) +
+  ak_theme + theme(axis.text.y = element_text(face = "italic"),
+                   legend.title = element_blank()) 
 
 prev_plot 
 
-ggsave("prev_plot", prev_plot, device = "pdf", scale = 2, width = 2200, height = 1200, units = "px", 
-       path = file.path(dir, figpath), dpi = 300)
+# ggsave("prev_plot.tiff", prev_plot, device = "tiff", path = file.path(dir, figpath),
+#        width = 2200, height = 1400, scale = 2, units = "px", dpi = 300, limitsize = F)
 
 
 
@@ -287,17 +276,19 @@ m2b_plot <- ggplot(m2b_predict, aes(scientific, sppAbun, colour = susceptibility
   xlab("Species") + 
   scale_colour_manual(name = "Susceptibility",
                       values = c("#548078", "#E3A630", "#b30000"),
-                      labels = c("Resistant", "Tolerant", "Susceptible")) +
+                      labels = c("Resistant", "Tolerant", "Susceptible"),
+                      guide = "none") +
   scale_y_continuous(labels = seq(0, 20, 5),
                      breaks = seq(0, 20, 5),
                      limits = c(0, 22)) +
   scale_x_discrete(expand = expansion(mult = c(0, 0.01), add = c(1, 0.5))) +
-  ak_theme + theme(axis.text.y = element_text(face = "italic")) 
+  ak_theme + theme(axis.text.y = element_text(face = "italic"),
+                   legend.title = element_blank()) 
 
 m2b_plot
 
-ggsave("m2b_plot", m2b_plot, device = "pdf", scale = 2, width = 2200, height = 1200, units = "px", 
-       path = file.path(dir, figpath), dpi = 300)
+# ggsave("abundance_plot.tiff", m2b_plot, device = "tiff", path = file.path(dir, figpath),
+#        width = 2200, height = 1400, scale = 2, units = "px", dpi = 300, limitsize = F)
 
 
 
@@ -327,8 +318,8 @@ m2c_predict <- merge(m2c_predict, m2c_rug)
 m2c_plot <- ggplot(m2c_predict, aes(susceptibility, predicted, color = susceptibility)) +
   geom_point(size = 5) +
   geom_errorbar(aes(ymin = conf.low, ymax = conf.high), width = 0.2, linewidth = 1) +
-  geom_richtext(aes(y = (conf.high + 0.75), label = paste0("n<sub>obs</sub>= ", n)), 
-                alpha = 0.6, size = 6, label.size = NA, fontface = "bold", show.legend = F) +
+  geom_richtext(aes(y = (conf.high + 1), label = paste0("n<sub>obs</sub>= ", n)), 
+                alpha = 0.75, size = 8, label.size = NA, fontface = "bold", show.legend = F) +
   annotate("text", x = 3, y = 6.75, label = "***", size = 10, fontface = "bold", 
            colour = "#b30000") +
   scale_x_discrete(labels = c("Resistant", "Tolerant", "Susceptible")) +
@@ -337,59 +328,125 @@ m2c_plot <- ggplot(m2c_predict, aes(susceptibility, predicted, color = susceptib
   scale_y_discrete(limits = factor(0:8), breaks = c("0", "2", "4", "6", "8")) +
   scale_colour_manual(name = "Susceptibility",
                       values = c("#548078", "#E3A630", "#b30000"),
-                      labels = c("Resistant", "Tolerant", "Susceptible")) +
-  ak_theme + theme(legend.position = "none")
+                      labels = c("Resistant", "Tolerant", "Susceptible"),
+                      guide = "none") + 
+  ak_theme
 
 m2c_plot
 
-ggsave("m1c_plot", m1c_plot, device = "pdf", scale = 2, width = 1920, height = 1080, units = "px", 
-       path = file.path(dir, figpath), dpi = 300)
+# ggsave("susceptibility_plot.tiff", m2c_plot, device = "tiff", path = file.path(dir, figpath),
+#        width = 2200, height = 1300, scale = 2, units = "px", dpi = 300, limitsize = F)
 
 
+## Create guide to force a common legend
+commonLegend <- guides(fill = guide_legend(override.aes = list(color = c("#548078", "#E3A630", "#b30000"),
+                                                    shape = c(16, 16, 16), 
+                                                    size = c(2, 2, 2),
+                                                    alpha = c(1, 1, 1)),))
 
-# plot.tag.position = c(0.96, 0.85)
-fig2combined <- (((prev_plot + labs(caption = NULL) + 
-                   theme(plot.tag.position = c(0.57, 0.85),
-                         plot.margin = margin(.5, .75, .5, .75, "cm"),
-                         axis.ticks.length = unit(.25, "cm"),
-                         axis.ticks = element_blank(),
-                         axis.title.y = element_text(margin = margin(r = -75)),
-                         axis.title.x = element_text(size = 26),
-                         axis.text.x = element_text(size = 20))) | 
-                  (m2a_plot + labs(caption = NULL) + 
-                     theme(axis.text.y = element_blank(), 
-                           axis.title.y = element_blank(),
-                           axis.title.x = element_text(size = 26),
-                           axis.text.x = element_text(size = 20),
+## Create combined plot for manuscript
+fig2a <- prev_plot + labs(caption = NULL) + 
+                     theme(plot.tag.position = c(0.98, 0.73),
+                           plot.margin = margin(.5, .75, .5, .75, "cm"),
                            axis.ticks.length = unit(.25, "cm"),
                            axis.ticks = element_blank(),
-                           plot.margin = margin(.5, .75, .5, .5, "cm"),
-                           plot.tag.position = c(0.09, 0.85)))) +
-                 plot_layout(guides = "collect") & theme(legend.position = "top")) / 
-                 (m2c_plot + labs(caption = NULL) + 
-                    theme(panel.border = element_rect(colour = "black", 
-                                                      fill = NA, linewidth = 1),
-                          plot.margin = margin(1, 2, .75, 0, "cm"), 
-                          axis.ticks.length.y = unit(.25, "cm"),
-                          axis.ticks = element_blank(),
-                          axis.title.y = element_text(margin = margin(r = -450), 
-                                                      size = 28),
-                          axis.text.y = element_text(size = 22),
-                          axis.title.x = element_text(size = 26),
-                          axis.text.x = element_text(size = 22),
-                          plot.tag.position = c(0.38, 0.92))) 
+                           axis.title.y = element_blank(),
+                           # axis.title.y = element_text(margin = margin(r = -75)),
+                           axis.title.x = element_text(size = 26),
+                           axis.text.x = element_text(size = 20)) +
+                     commonLegend
 
-fig2combined <- fig2combined + plot_annotation(tag_levels = "A") + 
-                           plot_layout(widths = c(1, 2), heights = c(1,1)) 
+fig2b <- m2b_plot + labs(caption = NULL) + 
+                       theme(axis.text.y = element_blank(),
+                             axis.title.y = element_blank(),
+                             axis.title.x = element_text(size = 26),
+                             axis.text.x = element_text(size = 20),
+                             axis.ticks.length = unit(.25, "cm"),
+                             axis.ticks = element_blank(),
+                             plot.margin = margin(.5, .75, .5, .5, "cm"),
+                             plot.tag.position = c(0.92, 0.73)) +
+                       commonLegend
 
+fig2c <- m2c_plot + labs(caption = NULL) + 
+                      theme(panel.border = element_rect(colour = "black", fill = NA, linewidth = 1),
+                            plot.margin = margin(.75, 2, .75, 0, "cm"),
+                            axis.ticks.length.y = unit(.25, "cm"),
+                            axis.ticks = element_blank(),
+                            axis.title.y = element_text(margin = margin(r = -600), size = 28),
+                            axis.text.y = element_text(size = 22),
+                            axis.title.x = element_text(size = 26),
+                            axis.text.x = element_text(size = 22),
+                            plot.tag.position = c(0.33, 0.92)) +
+                      commonLegend
+
+
+fig2combined <- ((fig2a | fig2b)/fig2c) + plot_layout(guides = "collect", heights = c(20, 16)) +
+                plot_annotation(tag_levels = "A") & theme(legend.position = "top",
+                                                          legend.box.margin = margin(0, 1, 1, 1, "cm"),
+                                                          legend.text = element_text(margin = margin(r = 1, unit = "cm")))
 fig2combined
 
-setwd(file.path(dir, figpath))
-ragg::agg_tiff("fig2_combined.tif", width = 4600, height = 4300, 
-               scaling = 0.5, units = "px", res = 600)
-fig2combined
-dev.off()
-setwd(file.path(dir, csvpath))
+ggsave("fig2_combined", fig2combined, device = "eps", path = file.path(dir, figpath),
+       width = 2600, height = 2300, scale = 2, units = "px", dpi = 300, limitsize = F)
+
+
+#### check fonts ####
+font_paths("C:/Windows/Fonts")
+fontInfo <- font_files()
+
+tmp <- fontInfo %>% 
+  dplyr::select(file) %>%
+  pivot_longer(., cols = everything()) %>%
+  plyr::mutate(name = value) %>%
+  separate(value, into = c("fileName", "fileExt"), sep = "\\.")
+names(tmp)[names(tmp) == "name"] <- "file"
+
+fontInfo <- left_join(tmp, fontInfo, by = "file")
+
+reg <- fontInfo %>%
+  dplyr::select(file, face) %>%
+  filter(face == "Regular") %>%
+  dplyr::select(file) 
+
+bold <- fontInfo %>%
+  dplyr::select(file, face) %>%
+  filter(face == "Bold") %>%
+  dplyr::select(file)
+
+italic <- fontInfo %>%
+  dplyr::select(file, face) %>%
+  filter(face == "Italic") %>%
+  dplyr::select(file) 
+
+bolditalic <- fontInfo %>%
+  dplyr::select(file, face) %>%
+  filter(face == "Bold Italic") %>%
+  dplyr::select(file) 
+
+
+
+
+## Function to add fonts
+add_all_fonts <- function(fontFamilies, regular, bold, bolditalic, italic){
+  for(i in length(fontFamilies)){
+    
+  }
+  
+  
+  
+  
+  values <- c("Low", "Med", "High")
+  keys <-  unique(df[,8])
+  index <- setNames(as.list(values), keys)
+  
+  df$dummy <- dplyr::recode(df[,8], !!!index)
+  
+  return(df)
+}
+
+
+####
+
 
 
 d %>%
@@ -412,7 +469,7 @@ dcbindScaled <- dcbindScaled %>%
             ~(scale(., center = T, scale = T %>% as.numeric)))
 
 
-# T0
+
 m_all <- glmmTMB(cbind(nPos_all, nNeg_all) ~  richness*logsiteAbun + 
                    temp_d*sMoist_d + (1|scientific),
                  data = dcbindScaled, family = "binomial",
