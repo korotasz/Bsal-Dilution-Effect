@@ -1,8 +1,9 @@
 #remotes::install_version("Rttf2pt1", version = "1.3.8") # install this version, latest ver. not compatible
 #remotes::install_github("gorkang/html2latex") # convert sjPlot::tab_model() hmtl table to tex and pdf in .Rmd docs
-#extrafont::font_import() # load fonts before ggplot2; only need to do this once
+#extrafont::font_import("C:/Windows/Fonts") # load fonts before ggplot2; only need to do this once
 require(pacman)
 require(rstudioapi) # Set working directory to current file location
+require(extrafontdb)
 require(extrafont) 
 extrafont::loadfonts(device = "all", quiet = T) # plot fonts 
 
@@ -58,7 +59,7 @@ ak_theme <- theme_ipsum() +
         axis.title.x = element_text(size = 28, hjust = 0.5, 
                                     margin = margin(t = 10, r = 0, b = 0, l = 0), 
                                     face = "plain"),
-        axis.text.y = element_text(size = 24),
+        axis.text.y = element_text(size = 24, face = "italic"),
         axis.title.y = element_text(size = 28, hjust = 0.5, 
                                     margin = margin(t = 0, r = 15, b = 0, l = 5), 
                                     face = "plain"),
@@ -190,6 +191,11 @@ map
 ggsave("map.tiff", map, device = "tiff", path = file.path(dir, figpath),
        width = 2000, height = 2000, scale = 2, units = "px", dpi = 300, limitsize = F)
 
+ggsave("map.pdf", map, device = "pdf", path = file.path(dir, figpath),
+       width = 2000, height = 2000, scale = 2, units = "px", dpi = 300, limitsize = F)
+
+
+
 #### 2) Testing assumptions of the dilution effect hypothesis ##################
 ##      2a. Hosts differ in their reservoir competence.
 prev <- d %>%
@@ -222,13 +228,17 @@ prev_plot <- ggplot(prev, aes(scientific, sapply(Bsal_prev, FUN = function(x) if
   scale_x_discrete(expand = expansion(mult = c(0, 0.01), add = c(1, 0.5))) +
   scale_y_continuous(labels = scales::label_percent(scale = 1, suffix = "%"), 
                      breaks = seq(0, 40, 10), limit = c(0, 43)) +
-  ak_theme + theme(axis.text.y = element_text(face = "italic"),
-                   legend.title = element_blank()) 
+  ak_theme #+ theme(axis.text.y = element_text(face = "italic"),
+                 #  legend.title = element_blank()) 
 
 prev_plot 
 
 # ggsave("prev_plot.tiff", prev_plot, device = "tiff", path = file.path(dir, figpath),
 #        width = 2200, height = 1400, scale = 2, units = "px", dpi = 300, limitsize = F)
+
+ggsave("prev_plot.pdf", prev_plot, device = cairo_pdf, path = file.path(dir, figpath),
+       width = 2000, height = 2000, scale = 2, units = "px", dpi = 300, limitsize = F)
+
 
 
 
@@ -450,8 +460,10 @@ add_all_fonts <- function(fontFamilies, regular, bold, bolditalic, italic){
 
 
 d %>%
-  group_by(country, BsalDetected) %>%
-  summarise(n = n())
+  dplyr::select(country, species, Site) %>%
+  filter(country == "Spain" & species == "marmoratus") %>%
+  unique() #%>%
+  nrow()
 
 
 #### 2. Cbind models for all salamander spp. ####################################################
