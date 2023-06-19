@@ -1112,6 +1112,7 @@ data.frame(colnames(prev))
 
 prev <- prev[, c(1:48, 55:77, 49:54)]
 
+
 #### cbind model df ####
 prev$genus <- gsub("[[:space:]]", "", prev$genus) # get rid of weird spaces in this column
 
@@ -1168,7 +1169,8 @@ dcbind <- Bsalpos_FS %>%
   dplyr::select(country, decimalLatitude, decimalLongitude, Site, prev_above_0, date, date_t1, date_t2, scientific, susceptibility, 
                 nPos_FS, nNeg_FS, nDead_FS, nAlive_FS, nFatalUnk_FS, nPos_all, nNeg_all, nDead_all, nAlive_all, nFatalUnk_all,
                 richness, sppAbun, siteAbun, sMoist_m_t2, sMoist_m_t1, sMoist_m, sMoist_d, precip_m_t2, precip_m_t1, precip_m, temp_m_t2, temp_m_t1, temp_m, temp_d,
-                tmin, tmax, tavg, prec, bio1, bio2, bio3, bio4, bio5, bio6, bio7, bio8, bio9, bio10, bio11, bio12, bio13, bio14, bio15, bio16, bio17, bio18, bio19, collectorList) %>%
+                tmin, tmax, tavg, prec, bio1, bio2, bio3, bio4, bio5, bio6, bio7, bio8, bio9, bio10, bio11, bio12, bio13, bio14, bio15, bio16, bio17, bio18, bio19, 
+                diagnosticLab, principalInvestigator, collectorList) %>%
   rename(tmin_wc = tmin, tmax_wc = tmax, tavg_wc = tavg, prec_wc = prec, bio1_wc = bio1, bio2_wc = bio2, bio3_wc = bio3, bio4_wc = bio4, bio5_wc = bio5, bio6_wc = bio6,
          bio7_wc = bio7, bio8_wc = bio8, bio9_wc = bio9, bio10_wc = bio10, bio11_wc = bio11, bio12_wc = bio12, bio13_wc = bio13, bio14_wc = bio14, bio15_wc = bio15, bio16_wc = bio16,
          bio17_wc = bio17, bio18_wc = bio18, bio19_wc = bio19) %>%

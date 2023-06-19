@@ -13,6 +13,7 @@ pckgs <- c("ggsignif", # adds labels to significant groups
              "ggtext", # for text type/arrangements w/ ggplot2
            "Rttf2pt1", # to use with the extrafont package
            "ggthemes", # contains 'scales', 'themes', and 'geoms' packages
+              "cairo", # saves high quality svg, pdf, and ps files 
             "cowplot", # arranging plots/figs
           "gridExtra", # arranging plots/figs
           "patchwork", # arranging plots/figs
@@ -55,18 +56,18 @@ setwd(file.path(dir, csvpath))
 
 ## Set plot theme 
 ak_theme <- theme_ipsum() +
-  theme(axis.text.x = element_text(size = 24),
-        axis.title.x = element_text(size = 28, hjust = 0.5, 
+  theme(axis.text.x = element_text(size = 26),
+        axis.title.x = element_text(size = 34, hjust = 0.5, 
                                     margin = margin(t = 10, r = 0, b = 0, l = 0), 
                                     face = "plain"),
-        axis.text.y = element_text(size = 24, face = "italic"),
-        axis.title.y = element_text(size = 28, hjust = 0.5, 
+        axis.text.y = element_text(size = 26, face = "italic"),
+        axis.title.y = element_text(size = 34, hjust = 0.5, 
                                     margin = margin(t = 0, r = 15, b = 0, l = 5), 
                                     face = "plain"),
         axis.ticks.length = unit(.25, "cm"),
         axis.ticks = element_blank(),
-        plot.tag = element_text(size = 32, face = "plain"),
-        plot.title = element_text(size = 32, hjust = 0.5, face = "plain"),
+        plot.tag = element_text(size = 36, face = "bold"),
+        plot.title = element_text(size = 42, hjust = 0.5, face = "plain"),
         plot.subtitle = element_markdown(size = 12, face = "plain"),
         plot.margin = margin(1, 1, 1.5, 1.2, "cm"), 
         plot.caption = element_markdown(hjust = 0, size = 14, face = "plain"),
@@ -75,8 +76,8 @@ ak_theme <- theme_ipsum() +
         #        legend.spacing = unit(1, "cm"), # Space legend labels
         legend.key.size = unit(2,"cm"), 
         legend.text.align = 1,
-        legend.text = element_text(size = 18, hjust = -1),
-        legend.title = element_text(size = 18, face = "bold"), 
+        legend.text = element_text(size = 28, hjust = -1),
+        legend.title = element_text(size = 28, face = "bold"), 
         panel.border = element_blank(),
         panel.background = element_blank(),
         panel.spacing.y = unit(1.5,"cm"),
@@ -180,7 +181,7 @@ map <- ggplot() +
                    axis.title.x = element_text(size = 42, hjust = 0.5, 
                                                margin = margin(t = 10, r = 0, b = 0, l = 0), 
                                                face = "plain"),
-                   axis.text.y = element_text(size = 28),
+                   axis.text.y = element_text(size = 28, face = "plain"),
                    axis.title.y = element_text(size = 42, hjust = 0.5, 
                                                margin = margin(t = 0, r = 15, b = 0, l = 5), 
                                                face = "plain"),) +
@@ -188,10 +189,7 @@ map <- ggplot() +
 
 map
 
-ggsave("map.tiff", map, device = "tiff", path = file.path(dir, figpath),
-       width = 2000, height = 2000, scale = 2, units = "px", dpi = 300, limitsize = F)
-
-ggsave("map.pdf", map, device = "pdf", path = file.path(dir, figpath),
+ggsave("map.pdf", map, device = cairo_pdf, path = file.path(dir, figpath),
        width = 2000, height = 2000, scale = 2, units = "px", dpi = 300, limitsize = F)
 
 
@@ -213,7 +211,8 @@ prev <- d %>%
 prev_plot <- ggplot(prev, aes(scientific, sapply(Bsal_prev, FUN = function(x) ifelse(x == 0, 0.1, x)), 
                               fill = susceptibility, label = paste(sprintf(Bsal_prev, fmt = '%#.1f'), "%"))) +
   geom_col(position = "identity") +
-  geom_text(aes(colour = susceptibility), nudge_y = 4, size = 5.5) +
+  geom_text(aes(colour = susceptibility), nudge_y = 4, size = 6,
+            fontface = "bold") +
   coord_flip(clip = "off") +
   ylab("Disease prevalence (%)") + 
   xlab("Species") + 
@@ -225,7 +224,7 @@ prev_plot <- ggplot(prev, aes(scientific, sapply(Bsal_prev, FUN = function(x) if
                     values = c("#548078", "#E3A630", "#b30000"),
                     labels = c("Resistant", "Tolerant", "Susceptible"),
                     guide = "none") +
-  scale_x_discrete(expand = expansion(mult = c(0, 0.01), add = c(1, 0.5))) +
+  scale_x_discrete(expand = expansion(mult = c(0, 0.01), add = c(1, 0.25))) +
   scale_y_continuous(labels = scales::label_percent(scale = 1, suffix = "%"), 
                      breaks = seq(0, 40, 10), limit = c(0, 43)) +
   ak_theme #+ theme(axis.text.y = element_text(face = "italic"),
@@ -233,11 +232,8 @@ prev_plot <- ggplot(prev, aes(scientific, sapply(Bsal_prev, FUN = function(x) if
 
 prev_plot 
 
-# ggsave("prev_plot.tiff", prev_plot, device = "tiff", path = file.path(dir, figpath),
-#        width = 2200, height = 1400, scale = 2, units = "px", dpi = 300, limitsize = F)
-
-ggsave("prev_plot.pdf", prev_plot, device = cairo_pdf, path = file.path(dir, figpath),
-       width = 2000, height = 2000, scale = 2, units = "px", dpi = 300, limitsize = F)
+# ggsave("prev_plot.pdf", prev_plot, device = cairo_pdf, path = file.path(dir, figpath),
+#        width = 2000, height = 2000, scale = 2, units = "px", dpi = 300, limitsize = F)
 
 
 
@@ -278,8 +274,8 @@ m2b_plot <- ggplot(m2b_predict, aes(scientific, sppAbun, colour = susceptibility
   geom_point(size = 3) +
   geom_errorbar(aes(ymin = conf.low, ymax = conf.high), width = 0.5) +
   geom_richtext(aes(y = (conf.high + 0.25), 
-                    label = paste("n<sub>sites</sub>=", No.Sites)), #Site #s 
-                vjust = 0.4, hjust = 0, alpha = 0.75, size = 5.5,
+                    label = paste(expectedAbun)), # predicted abundance provided by the model 
+                vjust = 0.5, hjust = 0, size = 6,
                 label.size = NA, fontface = "bold", show.legend = F) +
   coord_flip(clip = "off") +
   ylab("Abundance") +
@@ -291,14 +287,14 @@ m2b_plot <- ggplot(m2b_predict, aes(scientific, sppAbun, colour = susceptibility
   scale_y_continuous(labels = seq(0, 20, 5),
                      breaks = seq(0, 20, 5),
                      limits = c(0, 22)) +
-  scale_x_discrete(expand = expansion(mult = c(0, 0.01), add = c(1, 0.5))) +
+  scale_x_discrete(expand = expansion(mult = c(0, 0.01), add = c(1, 0.25))) +
   ak_theme + theme(axis.text.y = element_text(face = "italic"),
                    legend.title = element_blank()) 
 
 m2b_plot
 
-# ggsave("abundance_plot.tiff", m2b_plot, device = "tiff", path = file.path(dir, figpath),
-#        width = 2200, height = 1400, scale = 2, units = "px", dpi = 300, limitsize = F)
+# ggsave("abundance_plot.pdf", m2b_plot, device = cairo_pdf, path = file.path(dir, figpath),
+#         width = 2200, height = 1400, scale = 2, units = "px", dpi = 300, limitsize = F)
 
 
 
@@ -344,8 +340,8 @@ m2c_plot <- ggplot(m2c_predict, aes(susceptibility, predicted, color = susceptib
 
 m2c_plot
 
-# ggsave("susceptibility_plot.tiff", m2c_plot, device = "tiff", path = file.path(dir, figpath),
-#        width = 2200, height = 1300, scale = 2, units = "px", dpi = 300, limitsize = F)
+# ggsave("susceptibility_plot.pdf", m2c_plot, device = cairo_pdf, path = file.path(dir, figpath),
+#         width = 2200, height = 1300, scale = 2, units = "px", dpi = 300, limitsize = F)
 
 
 ## Create guide to force a common legend
@@ -356,25 +352,25 @@ commonLegend <- guides(fill = guide_legend(override.aes = list(color = c("#54807
 
 ## Create combined plot for manuscript
 fig2a <- prev_plot + labs(caption = NULL) + 
-                     theme(plot.tag.position = c(0.98, 0.73),
+                     theme(plot.tag.position = c(0.96, 0.78),
                            plot.margin = margin(.5, .75, .5, .75, "cm"),
                            axis.ticks.length = unit(.25, "cm"),
                            axis.ticks = element_blank(),
+                           axis.text.y = element_text(size = 28),
+                           axis.text.x = element_text(size = 24),
                            axis.title.y = element_blank(),
-                           # axis.title.y = element_text(margin = margin(r = -75)),
-                           axis.title.x = element_text(size = 26),
-                           axis.text.x = element_text(size = 20)) +
-                     commonLegend
+                           axis.title.x = element_text(size = 30)) +
+                      commonLegend
 
 fig2b <- m2b_plot + labs(caption = NULL) + 
                        theme(axis.text.y = element_blank(),
                              axis.title.y = element_blank(),
-                             axis.title.x = element_text(size = 26),
-                             axis.text.x = element_text(size = 20),
+                             axis.title.x = element_text(size = 30),
+                             axis.text.x = element_text(size = 24),
                              axis.ticks.length = unit(.25, "cm"),
                              axis.ticks = element_blank(),
                              plot.margin = margin(.5, .75, .5, .5, "cm"),
-                             plot.tag.position = c(0.92, 0.73)) +
+                             plot.tag.position = c(0.92, 0.78)) +
                        commonLegend
 
 fig2c <- m2c_plot + labs(caption = NULL) + 
@@ -382,10 +378,9 @@ fig2c <- m2c_plot + labs(caption = NULL) +
                             plot.margin = margin(.75, 2, .75, 0, "cm"),
                             axis.ticks.length.y = unit(.25, "cm"),
                             axis.ticks = element_blank(),
-                            axis.title.y = element_text(margin = margin(r = -600), size = 28),
-                            axis.text.y = element_text(size = 22),
-                            axis.title.x = element_text(size = 26),
-                            axis.text.x = element_text(size = 22),
+                            axis.title.y = element_text(margin = margin(r = -500)),
+                            axis.title.x = element_text(size = 34),
+                            axis.text.y = element_text(face = "plain"),
                             plot.tag.position = c(0.33, 0.92)) +
                       commonLegend
 
@@ -393,84 +388,28 @@ fig2c <- m2c_plot + labs(caption = NULL) +
 fig2combined <- ((fig2a | fig2b)/fig2c) + plot_layout(guides = "collect", heights = c(20, 16)) +
                 plot_annotation(tag_levels = "A") & theme(legend.position = "top",
                                                           legend.box.margin = margin(0, 1, 1, 1, "cm"),
-                                                          legend.text = element_text(margin = margin(r = 1, unit = "cm")))
+                                                          legend.text = element_text(margin = margin(r = 1, unit = "cm")),
+                                                          legend.title = element_blank())
 fig2combined
 
-ggsave("fig2_combined", fig2combined, device = "eps", path = file.path(dir, figpath),
-       width = 2600, height = 2300, scale = 2, units = "px", dpi = 300, limitsize = F)
+ggsave("fig2_combined.pdf", fig2combined, device = cairo_pdf, path = file.path(dir, figpath),
+       width = 2600, height = 2600, scale = 2, units = "px", dpi = 300, limitsize = F)
 
-
-#### check fonts ####
-font_paths("C:/Windows/Fonts")
-fontInfo <- font_files()
-
-tmp <- fontInfo %>% 
-  dplyr::select(file) %>%
-  pivot_longer(., cols = everything()) %>%
-  plyr::mutate(name = value) %>%
-  separate(value, into = c("fileName", "fileExt"), sep = "\\.")
-names(tmp)[names(tmp) == "name"] <- "file"
-
-fontInfo <- left_join(tmp, fontInfo, by = "file")
-
-reg <- fontInfo %>%
-  dplyr::select(file, face) %>%
-  filter(face == "Regular") %>%
-  dplyr::select(file) 
-
-bold <- fontInfo %>%
-  dplyr::select(file, face) %>%
-  filter(face == "Bold") %>%
-  dplyr::select(file)
-
-italic <- fontInfo %>%
-  dplyr::select(file, face) %>%
-  filter(face == "Italic") %>%
-  dplyr::select(file) 
-
-bolditalic <- fontInfo %>%
-  dplyr::select(file, face) %>%
-  filter(face == "Bold Italic") %>%
-  dplyr::select(file) 
-
-
-
-
-## Function to add fonts
-add_all_fonts <- function(fontFamilies, regular, bold, bolditalic, italic){
-  for(i in length(fontFamilies)){
-    
-  }
-  
-  
-  
-  
-  values <- c("Low", "Med", "High")
-  keys <-  unique(df[,8])
-  index <- setNames(as.list(values), keys)
-  
-  df$dummy <- dplyr::recode(df[,8], !!!index)
-  
-  return(df)
-}
-
-
-####
-
-
-
-d %>%
-  dplyr::select(country, species, Site) %>%
-  filter(country == "Spain" & species == "marmoratus") %>%
-  unique() #%>%
-  nrow()
+## Code to see how many sites each species are found at in each country
+# d %>%
+#   dplyr::select(country, species, Site) %>%
+#   filter(country == "Spain" & species == "marmoratus") %>%
+#   unique() #%>%
+#   nrow()
 
 
 #### 2. Cbind models for all salamander spp. ####################################################
 ##      2a. T0 (At time of observation); T-1 (1 month prior to initial obs.); 
 ##          T-2 (2 months prior to initial obs.)
 # Drop rows with NA vals in weather data
-dcbindScaled <- tidyr::drop_na(dcbind, any_of(c(21:36)))
+dcbindScaled <- dcbind %>% 
+  tidyr::drop_na(., any_of(c(21:36))) %>%
+  filter(country == "Germany" | country == "Spain")
 
 # Scale relevant vars
 dcbindScaled <- dcbindScaled %>%
@@ -482,24 +421,24 @@ dcbindScaled <- dcbindScaled %>%
 
 
 
-m_all <- glmmTMB(cbind(nPos_all, nNeg_all) ~  richness*logsiteAbun + 
-                   temp_d*sMoist_d + (1|scientific),
-                 data = dcbindScaled, family = "binomial",
-                 control = glmmTMBControl(optimizer = optim, 
-                                          optArgs = list(method = "BFGS")))
-
-m_all2 <- glmmTMB(cbind(nPos_all, nNeg_all) ~  richness*logsiteAbun + 
-                   temp_d*sMoist_d + (1|scientific) + (1|collectorList),
-                 data = dcbindScaled, family = "binomial",
-                 control = glmmTMBControl(optimizer = optim, 
-                                          optArgs = list(method = "BFGS")))
-
-
-modelsel <- model.sel(m_all, m_all2)
-
+m_all <- glmmTMB(cbind(nPos_all, nNeg_all) ~ richness*logsiteAbun +
+                    temp_d*sMoist_d + (1|scientific),
+                  data = dcbindScaled, family = "binomial", na.action = "na.fail",
+                  control = glmmTMBControl(optimizer = optim,
+                                           optArgs = list(method = "BFGS")))
 
 summary(m_all)
 Anova(m_all)
+
+m_all2 <- glmmTMB(cbind(nPos_all, nNeg_all) ~ richness*logsiteAbun +
+                   temp_d*sMoist_d + (1|scientific) + (1|principalInvestigator),
+                 data = dcbindScaled, family = "binomial", na.action = "na.fail",
+                 control = glmmTMBControl(optimizer = optim,
+                                          optArgs = list(method = "BFGS")))
+
+summary(m_all2)
+Anova(m_all2)
+
 
 # # T-1
 # m_all_t1 <- glmmTMB(cbind(nPos_all, nNeg_all) ~  richness*logsiteAbun + 
@@ -579,9 +518,8 @@ webshot(file.path(dir, figpath, "m_all_rich.html"),
 
 
 
-
 ##      2b. Prevalence by Abundance & Richness Plots for 'All spp.' model
-m_all_predict <- ggpredict(m_all,  terms = c("richness", "logsiteAbun")) %>%
+m_all_predict <- ggpredict(m_all2,  terms = c("richness", "logsiteAbun")) %>%
   dplyr::rename("richness" = "x",
          "logsiteAbun" = "group") %>%
   plyr::mutate(richness = as.numeric(as.character(richness)),
@@ -596,16 +534,16 @@ m_all_plot <- ggplot(m_all_predict, aes(x = richness, y = predicted,
            alpha = 0.5, position = position_jitter(width = 0.4, height = 0.1), 
            inherit.aes = F, na.rm = T) +
   labs(x = "Species richness",
-       y = "Bsal prevalence across\nall salamander species (%)",
-       title = "All spp. model", 
+       y = "Bsal prevalence (%)",
+       # title = "All spp. model", 
        linetype = "Site-level abundance") +
   #  geom_ribbon(aes(x = richness, ymin = conf.low, ymax = conf.high, 
   #              fill = siteAbun), alpha = 0.2, colour = NA, show.legend = F) +
   scale_linetype_manual(values = c("solid", "longdash", "twodash")) +
   scale_color_grey(start = 0.8, end = 0.2) +
-  scale_x_continuous(labels = seq(0, 10, 1), breaks = seq(0, 10, 1)) + 
-  scale_y_continuous(labels = scales::percent_format(accuracy = 0.1), 
-                     breaks = seq(0, .025, 0.005), limits = c(0, 0.025)) + 
+  scale_x_continuous(labels = seq(0, 10, 1), breaks = seq(0, 10, 1)) +
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1), 
+                      breaks = seq(0, .05, 0.01), limits = c(0, 0.05)) + 
   ak_theme + theme(plot.tag.position = c(0.96, 0.9)) + 
   guides(colour = guide_legend("Site-level abundance"))
 
@@ -742,16 +680,38 @@ ggsave("m_all_plot.tif", m_all_plot, device = "tiff", scale = 2,
 
 
 #### 3. Cbind models for fire salamanders only ####################################################
+## Subset data even further to only include Fire Salamanders
+FSdata <- dcbindScaled %>%
+  filter(scientific == "Salamandra salamandra")
 ##      3a. T0 (At time of observation); T-1 (30 days prior to initial obs.); T-2 (60 days prior to initial obs.)
 # T0
-m_FS <- glmmTMB(cbind(nPos_FS, nNeg_FS) ~  richness + logsppAbun + temp_d*sMoist_d + (1|scientific),
-                data = subset(dcbindScaled, scientific =="Salamandra salamandra"), family = "binomial",
+m_FS <- glmmTMB(cbind(nPos_FS, nNeg_FS) ~  richness + logsiteAbun + temp_d*sMoist_d + (1|scientific),
+                data = FSdata, family = "binomial",
                 control = glmmTMBControl(optimizer = optim, 
                                          optArgs = list(method = "BFGS")))
 
 
 summary(m_FS)
 Anova(m_FS)
+
+
+# m_FS2 <- glmmTMB(cbind(nPos_FS, nNeg_FS) ~  richness + logsppAbun + temp_d*sMoist_d + (1|scientific) + (1|principalInvestigator),
+#                  data = FSdata, family = "binomial", na.action = "na.fail",
+#                  control = glmmTMBControl(optimizer = optim, 
+#                                           optArgs = list(method = "BFGS")))
+# 
+# summary(m_FS2)
+# Anova(m_FS2)
+# 
+# m_FS3 <- glmmTMB(cbind(nPos_FS, nNeg_FS) ~  richness + logsppAbun + temp_d*sMoist_d + (1|principalInvestigator),
+#                  data = FSdata, family = "binomial", na.action = "na.fail",
+#                  control = glmmTMBControl(optimizer = optim, 
+#                                           optArgs = list(method = "BFGS")))
+# 
+# summary(m_FS3)
+# Anova(m_FS3)
+# 
+# anova(m_FS, m_FS2, m_FS3)
 
 
 # # T-1
@@ -776,7 +736,7 @@ Anova(m_FS)
 
 #### Clean model outputs
 ## ABUNDANCE x RICHNESS
-tab_model(m_FS, show.obs = T, collapse.ci = T, 
+tab_model(m_FS3, show.obs = T, collapse.ci = T, 
           show.icc = F, show.ngroups = F, show.re.var = F,
           rm.terms = c("temp_d", "sMoist_d", "temp_d:sMoist_d"),
           dv.labels = "Fire salamander model",
@@ -825,32 +785,66 @@ webshot(file.path(dir, figpath, "m_FS_weather.html"),file.path(dir, figpath, "m_
 
 
 ##      3b. Prevalence by Abundance & Richness Plots for T0, T-1, T-2 (Fire Salamanders Only)
-m_FS_predict <- ggpredict(m_FS,  terms = c("richness", "logsppAbun")) %>%
+m_FS_predict <- ggpredict(m_FS,  terms = c("richness", "logsiteAbun")) %>%
   dplyr::rename("richness" = "x",
-         "logsppAbun" = "group") %>%
+         "logsiteAbun" = "group") %>%
   plyr::mutate(richness = as.numeric(as.character(richness)),
-               logsppAbun = as.numeric(as.character(logsppAbun)),
+               logsiteAbun = as.numeric(as.character(logsiteAbun)),
                # Convert scaled prediction to original data scale:
-               sppAbun = as.factor(round(exp(as.numeric(logsppAbun)), 0)))
+               siteAbun = as.factor(round(exp(as.numeric(logsiteAbun)), 0)))
 
-m_FS_plot <- ggplot(m_FS_predict, aes(x = richness , y = predicted, colour = sppAbun)) +
-  geom_line(aes(linetype = sppAbun), linewidth = 1) +
-  geom_rug(data = subset(dcbindScaled, scientific =="Salamandra salamandra"), aes(x = richness, y = 0), sides = "b", alpha = 0.5,
+m_FS_plot <- ggplot(m_FS_predict, aes(x = richness , y = predicted, colour = siteAbun)) +
+  geom_line(aes(linetype = siteAbun), linewidth = 1) +
+  geom_rug(data = FSdata, aes(x = richness, y = 0), sides = "b", alpha = 0.5,
            position = position_jitter(width = 0.4, height = 0.1), inherit.aes = F, na.rm = T) +
-  labs(title =  "Fire salamander model", linetype = "Species abundance") +
-  #  geom_ribbon(aes(x = richness, ymin = conf.low, ymax = conf.high, fill = siteAbun), alpha = 0.2, colour = NA, show.legend = F) +
-  ylab("Fire salamander\nBsal prevalence (%)") +
-  xlab("Species richness") +
+  labs(linetype = "Site-level abundance",
+       # title =  "Fire salamander model", 
+       y = "Bsal prevalence (%)",
+       x = "Species richness") +
+  # geom_ribbon(aes(x = richness, ymin = conf.low, ymax = conf.high, fill = sppAbun), alpha = 0.2, colour = NA, show.legend = F) +
   scale_linetype_manual(values = c("solid", "longdash", "twodash")) +
   scale_color_grey(start = 0.8, end = 0.2) +
-  scale_x_continuous(labels = seq(0, 10, 1), breaks = seq(0, 10, 1)) +
-  scale_y_continuous(labels = scales::percent_format(accuracy = 1), limits = c(0, 0.13)) +
-  ak_theme + theme(plot.tag.position = c(0.96, 0.9)) + guides(colour = guide_legend("Species abundance"))
+  scale_x_continuous(labels = seq(0, 10, 1), 
+                     breaks = seq(0, 10, 1)) +
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1), 
+                     breaks = seq(0, 0.12, 0.02), 
+                     limits = c(0, 0.12)) +
+  ak_theme + theme(plot.tag.position = c(0.96, 0.9)) + guides(colour = guide_legend("Site-level abundance"))
+
 
 m_FS_plot
-ggsave("m_FS_plot.tif", m_FS_plot, device = "tiff", scale = 2, width = 1920, height = 1080, units = "px",
+ggsave("m_FS_plot.pdf", m_FS_plot, device = cairo_pdf, scale = 2, width = 1920, height = 1080, units = "px",
        path = file.path(dir, figpath), dpi = 300)
 
+
+## Create combined plot for manuscript
+fig3a <- m_all_plot + labs(caption = NULL) + 
+  theme(plot.tag.position = c(0.85, 0.78),
+        plot.margin = margin(.5, .75, .5, .75, "cm"),
+        axis.ticks = element_blank(),
+        legend.position = "top",
+        legend.box.margin = margin(0, 1, 1, 1, "cm"),
+        legend.text = element_text(margin = margin(r = 1, unit = "cm")),
+        legend.title = element_blank()) 
+
+fig3b <- m_FS_plot + labs(caption = NULL) + 
+  theme(plot.tag.position = c(0.92, 0.78),
+        plot.margin = margin(.5, .75, .5, .5, "cm"),
+        legend.position = "top",
+        legend.box.margin = margin(0, 1, 1, 1, "cm"),
+        legend.text = element_text(margin = margin(r = 1, unit = "cm")),
+        legend.title = element_blank())
+
+
+
+modPlots <- (m_all_plot/m_FS_plot)  + plot_layout(guides = "collect") + 
+  plot_annotation(tag_levels = "A")
+
+
+modPlots
+
+ggsave("modelPlots.pdf", modPlots, device = cairo_pdf, scale = 2, width = 1920, height = 2400, units = "px",
+       path = file.path(dir, figpath), dpi = 300)
 
 
 # ##      3c. Prevalence by Temperature & Soil Moisture Plots for T0, T-1, T-2 (Fire Salamanders Only)
