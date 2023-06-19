@@ -3,7 +3,7 @@ code/temp2.R
 .vscode/
 QGISFiles/
 Temp_dataAnalysis.Rmd
-WorldClimVars/
+WorldClim/gadm/
 bsal_analysis.csv
 dataAnalysis.Rmd
 dataCleaning_init.R
