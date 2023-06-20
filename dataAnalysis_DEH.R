@@ -13,14 +13,15 @@ pckgs <- c("ggsignif", # adds labels to significant groups
              "ggtext", # for text type/arrangements w/ ggplot2
            "Rttf2pt1", # to use with the extrafont package
            "ggthemes", # contains 'scales', 'themes', and 'geoms' packages
-              "cairo", # saves high quality svg, pdf, and ps files 
+          "grDevices", # saves high quality svg, pdf, and ps files
+           "graphics", # dependency of grDevices
             "cowplot", # arranging plots/figs
           "gridExtra", # arranging plots/figs
           "patchwork", # arranging plots/figs
          "hrbrthemes", # plot colors
        "RColorBrewer", # plot colors
             "viridis", # plot colors
-           "showtext", # unique font types
+             "scales", # plot customization
            "eurostat", # obtain spatial data from europe
             "geodata", # obtain geographic data (world map)
               "ggmap", # creates maps
@@ -28,6 +29,7 @@ pckgs <- c("ggsignif", # adds labels to significant groups
             "mapproj", # apply map projection
          "scatterpie", # add pie charts to maps
              "ggpubr", # prepares plots to be ready for publication
+          "latex2exp", # allows use of mathematical expressions
              "sjPlot", # plot_model(), tab_model()
                "ragg", # converts plots to tiff files
           "htmltools", # visualizes model outputs as html tables
@@ -73,7 +75,6 @@ ak_theme <- theme_ipsum() +
         plot.caption = element_markdown(hjust = 0, size = 14, face = "plain"),
         plot.caption.position = "plot",
         legend.position = "top", 
-        #        legend.spacing = unit(1, "cm"), # Space legend labels
         legend.key.size = unit(2,"cm"), 
         legend.text.align = 1,
         legend.text = element_text(size = 28, hjust = -1),
@@ -123,10 +124,12 @@ nicelabs <- c(`(Intercept)` = "Intercept",
 ## Function to populate dummy columns with uniform labels in ggpredict dataframe
 create_dummy_col <- function(df){
   values <- c("Low", "Med", "High")
-  keys <-  unique(df[,8])
+  keys <-  unique(df[,6])
   index <- setNames(as.list(values), keys)
   
-  df$dummy <- dplyr::recode(df[,8], !!!index)
+  # df$dummy <- dplyr::recode(as.list(df[,6]), !!!index)
+  
+  df$dummy <- dplyr::mutate(df = as.factor(dplyr::recode(df[,6], !!!index)))
   
   return(df)
 }
@@ -270,13 +273,14 @@ m2b_predict <- ggpredict(model_2b, terms = "scientific") %>%
                susceptibility = as.factor(susceptibility))
 
 
+m2b_plot_lbl <- mtext(substitute(paste(hat(x)," = ",e),list(e = m2b_predict$expectedAbun)))
+
 m2b_plot <- ggplot(m2b_predict, aes(scientific, sppAbun, colour = susceptibility)) +
   geom_point(size = 3) +
   geom_errorbar(aes(ymin = conf.low, ymax = conf.high), width = 0.5) +
-  geom_richtext(aes(y = (conf.high + 0.25), 
-                    label = paste(expectedAbun)), # predicted abundance provided by the model 
-                vjust = 0.5, hjust = 0, size = 6,
-                label.size = NA, fontface = "bold", show.legend = F) +
+  geom_richtext(aes(y = (conf.high + 0.25), label = paste0("*E*<sub>(*abun*)</sub>= ", expectedAbun)), # predicted abundance provided by the model
+                vjust = 0.5, hjust = 0,  label.size = NA, fill = NA, 
+                size = 6, fontface = "bold", alpha = 0.75, show.legend = F) +
   coord_flip(clip = "off") +
   ylab("Abundance") +
   xlab("Species") + 
@@ -292,6 +296,7 @@ m2b_plot <- ggplot(m2b_predict, aes(scientific, sppAbun, colour = susceptibility
                    legend.title = element_blank()) 
 
 m2b_plot
+
 
 # ggsave("abundance_plot.pdf", m2b_plot, device = cairo_pdf, path = file.path(dir, figpath),
 #         width = 2200, height = 1400, scale = 2, units = "px", dpi = 300, limitsize = F)
@@ -324,8 +329,8 @@ m2c_predict <- merge(m2c_predict, m2c_rug)
 m2c_plot <- ggplot(m2c_predict, aes(susceptibility, predicted, color = susceptibility)) +
   geom_point(size = 5) +
   geom_errorbar(aes(ymin = conf.low, ymax = conf.high), width = 0.2, linewidth = 1) +
-  geom_richtext(aes(y = (conf.high + 1), label = paste0("n<sub>obs</sub>= ", n)), 
-                alpha = 0.75, size = 8, label.size = NA, fontface = "bold", show.legend = F) +
+  geom_richtext(aes(y = (conf.high + 1), label = paste0("n<sub>(*obs*)</sub>= ", n)), 
+                alpha = 0.75, size = 8, label.size = NA, fill = NA, fontface = "bold", show.legend = F) +
   annotate("text", x = 3, y = 6.75, label = "***", size = 10, fontface = "bold", 
            colour = "#b30000") +
   scale_x_discrete(labels = c("Resistant", "Tolerant", "Susceptible")) +
@@ -403,9 +408,9 @@ ggsave("fig2_combined.pdf", fig2combined, device = cairo_pdf, path = file.path(d
 #   nrow()
 
 
-#### 2. Cbind models for all salamander spp. ####################################################
-##      2a. T0 (At time of observation); T-1 (1 month prior to initial obs.); 
-##          T-2 (2 months prior to initial obs.)
+#### 3. Cbind models testing the Dilution Effect Hypothesis ####################
+## Data prep
+
 # Drop rows with NA vals in weather data
 dcbindScaled <- dcbind %>% 
   tidyr::drop_na(., any_of(c(21:36))) %>%
@@ -420,7 +425,7 @@ dcbindScaled <- dcbindScaled %>%
             ~(scale(., center = T, scale = T %>% as.numeric)))
 
 
-
+##      3a. Cbind model including all salamander spp. --------------------------
 m_all <- glmmTMB(cbind(nPos_all, nNeg_all) ~ richness*logsiteAbun +
                     temp_d*sMoist_d + (1|scientific),
                   data = dcbindScaled, family = "binomial", na.action = "na.fail",
@@ -430,102 +435,65 @@ m_all <- glmmTMB(cbind(nPos_all, nNeg_all) ~ richness*logsiteAbun +
 summary(m_all)
 Anova(m_all)
 
-m_all2 <- glmmTMB(cbind(nPos_all, nNeg_all) ~ richness*logsiteAbun +
-                   temp_d*sMoist_d + (1|scientific) + (1|principalInvestigator),
-                 data = dcbindScaled, family = "binomial", na.action = "na.fail",
-                 control = glmmTMBControl(optimizer = optim,
-                                          optArgs = list(method = "BFGS")))
-
-summary(m_all2)
-Anova(m_all2)
-
-
-# # T-1
-# m_all_t1 <- glmmTMB(cbind(nPos_all, nNeg_all) ~  richness*logsiteAbun + 
-#                    temp_m_t1*sMoist_m_t1 + (1|scientific),
-#                  data = dcbindScaled, family = "binomial",
-#                  control = glmmTMBControl(optimizer = optim, 
+# m_all2 <- glmmTMB(cbind(nPos_all, nNeg_all) ~ richness*logsiteAbun +
+#                    temp_d*sMoist_d + (1|scientific) + (1|principalInvestigator),
+#                  data = dcbindScaled, family = "binomial", na.action = "na.fail",
+#                  control = glmmTMBControl(optimizer = optim,
 #                                           optArgs = list(method = "BFGS")))
 # 
-# summary(m_all_t1)
-# Anova(m_all_t1)
-# 
-# # T-2
-# m_all_t2 <- glmmTMB(cbind(nPos_all, nNeg_all) ~  richness*logsiteAbun + 
-#                    temp_m_t2*sMoist_m_t2 + (1|scientific),
-#                  data = dcbindScaled, family = "binomial",
-#                  control = glmmTMBControl(optimizer = optim, 
-#                                           optArgs = list(method = "BFGS")))
-# 
-# summary(m_all_t2)
-# Anova(m_all_t2)
+# summary(m_all2)
+# Anova(m_all2)
+
+# anova(m_all, m_all2) # models are virtually the same, going with the simpler model to be parsimonious.
 
 
 #### Clean model outputs
 ## ABUNDANCE x RICHNESS
-tab_model(m_all, show.obs = T, collapse.ci = T, 
-          show.icc = F, show.ngroups = F, show.re.var = F,
-          rm.terms = c("temp_d", "sMoist_d", "temp_d:sMoist_d"),
-          dv.labels = "All species model",
-          string.pred = "Terms",
-          string.p = "P-Value",
-          show.p = T,
-          pred.labels = nicelabs)
-
-
-# take html file and make .png file
-webshot(file.path(dir, figpath, "m_all_rich.html"),
-        file.path(dir, figpath, "m_all_rich.png"),
-        vwidth = 365, vheight = 500)
-
-
-# ## TEMP x SOIL MOISTURE
-# tab_model(m_all, show.obs = T, collapse.ci = T,
-#           rm.terms = c("logsiteAbun", "richness", "richness:logsiteAbun"),
-#           dv.labels = "Sample date",
+# tab_model(m_all, show.obs = T, collapse.ci = T, 
+#           show.icc = F, show.ngroups = F, show.re.var = F,
+#           rm.terms = c("temp_d", "sMoist_d", "temp_d:sMoist_d"),
+#           dv.labels = "All species model",
 #           string.pred = "Terms",
 #           string.p = "P-Value",
-#           pred.labels = nicelabs,
-#           file = file.path(dir, figpath, "m_all_weather.html"))
-# 
-# tab_model(m_all_t2, show.obs = T, collapse.ci = T,
-#           rm.terms = c("logsiteAbun", "richness", "richness:logsiteAbun"),
-#           dv.labels = "One month prior",
-#           string.pred = "Terms",
-#           string.p = "P-Value",
-#           pred.labels = nicelabs,
-#           file = file.path(dir, figpath, "m_all_t1_weather.html"))
-# 
-# tab_model(m_all_t2, show.obs = T, collapse.ci = T,
-#           rm.terms = c("logsiteAbun", "richness", "richness:logsiteAbun"),
-#           dv.labels = "Two months prior",
-#           string.pred = "Terms",
-#           string.p = "P-Value",
-#           pred.labels = nicelabs,
-#           file = file.path(dir, figpath, "m_all_t2_weather.html"))
+#           show.p = T,
+#           pred.labels = nicelabs)
 # 
 # 
 # # take html file and make .png file
-# webshot(file.path(dir, figpath, "m_all_weather.html"),
-#         file.path(dir, figpath, "m_all_weather.png"),
-#         vwidth = 365, vheight = 500)
-# webshot(file.path(dir, figpath, "m_all_t1_weather.html"),
-#         file.path(dir, figpath, "m_all_t1_weather.png"),
-#         vwidth = 365, vheight = 500)
-# webshot(file.path(dir, figpath, "m_all_t2_weather.html"),
-#         file.path(dir, figpath, "m_all_t2_weather.png"),
+# webshot(file.path(dir, figpath, "m_all_rich.html"),
+#         file.path(dir, figpath, "m_all_rich.png"),
 #         vwidth = 365, vheight = 500)
 
 
 
-##      2b. Prevalence by Abundance & Richness Plots for 'All spp.' model
-m_all_predict <- ggpredict(m_all2,  terms = c("richness", "logsiteAbun")) %>%
+
+##      Prevalence by Abundance & Richness Plots for 'All spp.' model
+m_all_predict <- ggpredict(m_all,  terms = c("richness", "logsiteAbun")) %>%
   dplyr::rename("richness" = "x",
          "logsiteAbun" = "group") %>%
   plyr::mutate(richness = as.numeric(as.character(richness)),
                logsiteAbun = as.numeric(as.character(logsiteAbun)),
                # Convert scaled prediction to original data scale:
                siteAbun = as.factor(round(exp(as.numeric(logsiteAbun)), 0)))
+
+# Create dummy column for site abundance labels
+create_dummy_col <- function(df){
+  values <- c("Low", "Med", "High")
+  keys <-  unique(df[,6])
+  index <- setNames(as.list(values), keys)
+  
+  df$dummy <- dplyr::recode(as.list(df[,6]), !!!index)
+  
+  # df$dummy <- plyr::mutate(df = dplyr::recode(df[,6], !!!index)))
+  
+  return(df)
+}
+
+
+m_all_predict <- create_dummy_col(m_all_predict)
+
+
+
 
 m_all_plot <- ggplot(m_all_predict, aes(x = richness, y = predicted, 
                                         colour = siteAbun)) +
@@ -544,7 +512,9 @@ m_all_plot <- ggplot(m_all_predict, aes(x = richness, y = predicted,
   scale_x_continuous(labels = seq(0, 10, 1), breaks = seq(0, 10, 1)) +
   scale_y_continuous(labels = scales::percent_format(accuracy = 1), 
                       breaks = seq(0, .05, 0.01), limits = c(0, 0.05)) + 
-  ak_theme + theme(plot.tag.position = c(0.96, 0.9)) + 
+  ak_theme + theme(plot.tag.position = c(0.96, 0.9),
+                   legend.title = element_blank(),
+                   axis.text.y = element_text(face = "plain")) + 
   guides(colour = guide_legend("Site-level abundance"))
 
 m_all_plot
@@ -553,138 +523,11 @@ ggsave("m_all_plot.tif", m_all_plot, device = "tiff", scale = 2,
        path = file.path(dir, figpath), dpi = 300)
 
 
-
-
-# ##      2c. Prevalence by Temperature & Soil Moisture Plots for T0, T-1, T-2 
-# # T0
-# m2_t0_weather <- ggpredict(m2_t0, terms = c("temp_d [all]", "sMoist_d"))%>%
-#   rename("temp_d" = "x",
-#          "sMoist_d" = "group") %>%
-#   mutate(temp_d = as.numeric(as.character(temp_d)),
-#          sMoist_d = as.numeric(as.character(sMoist_d)),
-#   # Convert scaled prediction to original data scale:
-#          temp_dUnscaled = (temp_d * as.numeric(attr(dcbindScaled$temp_d, "scaled:scale")) + 
-#                               as.numeric(attr(dcbindScaled$temp_d, "scaled:center"))),
-#          sMoistUnscaled = as.factor((round(sMoist_d * as.numeric(attr(dcbindScaled$sMoist_d, "scaled:scale")) +
-#                                  as.numeric(attr(dcbindScaled$sMoist_d, "scaled:center")), 2)))) 
-# # Create dummy column for soil moisture labels 
-# m2_t0_weather <- create_dummy_col(m2_t0_weather)
-# 
-# 
-# m2_t0_p2 <- ggplot(m2_t0_weather, aes(x = temp_dUnscaled , y = predicted, 
-#                                       colour = dummy)) +
-#   geom_line(aes(linetype = factor(dummy, 
-#                                   levels  = c("Low", "Med", "High"))), 
-#                                   linewidth = 1) +
-#   geom_rug(data = dcbindScaled, aes(x = temp_d, y = 0), sides = "b", alpha = 0.5,
-#            position = position_jitter(width = 0.4, height = 0.1), inherit.aes = F, 
-#            na.rm = T) +
-# #  geom_ribbon(aes(x = temp_dUnscaled, ymin = conf.low, ymax = conf.high, 
-# #              fill = dummy), alpha = 0.2, colour = NA, show.legend = F) +
-#   labs(title =  bquote(paste(italic(t))[(0~days)]), linetype = "Soil moisture") +
-#   ylab("Bsal prevalence across\nall salamander species (%)") +
-#   xlab(expression("Temperature (°C)")) + 
-#   scale_linetype_manual(values = c("solid", "longdash", "twodash")) +
-#   scale_color_viridis(option = "G", discrete = T, begin = 0.8, end = 0.3) +
-#   scale_x_continuous(labels = seq(-10, 30, 10), 
-#                      breaks = seq(-10, 30, 10), 
-#                      limits = c(-10, 30)) + 
-#   scale_y_continuous(labels = scales::percent_format(accuracy = 1), 
-#                      limits = c(0, 0.1)) + 
-#   ak_theme + theme(plot.tag.position = c(0.96, 0.9)) + 
-#   guides(colour = guide_legend("Soil moisture"))
-# 
-# m2_t0_p2 
-# ggsave("m2_t0_weather.tif", m2_t0_p2, device = "tiff", scale = 2, 
-#        width = 1920, height = 1080, units = "px", 
-#        path = file.path(dir, figpath), dpi = 300)
-# 
-# 
-# # T-1
-# m2_t1_weather <- ggpredict(m2_t1, terms = c("temp_m_t1 [all]", "sMoist_m_t1")) %>%
-#   rename("temp_m_t1" = "x",
-#          "sMoist_m_t1" = "group") %>%
-#   mutate(temp_m_t1 = as.numeric(as.character(temp_m_t1)),
-#          sMoist_m_t1 = as.numeric(as.character(sMoist_m_t1)),
-#          temp_m_t1Unscaled = temp_m_t1 * as.numeric(attr(dcbindScaled$temp_m_t1, "scaled:scale")) + 
-#                                  as.numeric(attr(dcbindScaled$temp_m_t1, "scaled:center")),
-#          sMoist_t1Unscaled = as.factor(round(sMoist_m_t1 * as.numeric(attr(dcbindScaled$sMoist_m_t1, "scaled:scale")) +
-#                   as.numeric(attr(dcbindScaled$sMoist_m_t1, "scaled:center")), 2)))
-# # Create dummy column for soil moisture labels
-# m2_t1_weather <- create_dummy_col(m2_t1_weather)
-# 
-# 
-# m2_t1_p2 <- ggplot(m2_t1_weather, aes(x = temp_m_t1Unscaled , y = predicted, colour = dummy)) +
-#   geom_line(aes(linetype = factor(dummy, levels  = c("Low", "Med", "High"))), linewidth = 1) +
-#   geom_rug(data = dcbindScaled, aes(x = temp_m_t1, y = 0), sides = "b", alpha = 0.5,
-#            position = position_jitter(width = 0.4, height = 0.1), inherit.aes = F, na.rm = T) +
-# #  geom_ribbon(aes(x = temp_m_t1Unscaled, ymin = conf.low, ymax = conf.high, fill = dummy), alpha = 0.2, colour = NA, show.legend = F) +
-#   labs(title = bquote(paste(italic(t))[(-30~days)]), linetype = bquote("Soil moisture")) +
-#   ylab("Bsal prevalence acrossn\all salamander species (%)") +
-#   xlab(expression("Temperature (°C)")) + 
-#   scale_linetype_manual(values = c("solid", "longdash", "twodash")) +
-#   scale_color_viridis(option = "G", discrete = T, begin = 0.8, end = 0.3) +
-#   scale_x_continuous(labels = seq(-10, 30, 10), breaks = seq(-10, 30, 10), limits = c(-10, 30)) + 
-#   scale_y_continuous(labels = scales::percent_format(accuracy = 1), limits = c(0, 0.1)) + 
-#   ak_theme + theme(plot.tag.position = c(0.96, 0.9)) + guides(colour = guide_legend("Soil moisture"))
-# 
-# m2_t1_p2 
-# ggsave("m2_t1_weather.tif", m2_t1_p2, device = "tiff", scale = 2, width = 1920, height = 1080, units = "px", 
-#        path = file.path(dir, figpath), dpi = 300)
-# 
-# 
-# # T-2
-# m2_t2_weather <- ggpredict(m2_t2, terms = c("temp_m_t2 [all]", "sMoist_m_t2")) %>%
-#   rename("temp_m_t2" = "x",
-#          "sMoist_m_t2" = "group") %>%
-#   mutate(temp_m_t2 = as.numeric(as.character(temp_m_t2)),
-#          sMoist_m_t2 = as.numeric(as.character(sMoist_m_t2)),
-#          temp_m_t2Unscaled = (temp_m_t2 * as.numeric(attr(dcbindScaled$temp_m_t2, "scaled:scale")) +
-#                                  as.numeric(attr(dcbindScaled$temp_m_t2, "scaled:center"))),
-#          sMoist_t2Unscaled = as.factor((round(sMoist_m_t2 * as.numeric(attr(dcbindScaled$sMoist_m_t2, "scaled:scale")) +
-#                                             as.numeric(attr(dcbindScaled$sMoist_m_t2, "scaled:center")), 2))))
-# # Create dummy column for soil moisture labels
-# m2_t2_weather <- create_dummy_col(m2_t2_weather)
-# 
-# 
-# m2_t2_p2 <- ggplot(m2_t2_weather, aes(x = temp_m_t2Unscaled , y = predicted, colour = dummy)) +
-#   geom_line(aes(linetype = factor(dummy, levels  = c("Low", "Med", "High"))), linewidth = 1) +
-#   geom_rug(data = dcbindScaled, aes(x = temp_m_t2, y = 0), sides = "b", alpha = 0.5,
-#            position = position_jitter(width = 0.4, height = 0.1), inherit.aes = F, na.rm = T) +
-# #  geom_ribbon(aes(x = temp_m_t2Unscaled, ymin = conf.low, ymax = conf.high, fill = dummy), alpha = 0.2, colour = NA, show.legend = F) +
-#   labs(title = bquote(paste(italic(t))[(-60~days)]), linetype = bquote("Soil moisture")) +
-#   ylab("Bsal prevalence across\nall salamander species (%)") +
-#   xlab(expression("Temperature (°C)")) + 
-#   scale_linetype_manual(values = c("solid", "longdash", "twodash")) +
-#   scale_color_viridis(option = "G", discrete = T, begin = 0.8, end = 0.3) +
-#   scale_x_continuous(labels = seq(-10, 30, 10), breaks = seq(-10, 30, 10), limits = c(-10, 30)) + 
-#   scale_y_continuous(labels = scales::percent_format(accuracy = 1), limits = c(0, 0.1)) + 
-#   ak_theme + theme(plot.tag.position = c(0.96, 0.9)) + guides(colour = guide_legend("Soil moisture"))
-# 
-# m2_t2_p2 
-# ggsave("m2_t2_weather.tif", m2_t2_p2, device = "tiff", scale = 2, width = 1920, height = 1080, units = "px", 
-#        path = file.path(dir, figpath), dpi = 300)
-# 
-# # 3 Panel Graph
-# m2_p2_combined <- ((m2_t2_p2 + labs(caption = NULL, x = NULL) + theme(legend.position = "none")) | 
-#                      (m2_t1_p2 + labs(caption = NULL, y = NULL)) | 
-#                      (m2_t0_p2 + labs(caption = NULL, y = NULL, x = NULL) + theme(legend.position = "none"))) + 
-#   plot_annotation(tag_levels = "A", 
-#                   caption = "Soil moisture ranged from 5.34-5.36 (kg/m"^2~"), 6.10-6.12 (kg/m"^2~"), and 6.84-6.90 (kg/m"^2~") for the Low, Medium, and High categories respectively. Timepoints above each graph indicate the time from the initial observation.",
-#                   theme = theme(plot.caption = element_text(size = 12, hjust = 0)))
-# 
-# m2_p2_combined
-# ggsave("m2_weather_combined.tif", m2_p2_combined, device = "tiff", scale = 2, width = 2600, height = 1500, units = "px", 
-#        path = file.path(dir, figpath), dpi = 300)
-
-
-
-#### 3. Cbind models for fire salamanders only ####################################################
+##      3b. Cbind model for fire salamanders only ------------------------------
 ## Subset data even further to only include Fire Salamanders
 FSdata <- dcbindScaled %>%
   filter(scientific == "Salamandra salamandra")
-##      3a. T0 (At time of observation); T-1 (30 days prior to initial obs.); T-2 (60 days prior to initial obs.)
-# T0
+
 m_FS <- glmmTMB(cbind(nPos_FS, nNeg_FS) ~  richness + logsiteAbun + temp_d*sMoist_d + (1|scientific),
                 data = FSdata, family = "binomial",
                 control = glmmTMBControl(optimizer = optim, 
@@ -697,94 +540,42 @@ Anova(m_FS)
 
 # m_FS2 <- glmmTMB(cbind(nPos_FS, nNeg_FS) ~  richness + logsppAbun + temp_d*sMoist_d + (1|scientific) + (1|principalInvestigator),
 #                  data = FSdata, family = "binomial", na.action = "na.fail",
-#                  control = glmmTMBControl(optimizer = optim, 
+#                  control = glmmTMBControl(optimizer = optim,
 #                                           optArgs = list(method = "BFGS")))
 # 
 # summary(m_FS2)
 # Anova(m_FS2)
 # 
-# m_FS3 <- glmmTMB(cbind(nPos_FS, nNeg_FS) ~  richness + logsppAbun + temp_d*sMoist_d + (1|principalInvestigator),
-#                  data = FSdata, family = "binomial", na.action = "na.fail",
-#                  control = glmmTMBControl(optimizer = optim, 
-#                                           optArgs = list(method = "BFGS")))
 # 
-# summary(m_FS3)
-# Anova(m_FS3)
-# 
-# anova(m_FS, m_FS2, m_FS3)
+# anova(m_FS, m_FS2) # same as the "all spp. model" -- simpler model is just as effective at accounting for variance
 
 
-# # T-1
-# m_FS_t1 <- glmmTMB(cbind(nPos_FS, nNeg_FS) ~  richness*logsiteAbun + temp_m_t1*sMoist_m_t1 + (1|scientific),
-#                  data = subset(dcbindScaled, scientific =="Salamandra salamandra"), family = "binomial",
-#                  control = glmmTMBControl(optimizer = optim, 
-#                                           optArgs = list(method = "BFGS")))
-# 
-# summary(m_FS_t1)
-# Anova(m_FS_t1)
-# 
-# 
-# 
-# # T-2
-# m_FS_t2 <- glmmTMB(cbind(nPos_FS, nNeg_FS) ~  richness*logsiteAbun + temp_m_t2*sMoist_m_t2 + (1|scientific),
-#                  data = subset(dcbindScaled, scientific =="Salamandra salamandra"), family = "binomial",
-#                  control = glmmTMBControl(optimizer = optim, 
-#                                           optArgs = list(method = "BFGS")))
-# 
-# summary(m_FS_t2)
-# Anova(m_FS_t2)
+
 
 #### Clean model outputs
 ## ABUNDANCE x RICHNESS
-tab_model(m_FS3, show.obs = T, collapse.ci = T, 
-          show.icc = F, show.ngroups = F, show.re.var = F,
-          rm.terms = c("temp_d", "sMoist_d", "temp_d:sMoist_d"),
-          dv.labels = "Fire salamander model",
-          string.pred = "Terms",
-          string.p = "P-Value",
-          show.p = T,
-          pred.labels = nicelabs)
-
-
-# take html file and make .png file
-webshot(file.path(dir, figpath, "m_FS.html"),
-        file.path(dir, figpath, "m_FS.png"),
-        vwidth = 365, vheight = 500)
-
-
-# ## TEMP x SOIL MOISTURE
-# tab_model(m3_t0, show.obs = T, collapse.ci = T,
-#           rm.terms = c("logsiteAbun", "richness", "richness:logsiteAbun"),
-#           dv.labels = "t(0)",
+# tab_model(m_FS, show.obs = T, collapse.ci = T, 
+#           show.icc = F, show.ngroups = F, show.re.var = F,
+#           rm.terms = c("temp_d", "sMoist_d", "temp_d:sMoist_d"),
+#           dv.labels = "Fire salamander model",
 #           string.pred = "Terms",
 #           string.p = "P-Value",
-#           pred.labels = nicelabs,
-#           file = file.path(dir, figpath, "m_FS_weather.html"))
+#           show.p = T,
+#           pred.labels = nicelabs)
 # 
-# tab_model(m3_t1, show.obs = T, collapse.ci = T,
-#           rm.terms = c("logsiteAbun", "richness", "richness:logsiteAbun"),
-#           dv.labels = "t(-30)",
-#           string.pred = "Terms",
-#           string.p = "P-Value",
-#           pred.labels = nicelabs,
-#           file = file.path(dir, figpath, "m_FS_t1_weather.html"))
 # 
-# tab_model(m3_t2, show.obs = T, collapse.ci = T,
-#           rm.terms = c("logsiteAbun", "richness", "richness:logsiteAbun"),
-#           dv.labels = "t(-60)",
-#           string.pred = "Terms",
-#           string.p = "P-Value",
-#           pred.labels = nicelabs,
-#           file = file.path(dir, figpath, "m_FS_t2_weather.html"))
+# # take html file and make .png file
+# webshot(file.path(dir, figpath, "m_FS.html"),
+#         file.path(dir, figpath, "m_FS.png"),
+#         vwidth = 365, vheight = 500)
 
 
-# take html file and make .png file
-webshot(file.path(dir, figpath, "m_FS_weather.html"),file.path(dir, figpath, "m_FS_weather.png"))
-# webshot(file.path(dir, figpath, "m_FS_t1_weather.html"),file.path(dir, figpath, "m_FS_t1_weather.png"))
-# webshot(file.path(dir, figpath, "m_FS_t2_weather.html"),file.path(dir, figpath, "m_FS_t2_weather.png"))
+
+# # take html file and make .png file
+# webshot(file.path(dir, figpath, "m_FS_weather.html"),file.path(dir, figpath, "m_FS_weather.png"))
 
 
-##      3b. Prevalence by Abundance & Richness Plots for T0, T-1, T-2 (Fire Salamanders Only)
+##      Prevalence by Abundance & Richness Plots for 'fire salamander' model
 m_FS_predict <- ggpredict(m_FS,  terms = c("richness", "logsiteAbun")) %>%
   dplyr::rename("richness" = "x",
          "logsiteAbun" = "group") %>%
@@ -809,7 +600,10 @@ m_FS_plot <- ggplot(m_FS_predict, aes(x = richness , y = predicted, colour = sit
   scale_y_continuous(labels = scales::percent_format(accuracy = 1), 
                      breaks = seq(0, 0.12, 0.02), 
                      limits = c(0, 0.12)) +
-  ak_theme + theme(plot.tag.position = c(0.96, 0.9)) + guides(colour = guide_legend("Site-level abundance"))
+  ak_theme + theme(plot.tag.position = c(0.96, 0.9),
+                   legend.title = element_blank(),
+                   axis.text.y = element_text(face = "plain")) + 
+  guides(colour = guide_legend("Site-level abundance"))
 
 
 m_FS_plot
@@ -818,30 +612,41 @@ ggsave("m_FS_plot.pdf", m_FS_plot, device = cairo_pdf, scale = 2, width = 1920, 
 
 
 ## Create combined plot for manuscript
-fig3a <- m_all_plot + labs(caption = NULL) + 
-  theme(plot.tag.position = c(0.85, 0.78),
-        plot.margin = margin(.5, .75, .5, .75, "cm"),
-        axis.ticks = element_blank(),
-        legend.position = "top",
-        legend.box.margin = margin(0, 1, 1, 1, "cm"),
-        legend.text = element_text(margin = margin(r = 1, unit = "cm")),
-        legend.title = element_blank()) 
-
-fig3b <- m_FS_plot + labs(caption = NULL) + 
-  theme(plot.tag.position = c(0.92, 0.78),
+fig3a <- m_all_plot + labs(caption = NULL, x = NULL, y = NULL) + 
+  theme(plot.tag.position = c(0.95, 0.9),
         plot.margin = margin(.5, .75, .5, .5, "cm"),
-        legend.position = "top",
-        legend.box.margin = margin(0, 1, 1, 1, "cm"),
-        legend.text = element_text(margin = margin(r = 1, unit = "cm")),
-        legend.title = element_blank())
+        legend.position = c(0.5, 0.9),
+        legend.background = element_rect(fill = alpha ("white", 0.75), color = NA),
+        legend.box = "horizontal",
+        legend.key.size = unit(1,"cm"),
+        legend.text = element_text(margin = margin(r = 1, unit = "cm"), size = 22),
+        legend.title = element_blank()) +
+  guides(shape = guide_legend(label.position = "left"),
+         linetype = guide_legend(nrow = 1))
 
+fig3a
 
+fig3b <- m_FS_plot + labs(caption = NULL, y = NULL) + 
+  theme(plot.tag.position = c(0.95, 0.9),
+        plot.margin = margin(.5, .75, .5, .5, "cm"),
+        legend.position = c(0.5, 0.9),
+        legend.background = element_rect(fill = alpha ("white", 0.75), color = NA),
+        legend.box = "horizontal",
+        legend.key.size = unit(1,"cm"),
+        legend.text = element_text(margin = margin(r = 1, unit = "cm"), size = 22),
+        legend.title = element_blank()) +
+  guides(shape = guide_legend(label.position = "left"),
+         linetype = guide_legend(nrow = 1))
+fig3b
 
-modPlots <- (m_all_plot/m_FS_plot)  + plot_layout(guides = "collect") + 
+modPlots <- (fig3a/fig3b) + 
   plot_annotation(tag_levels = "A")
 
-
 modPlots
+
+
+tmp <- modPlots + grid::grid.draw(grid::textGrob("ylab", x = 0.02, rot = 90))
+tmp
 
 ggsave("modelPlots.pdf", modPlots, device = cairo_pdf, scale = 2, width = 1920, height = 2400, units = "px",
        path = file.path(dir, figpath), dpi = 300)
