@@ -29,7 +29,8 @@ pckgs <- c("ggsignif", # adds labels to significant groups
             "mapproj", # apply map projection
          "scatterpie", # add pie charts to maps
              "ggpubr", # prepares plots to be ready for publication
-          "latex2exp", # allows use of mathematical expressions
+          "latex2exp", # allows use of LaTeX in R
+               "glue", # allows concatenation of LaTeX and R syntax
              "sjPlot", # plot_model(), tab_model()
                "ragg", # converts plots to tiff files
           "htmltools", # visualizes model outputs as html tables
@@ -192,8 +193,8 @@ map <- ggplot() +
 
 map
 
-ggsave("map.pdf", map, device = cairo_pdf, path = file.path(dir, figpath),
-       width = 2000, height = 2000, scale = 2, units = "px", dpi = 300, limitsize = F)
+# ggsave("map.pdf", map, device = cairo_pdf, path = file.path(dir, figpath),
+#        width = 2000, height = 2000, scale = 2, units = "px", dpi = 300, limitsize = F)
 
 
 
@@ -273,14 +274,18 @@ m2b_predict <- ggpredict(model_2b, terms = "scientific") %>%
                susceptibility = as.factor(susceptibility))
 
 
-m2b_plot_lbl <- mtext(substitute(paste(hat(x)," = ",e),list(e = m2b_predict$expectedAbun)))
+# m2b_plot_lbl <- mtext(substitute(paste(hat(x)," = ",e),list(e = m2b_predict$expectedAbun)))
+xhat <- latex2exp::TeX(r"($\hat{X}_{\textit{a}} =)", output = "expression") ## LaTeX formula: $\hat{X}_{\textit{a}} =
+plot(xhat)
 
+
+## layer geom_richtext with variable over geom_richtext with LaTeX? 
 m2b_plot <- ggplot(m2b_predict, aes(scientific, sppAbun, colour = susceptibility)) +
   geom_point(size = 3) +
   geom_errorbar(aes(ymin = conf.low, ymax = conf.high), width = 0.5) +
-  geom_richtext(aes(y = (conf.high + 0.25), label = paste0("*E*<sub>(*abun*)</sub>= ", expectedAbun)), # predicted abundance provided by the model
-                vjust = 0.5, hjust = 0,  label.size = NA, fill = NA, 
-                size = 6, fontface = "bold", alpha = 0.75, show.legend = F) +
+  # geom_richtext(aes(y = (conf.high + 0.25), label = TeX(paste0(r"($\hat{X}_{\textit{a}} =)", expectedAbun))), # predicted abundance provided by the model
+  #               vjust = 0.5, hjust = 0,  label.size = NA, fill = NA, 
+  #               size = 6, fontface = "bold", alpha = 0.75, show.legend = F) +
   coord_flip(clip = "off") +
   ylab("Abundance") +
   xlab("Species") + 
@@ -294,6 +299,8 @@ m2b_plot <- ggplot(m2b_predict, aes(scientific, sppAbun, colour = susceptibility
   scale_x_discrete(expand = expansion(mult = c(0, 0.01), add = c(1, 0.25))) +
   ak_theme + theme(axis.text.y = element_text(face = "italic"),
                    legend.title = element_blank()) 
+
+
 
 m2b_plot
 
@@ -329,7 +336,7 @@ m2c_predict <- merge(m2c_predict, m2c_rug)
 m2c_plot <- ggplot(m2c_predict, aes(susceptibility, predicted, color = susceptibility)) +
   geom_point(size = 5) +
   geom_errorbar(aes(ymin = conf.low, ymax = conf.high), width = 0.2, linewidth = 1) +
-  geom_richtext(aes(y = (conf.high + 1), label = paste0("n<sub>(*obs*)</sub>= ", n)), 
+  geom_richtext(aes(y = (conf.high + 1), label = paste0("n<span style = 'font-size:15pt'><sub>*obs*</sub> </span>= ", n)), 
                 alpha = 0.75, size = 8, label.size = NA, fill = NA, fontface = "bold", show.legend = F) +
   annotate("text", x = 3, y = 6.75, label = "***", size = 10, fontface = "bold", 
            colour = "#b30000") +
