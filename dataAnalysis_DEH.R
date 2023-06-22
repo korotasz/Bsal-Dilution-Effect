@@ -275,17 +275,30 @@ m2b_predict <- ggpredict(model_2b, terms = "scientific") %>%
 
 
 # m2b_plot_lbl <- mtext(substitute(paste(hat(x)," = ",e),list(e = m2b_predict$expectedAbun)))
-xhat <- latex2exp::TeX(r"($\hat{X}_{\textit{a}} =)", output = "expression") ## LaTeX formula: $\hat{X}_{\textit{a}} =
+eA <- as.list(m2b_predict$expectedAbun)
+
+test <- glue::glue("$\\hat{X}_{\\textit{a}}}=", .open = "{{")
+xhat <- latex2exp::TeX(test)
+
+
+# xhat <- TeX(r"($\hat{X}_{\textit{a}} =)") ## LaTeX formula: $\hat{X}_{\textit{a}} =
 plot(xhat)
 
+getLatexLabels <- function(item)
+{
+  output <- TeX(glue::glue("$\\hat{X}_{\\textit{a}}}={{item}", .open = "{{"))
+  return (output)
+}
+
+  
 
 ## layer geom_richtext with variable over geom_richtext with LaTeX? 
 m2b_plot <- ggplot(m2b_predict, aes(scientific, sppAbun, colour = susceptibility)) +
   geom_point(size = 3) +
   geom_errorbar(aes(ymin = conf.low, ymax = conf.high), width = 0.5) +
-  # geom_richtext(aes(y = (conf.high + 0.25), label = TeX(paste0(r"($\hat{X}_{\textit{a}} =)", expectedAbun))), # predicted abundance provided by the model
-  #               vjust = 0.5, hjust = 0,  label.size = NA, fill = NA, 
-  #               size = 6, fontface = "bold", alpha = 0.75, show.legend = F) +
+   geom_richtext(aes(y = (conf.high + 0.25), label=), # predicted abundance provided by the model
+                 vjust = 0.5, hjust = 0,  label.size = NA, fill = NA,
+                 size = 6, fontface = "bold", alpha = 0.75, show.legend = F) +
   coord_flip(clip = "off") +
   ylab("Abundance") +
   xlab("Species") + 
