@@ -125,12 +125,12 @@ nicelabs <- c(`(Intercept)` = "Intercept",
 ## Function to populate dummy columns with uniform labels in ggpredict dataframe
 create_dummy_col <- function(df){
   values <- c("Low", "Med", "High")
-  keys <-  unique(df[,6])
+  keys <-  unique(df[,8])
   index <- setNames(as.list(values), keys)
   
-  # df$dummy <- dplyr::recode(as.list(df[,6]), !!!index)
+  df$dummy <- dplyr::recode(as.list(df[,8]), !!!index)
   
-  df$dummy <- dplyr::mutate(df = as.factor(dplyr::recode(df[,6], !!!index)))
+  # df$dummy <- dplyr::mutate(df = as.factor(dplyr::recode(df[,6], !!!index)))
   
   return(df)
 }
@@ -215,8 +215,7 @@ prev <- d %>%
 prev_plot <- ggplot(prev, aes(scientific, sapply(Bsal_prev, FUN = function(x) ifelse(x == 0, 0.1, x)), 
                               fill = susceptibility, label = paste(sprintf(Bsal_prev, fmt = '%#.1f'), "%"))) +
   geom_col(position = "identity") +
-  geom_text(aes(colour = susceptibility), nudge_y = 4, size = 6,
-            fontface = "bold") +
+  geom_text(aes(colour = susceptibility), nudge_y = 4, size = 6, fontface = "bold", alpha = 0.75) +
   coord_flip(clip = "off") +
   ylab("Disease prevalence (%)") + 
   xlab("Species") + 
@@ -231,13 +230,12 @@ prev_plot <- ggplot(prev, aes(scientific, sapply(Bsal_prev, FUN = function(x) if
   scale_x_discrete(expand = expansion(mult = c(0, 0.01), add = c(1, 0.25))) +
   scale_y_continuous(labels = scales::label_percent(scale = 1, suffix = "%"), 
                      breaks = seq(0, 40, 10), limit = c(0, 43)) +
-  ak_theme #+ theme(axis.text.y = element_text(face = "italic"),
-                 #  legend.title = element_blank()) 
+  ak_theme 
 
 prev_plot 
 
-# ggsave("prev_plot.pdf", prev_plot, device = cairo_pdf, path = file.path(dir, figpath),
-#        width = 2000, height = 2000, scale = 2, units = "px", dpi = 300, limitsize = F)
+ggsave("prev_plot.pdf", prev_plot, device = cairo_pdf, path = file.path(dir, figpath),
+        width = 2300, height = 2000, scale = 1.5, units = "px", dpi = 300, limitsize = F)
 
 
 
@@ -274,31 +272,35 @@ m2b_predict <- ggpredict(model_2b, terms = "scientific") %>%
                susceptibility = as.factor(susceptibility))
 
 
-# m2b_plot_lbl <- mtext(substitute(paste(hat(x)," = ",e),list(e = m2b_predict$expectedAbun)))
-eA <- as.list(m2b_predict$expectedAbun)
-
-test <- glue::glue("$\\hat{X}_{\\textit{a}}}=", .open = "{{")
-xhat <- latex2exp::TeX(test)
+# xhat <- TeX(r"($\hat{X}_{\textit{a}} =)") ## LaTeX formula: $\hat{X}_{\textit{a}} = ## THIS ALSO WORKS, BUT WILL TRY USING LATEX EXP BELOW
+TeXlabl <- glue::glue("$\\textbf{\\hat{X}_{\\textit{a}}}}}=", .open = "{{") # THIS WORKS
+xhat <- latex2exp::TeX(TeXlabl, output = "expression")
 
 
-# xhat <- TeX(r"($\hat{X}_{\textit{a}} =)") ## LaTeX formula: $\hat{X}_{\textit{a}} =
-plot(xhat)
+# Resistant
+df1 <- m2b_predict %>%
+  filter(susceptibility == "1")
 
-getLatexLabels <- function(item)
-{
-  output <- TeX(glue::glue("$\\hat{X}_{\\textit{a}}}={{item}", .open = "{{"))
-  return (output)
-}
+# Tolerant
+df2 <- m2b_predict %>% 
+  filter(susceptibility == "2") 
 
-  
+# Susceptible
+df3 <- m2b_predict %>% 
+  filter(susceptibility == "3") 
 
-## layer geom_richtext with variable over geom_richtext with LaTeX? 
-m2b_plot <- ggplot(m2b_predict, aes(scientific, sppAbun, colour = susceptibility)) +
+m2b_plot <- ggplot(m2b_predict, aes(scientific, sppAbun, colour = susceptibility,
+                                    label = expectedAbun)) +
   geom_point(size = 3) +
   geom_errorbar(aes(ymin = conf.low, ymax = conf.high), width = 0.5) +
-   geom_richtext(aes(y = (conf.high + 0.25), label=), # predicted abundance provided by the model
-                 vjust = 0.5, hjust = 0,  label.size = NA, fill = NA,
-                 size = 6, fontface = "bold", alpha = 0.75, show.legend = F) +
+  geom_text(aes(colour = susceptibility, x = (as.numeric(scientific)+0.05), y = conf.high + 3.5), 
+            size = 6, fontface = "bold", alpha = 0.75) +
+  annotate(geom = "text", x = (as.numeric(df1$scientific) + 0.1), y = (df1$conf.high + 2),
+           label = paste(xhat), parse = TRUE, size = 6, color = "#548078", alpha = 0.75) +
+  annotate(geom = "text", x = (as.numeric(df2$scientific) + 0.1), y = (df2$conf.high + 2),
+           label = paste(xhat), parse = TRUE, size = 6, color = "#E3A630", alpha = 0.75) +
+  annotate(geom = "text", x = (as.numeric(df3$scientific) + 0.1), y = (df3$conf.high + 2),
+           label = paste(xhat), parse = TRUE, size = 6, color = "#b30000", alpha = 0.75) +
   coord_flip(clip = "off") +
   ylab("Abundance") +
   xlab("Species") + 
@@ -314,12 +316,10 @@ m2b_plot <- ggplot(m2b_predict, aes(scientific, sppAbun, colour = susceptibility
                    legend.title = element_blank()) 
 
 
-
 m2b_plot
 
-
-# ggsave("abundance_plot.pdf", m2b_plot, device = cairo_pdf, path = file.path(dir, figpath),
-#         width = 2200, height = 1400, scale = 2, units = "px", dpi = 300, limitsize = F)
+ggsave("abundance_plot.pdf", m2b_plot, device = cairo_pdf, path = file.path(dir, figpath),
+         width = 2200, height = 1400, scale = 2, units = "px", dpi = 300, limitsize = F)
 
 
 
@@ -330,6 +330,7 @@ model_2c <- glmmTMB(logsppAbun ~ susceptibility + (1|Site),
                                         optArgs = list(method = "BFGS")))
 summary(model_2c)
 Anova(model_2c)
+
 
 m2c_predict <- ggpredict(model_2c, terms = c("susceptibility")) %>%
   dplyr::rename("susceptibility" = "x",
@@ -353,6 +354,7 @@ m2c_plot <- ggplot(m2c_predict, aes(susceptibility, predicted, color = susceptib
                 alpha = 0.75, size = 8, label.size = NA, fill = NA, fontface = "bold", show.legend = F) +
   annotate("text", x = 3, y = 6.75, label = "***", size = 10, fontface = "bold", 
            colour = "#b30000") +
+  stat_compare_means() +
   scale_x_discrete(labels = c("Resistant", "Tolerant", "Susceptible")) +
   ylab("Species abundance") + 
   xlab("Susceptibility level") +
@@ -365,8 +367,8 @@ m2c_plot <- ggplot(m2c_predict, aes(susceptibility, predicted, color = susceptib
 
 m2c_plot
 
-# ggsave("susceptibility_plot.pdf", m2c_plot, device = cairo_pdf, path = file.path(dir, figpath),
-#         width = 2200, height = 1300, scale = 2, units = "px", dpi = 300, limitsize = F)
+ggsave("susceptibility_plot.pdf", m2c_plot, device = cairo_pdf, path = file.path(dir, figpath),
+         width = 2200, height = 1300, scale = 2, units = "px", dpi = 300, limitsize = F)
 
 
 ## Create guide to force a common legend
@@ -418,7 +420,7 @@ fig2combined <- ((fig2a | fig2b)/fig2c) + plot_layout(guides = "collect", height
 fig2combined
 
 ggsave("fig2_combined.pdf", fig2combined, device = cairo_pdf, path = file.path(dir, figpath),
-       width = 2600, height = 2600, scale = 2, units = "px", dpi = 300, limitsize = F)
+       width = 2800, height = 2600, scale = 2, units = "px", dpi = 300, limitsize = F)
 
 ## Code to see how many sites each species are found at in each country
 # d %>%
@@ -495,24 +497,6 @@ m_all_predict <- ggpredict(m_all,  terms = c("richness", "logsiteAbun")) %>%
                logsiteAbun = as.numeric(as.character(logsiteAbun)),
                # Convert scaled prediction to original data scale:
                siteAbun = as.factor(round(exp(as.numeric(logsiteAbun)), 0)))
-
-# Create dummy column for site abundance labels
-create_dummy_col <- function(df){
-  values <- c("Low", "Med", "High")
-  keys <-  unique(df[,6])
-  index <- setNames(as.list(values), keys)
-  
-  df$dummy <- dplyr::recode(as.list(df[,6]), !!!index)
-  
-  # df$dummy <- plyr::mutate(df = dplyr::recode(df[,6], !!!index)))
-  
-  return(df)
-}
-
-
-m_all_predict <- create_dummy_col(m_all_predict)
-
-
 
 
 m_all_plot <- ggplot(m_all_predict, aes(x = richness, y = predicted, 
