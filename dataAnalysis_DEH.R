@@ -123,17 +123,18 @@ nicelabs <- c(`(Intercept)` = "Intercept",
 
 
 ## Function to populate dummy columns with uniform labels in ggpredict dataframe
-create_dummy_col <- function(df){
-  values <- c("Low", "Med", "High")
-  keys <-  unique(df[,8])
-  index <- setNames(as.list(values), keys)
-  
-  df$dummy <- dplyr::recode(as.list(df[,8]), !!!index)
-  
-  # df$dummy <- dplyr::mutate(df = as.factor(dplyr::recode(df[,6], !!!index)))
-  
-  return(df)
-}
+## NEED TO FIX THIS
+# create_dummy_col <- function(df){
+#   values <- c("Low", "Med", "High")
+#   keys <-  unique(df[,8])
+#   index <- setNames(as.list(values), keys)
+#   
+#   df$dummy <- dplyr::recode(as.list(df[,8]), !!!index)
+#   
+#   # df$dummy <- dplyr::mutate(df = as.factor(dplyr::recode(df[,6], !!!index)))
+#   
+#   return(df)
+# }
 
 
 #### 1) Descriptive Figures ####################################################
@@ -234,8 +235,8 @@ prev_plot <- ggplot(prev, aes(scientific, sapply(Bsal_prev, FUN = function(x) if
 
 prev_plot 
 
-ggsave("prev_plot.pdf", prev_plot, device = cairo_pdf, path = file.path(dir, figpath),
-        width = 2300, height = 2000, scale = 1.5, units = "px", dpi = 300, limitsize = F)
+# ggsave("prev_plot.pdf", prev_plot, device = cairo_pdf, path = file.path(dir, figpath),
+#         width = 2300, height = 2000, scale = 1.5, units = "px", dpi = 300, limitsize = F)
 
 
 
@@ -249,6 +250,7 @@ model_2b <- glmmTMB(logsppAbun ~ scientific + (1|Site),
 summary(model_2b)
 Anova(model_2b)
 
+glht(model_2b)
 
 textcol <- d %>%
   dplyr::select(scientific, susceptibility, Site) %>% # subset relevant data
@@ -318,8 +320,8 @@ m2b_plot <- ggplot(m2b_predict, aes(scientific, sppAbun, colour = susceptibility
 
 m2b_plot
 
-ggsave("abundance_plot.pdf", m2b_plot, device = cairo_pdf, path = file.path(dir, figpath),
-         width = 2200, height = 1400, scale = 2, units = "px", dpi = 300, limitsize = F)
+# ggsave("abundance_plot.pdf", m2b_plot, device = cairo_pdf, path = file.path(dir, figpath),
+#          width = 2200, height = 1400, scale = 2, units = "px", dpi = 300, limitsize = F)
 
 
 
@@ -367,8 +369,8 @@ m2c_plot <- ggplot(m2c_predict, aes(susceptibility, predicted, color = susceptib
 
 m2c_plot
 
-ggsave("susceptibility_plot.pdf", m2c_plot, device = cairo_pdf, path = file.path(dir, figpath),
-         width = 2200, height = 1300, scale = 2, units = "px", dpi = 300, limitsize = F)
+# ggsave("susceptibility_plot.pdf", m2c_plot, device = cairo_pdf, path = file.path(dir, figpath),
+#          width = 2200, height = 1300, scale = 2, units = "px", dpi = 300, limitsize = F)
 
 
 ## Create guide to force a common legend
@@ -419,15 +421,15 @@ fig2combined <- ((fig2a | fig2b)/fig2c) + plot_layout(guides = "collect", height
                                                           legend.title = element_blank())
 fig2combined
 
-ggsave("fig2_combined.pdf", fig2combined, device = cairo_pdf, path = file.path(dir, figpath),
-       width = 2800, height = 2600, scale = 2, units = "px", dpi = 300, limitsize = F)
+# ggsave("fig2_combined.pdf", fig2combined, device = cairo_pdf, path = file.path(dir, figpath),
+#        width = 2800, height = 2600, scale = 2, units = "px", dpi = 300, limitsize = F)
 
 ## Code to see how many sites each species are found at in each country
-# d %>%
-#   dplyr::select(country, species, Site) %>%
-#   filter(country == "Spain" & species == "marmoratus") %>%
-#   unique() #%>%
-#   nrow()
+tmp <- d %>%
+  dplyr::select(country, Site, prev_above_0, materialSampleID) %>%
+  filter(prev_above_0 == 1) %>%
+  unique()
+  
 
 
 #### 3. Cbind models testing the Dilution Effect Hypothesis ####################
@@ -437,6 +439,7 @@ ggsave("fig2_combined.pdf", fig2combined, device = cairo_pdf, path = file.path(d
 dcbindScaled <- dcbind %>% 
   tidyr::drop_na(., any_of(c(21:36))) %>%
   filter(country == "Germany" | country == "Spain")
+
 
 # Scale relevant vars
 dcbindScaled <- dcbindScaled %>%
@@ -465,7 +468,7 @@ Anova(m_all)
 # 
 # summary(m_all2)
 # Anova(m_all2)
-
+# 
 # anova(m_all, m_all2) # models are virtually the same, going with the simpler model to be parsimonious.
 
 
@@ -522,9 +525,9 @@ m_all_plot <- ggplot(m_all_predict, aes(x = richness, y = predicted,
   guides(colour = guide_legend("Site-level abundance"))
 
 m_all_plot
-ggsave("m_all_plot.tif", m_all_plot, device = "tiff", scale = 2, 
-       width = 1920, height = 1080, units = "px", 
-       path = file.path(dir, figpath), dpi = 300)
+# ggsave("m_all_plot.tif", m_all_plot, device = "tiff", scale = 2, 
+#        width = 1920, height = 1080, units = "px", 
+#        path = file.path(dir, figpath), dpi = 300)
 
 
 ##      3b. Cbind model for fire salamanders only ------------------------------
@@ -611,8 +614,8 @@ m_FS_plot <- ggplot(m_FS_predict, aes(x = richness , y = predicted, colour = sit
 
 
 m_FS_plot
-ggsave("m_FS_plot.pdf", m_FS_plot, device = cairo_pdf, scale = 2, width = 1920, height = 1080, units = "px",
-       path = file.path(dir, figpath), dpi = 300)
+# ggsave("m_FS_plot.pdf", m_FS_plot, device = cairo_pdf, scale = 2, width = 1920, height = 1080, units = "px",
+#        path = file.path(dir, figpath), dpi = 300)
 
 
 ## Create combined plot for manuscript
