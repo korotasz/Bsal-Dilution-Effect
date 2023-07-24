@@ -39,6 +39,7 @@ pckgs <- c("ggsignif", # adds labels to significant groups
           "tidyverse", # data wrangling/manipulation
             "glmmTMB", # glmmTMB()
             "emmeans", # lsmeans()
+           "multcomp", # glht()
                 "car", # Anova()
              "DHARMa", # simulateResiduals(), testZeroInflation(), testDispersion() 
               "MuMIn", # model.sel()
