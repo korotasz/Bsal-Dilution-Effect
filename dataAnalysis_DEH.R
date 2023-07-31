@@ -5,8 +5,8 @@ require(pacman)
 require(rstudioapi) # Set working directory to current file location
 require(extrafontdb)
 require(extrafont) 
-extrafont::loadfonts(device = "all", quiet = T) # plot fonts 
-
+extrafont::loadfonts(device = "win", quiet = T) # plot fonts 
+#font_install('fontcm')
 
 #### Visualization Packages ####
 pckgs <- c("ggsignif", # adds labels to significant groups
@@ -144,7 +144,8 @@ obs <- d %>%
   dplyr::select(country, ADM0, decimalLatitude, decimalLongitude, diseaseTested,
                 BsalDetected, BdDetected, individualCount) %>%
   plyr::mutate(BsalDetected = as.factor(dplyr::recode(BsalDetected,
-                                                      "1" = "Bsal positive", "0" = "Bsal negative"))) %>%
+                                                      "1" = "Bsal positive", 
+                                                      "0" = "Bsal negative"))) %>%
   arrange(BsalDetected)
 
 # Summarise number of observations from each country
@@ -194,6 +195,76 @@ map <- ggplot() +
   guides(fill = guide_legend(override.aes = list(alpha = 1)))
 
 map
+
+## UK map
+uk_map <- ggplot() +
+  geom_map(data = worldmap, map = worldmap,
+           aes(x = long, y = lat, map_id = region),
+           col = "white", fill = "#B2BEB5") +
+  scale_x_continuous(limits = c(-7, 2),
+                     breaks = seq(-8, 4, 2)) +
+  scale_y_continuous(limits = c(50, 60),
+                     breaks = seq(50, 60, 2)) +
+  geom_point(data = obs, aes(x = decimalLongitude, y = decimalLatitude, fill = BsalDetected, shape = BsalDetected),
+             alpha = 0.3, size = 4, stroke = 1, color = "gray30") +
+  scale_fill_manual(values = c("gray40", "#C23113")) +
+  scale_shape_manual(values = c(21, 24)) +
+  coord_fixed() +
+  labs(x = "Longitude", y = "Latitude") +
+  ak_theme + theme(legend.title = element_blank(),
+                   legend.position = "top",
+                   legend.spacing = unit(1, "cm"), # Space legend labels
+                   legend.key.size = unit(1,"cm"),
+                   legend.text.align = 0,
+                   legend.text = element_text(size = 28, hjust = 0),
+                   axis.text.x = element_text(size = 28),
+                   axis.title.x = element_text(size = 42, hjust = 0.5, 
+                                               margin = margin(t = 10, r = 0, b = 0, l = 0), 
+                                               face = "plain"),
+                   axis.text.y = element_text(size = 28, face = "plain"),
+                   axis.title.y = element_text(size = 42, hjust = 0.5, 
+                                               margin = margin(t = 0, r = 15, b = 0, l = 5), 
+                                               face = "plain"),) +
+  guides(fill = guide_legend(override.aes = list(alpha = 1)))
+
+uk_map
+
+## Germany map
+deu_map <- ggplot() +
+  geom_map(data = worldmap, map = worldmap,
+           aes(x = long, y = lat, map_id = region),
+           col = "white", fill = "#B2BEB5") +
+  scale_x_continuous(limits = c(5, 13),
+                     breaks = seq(6, 12, 2)) +
+  scale_y_continuous(limits = c(48, 53),
+                     breaks = seq(48, 54, 2)) +
+  geom_point(data = obs, aes(x = decimalLongitude, y = decimalLatitude, fill = BsalDetected, shape = BsalDetected),
+             alpha = 0.3, size = 4, stroke = 1, color = "gray30") +
+  scale_fill_manual(values = c("gray40", "#C23113")) +
+  scale_shape_manual(values = c(21, 24)) +
+  coord_fixed() +
+  labs(x = "Longitude", y = "Latitude") +
+  ak_theme + theme(legend.title = element_blank(),
+                   legend.position = "top",
+                   legend.spacing = unit(1, "cm"), # Space legend labels
+                   legend.key.size = unit(1,"cm"),
+                   legend.text.align = 0,
+                   legend.text = element_text(size = 28, hjust = 0),
+                   axis.text.x = element_text(size = 28),
+                   axis.title.x = element_text(size = 42, hjust = 0.5, 
+                                               margin = margin(t = 10, r = 0, b = 0, l = 0), 
+                                               face = "plain"),
+                   axis.text.y = element_text(size = 28, face = "plain"),
+                   axis.title.y = element_text(size = 42, hjust = 0.5, 
+                                               margin = margin(t = 0, r = 15, b = 0, l = 5), 
+                                               face = "plain"),) +
+  guides(fill = guide_legend(override.aes = list(alpha = 1)))
+
+deu_map
+
+## Spain map
+
+## Switzerland map
 
 # ggsave("map.pdf", map, device = cairo_pdf, path = file.path(dir, figpath),
 #        width = 2000, height = 2000, scale = 2, units = "px", dpi = 300, limitsize = F)
