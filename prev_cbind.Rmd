@@ -1,0 +1,446 @@
+---
+title: "prevalence cbind model"
+author: "Alexis Korotasz"
+date: "`r Sys.Date()`"
+output:
+  rmdformats::downcute:
+    code_folding: hide
+    toc_float: true # maintains toc on side of document
+    toc_depth: 3 # up to 3 depths of headings (#, ##, and ###)
+    number_sections: true
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(message = FALSE, warning = FALSE, echo = TRUE)
+#remotes::install_version("Rttf2pt1", version = "1.3.8") # install this version, latest ver. not compatible
+#remotes::install_github("gorkang/html2latex") # convert sjPlot::tab_model() hmtl table to tex and pdf in .Rmd docs
+#extrafont::font_import("C:/Windows/Fonts") # load fonts before ggplot2; only need to do this once
+require(pacman)
+require(rstudioapi) # Set working directory to current file location
+require(extrafontdb)
+require(extrafont) 
+extrafont::loadfonts(device = "all", quiet = T) # plot fonts 
+
+
+#### Visualization Packages ####
+pckgs <- c("ggsignif", # adds labels to significant groups
+             "ggtext", # for text type/arrangements w/ ggplot2
+           "Rttf2pt1", # to use with the extrafont package
+           "ggthemes", # contains 'scales', 'themes', and 'geoms' packages
+          "grDevices", # saves high quality svg, pdf, and ps files
+           "graphics", # dependency of grDevices
+            "cowplot", # arranging plots/figs
+          "gridExtra", # arranging plots/figs
+          "patchwork", # arranging plots/figs
+         "hrbrthemes", # plot colors
+       "RColorBrewer", # plot colors
+            "viridis", # plot colors
+             "scales", # plot customization
+           "eurostat", # obtain spatial data from europe
+            "geodata", # obtain geographic data (world map)
+              "ggmap", # creates maps
+          "ggspatial", # north arrow and scale bar
+            "mapproj", # apply map projection
+         "scatterpie", # add pie charts to maps
+             "ggpubr", # prepares plots to be ready for publication
+          "latex2exp", # allows use of LaTeX in R
+               "glue", # allows concatenation of LaTeX and R syntax
+             "sjPlot", # plot_model(), tab_model()
+               "ragg", # converts plots to tiff files
+          "htmltools", # visualizes model outputs as html tables
+            "webshot", # converts html files to png
+             "magick", # image_read() -- needed for cowplot::draw_image
+#### Analysis Specific Packages ####
+          "tidyverse", # data wrangling/manipulation
+            "glmmTMB", # glmmTMB()
+            "emmeans", # lsmeans()
+                "car", # Anova()
+             "DHARMa", # simulateResiduals(), testZeroInflation(), testDispersion() 
+              "MuMIn", # model.sel()
+          "ggeffects", # ggpredict()
+               "epiR", # calculate prevalence & CIs
+             "sjmisc"  # data and variable transformation
+)
+
+## Load packages
+pacman::p_load(pckgs, update = FALSE, character.only = T)
+
+
+## Set working directory
+knitr::opts_knit$set(root.dir = dirname(rstudioapi::getActiveDocumentContext()$path))
+
+## Set plot theme 
+ak_theme <- theme_ipsum() +
+  theme(axis.text.x = element_text(size = 26),
+        axis.title.x = element_text(size = 34, hjust = 0.5, 
+                                    margin = margin(t = 10, r = 0, b = 0, l = 0), 
+                                    face = "plain"),
+        axis.text.y = element_text(size = 26, face = "italic"),
+        axis.title.y = element_text(size = 34, hjust = 0.5, 
+                                    margin = margin(t = 0, r = 15, b = 0, l = 5), 
+                                    face = "plain"),
+        axis.ticks.length = unit(.25, "cm"),
+        axis.ticks = element_blank(),
+        plot.tag = element_text(size = 36, face = "bold"),
+        plot.title = element_text(size = 42, hjust = 0.5, face = "plain"),
+        plot.subtitle = element_markdown(size = 12, face = "plain"),
+        plot.margin = margin(1, 1, 1.5, 1.2, "cm"), 
+        plot.caption = element_markdown(hjust = 0, size = 14, face = "plain"),
+        plot.caption.position = "plot",
+        legend.position = "top", 
+        legend.key.size = unit(2,"cm"), 
+        legend.text.align = 1,
+        legend.text = element_text(size = 28, hjust = -1),
+        legend.title = element_text(size = 28, face = "bold"), 
+        panel.border = element_blank(),
+        panel.background = element_blank(),
+        panel.spacing.y = unit(1.5,"cm"),
+        strip.text = element_text(size = 14, face = "bold", hjust = 0.5),
+        axis.line = element_line(color = 'black'))
+
+
+#### Load csv files ####
+d <- read.csv("bsalData_clean.csv", header = T, encoding = "UTF-8")
+dcbind <- read.csv("bsalData_cbind.csv", header = T, encoding = "UTF-8")
+
+
+
+# log transform vars
+d <- d %>%
+  mutate(logsppAbun = log(sppAbun),
+         logsiteAbun = log(siteAbun),
+         scientific = as.factor(scientific),
+         susceptibility = as.factor(susceptibility)) %>%
+  relocate(c(logsppAbun, logsiteAbun), .after = sppAbun) 
+
+
+dcbind <- dcbind %>%
+  mutate(logsppAbun = log(sppAbun),
+         logsiteAbun = log(siteAbun),
+         scientific = as.factor(scientific),
+         susceptibility = as.factor(susceptibility)) %>%
+  relocate(c(logsppAbun, logsiteAbun), .after = sppAbun) 
+
+# Drop rows with NA vals in weather data
+dcbindScaled <- dcbind %>% 
+  tidyr::drop_na(., any_of(c(21:36)))
+
+# Scale relevant vars
+dcbindScaled <- dcbindScaled %>%
+  mutate_at(c("temp_d", "temp_m", "temp_m_t1", "temp_m_t2",
+              "sMoist_d", "sMoist_m", "sMoist_m_t1", "sMoist_m_t2",
+              "precip_m", "precip_m_t1", "precip_m_t2",
+              "bio1_wc", "bio12_wc", "tavg_wc", "prec_wc"), 
+            ~(scale(., center = T, scale = T %>% as.numeric)))
+
+
+## Vector of cleaner labels for model output table
+nicelabs <- c(`(Intercept)` = "Intercept",
+              richness = "Richness",
+              logsiteAbun = "log(Site abundance)",
+              "richness:logsiteAbun" = "Richness:log(Site abundance)",
+              temp_d = "Temp (t0)", temp_m_t1 = "Temp (t-30)", temp_m_t2 = "Temp (t-60)",
+              sMoist_d = "Soil moisture (t0)", sMoist_m_t1 = "Soil moisture (t-30)",
+              sMoist_m_t2 = "Soil moisture (t-60)",
+              "temp_d:sMoist_d" = "Temp (t0):Soil moisture (t0)",
+              "temp_m_t1:sMoist_m_t1" = "Temp (t-30):Soil moisture (t-30)",
+              "temp_m_t2:sMoist_m_t2" = "Temp (t-60):Soil moisture (t-60)")
+
+```
+
+
+# Prevalence by species (all sites combined) -- for reference
+
+```{r descriptive_plot, fig.width = 16, fig.height = 8, fig.fullwidth = TRUE, fig.fullheight = TRUE, echo = FALSE}
+prev <- d %>%
+  group_by(scientific) %>%
+  mutate(ncas_Bsal = sum(BsalDetected == 1), # number of pos. Bsal cases
+         npop = sum(individualCount)) %>% # pop size (total # individuals/spp.)
+  drop_na(date) %>%
+  ungroup() %>%
+  mutate(Bsal_prev = (ncas_Bsal/npop)*100) %>% # prevalence as a percentage
+  dplyr::select(scientific, susceptibility, ncas_Bsal, Bsal_prev, npop) %>%
+  unique()
+
+
+# Descriptive plot showing disease prevalence values per species
+prev_plot <- ggplot(prev, aes(scientific, sapply(Bsal_prev, FUN = function(x) ifelse(x == 0, 0.1, x)), 
+                              fill = susceptibility, label = paste(sprintf(Bsal_prev, fmt = '%#.1f'), "%"))) +
+  geom_col(position = "identity") +
+  geom_text(aes(colour = susceptibility), nudge_y = 2, size = 6, fontface = "bold", alpha = 0.75) +
+  coord_flip(clip = "off") +
+  ylab("Disease prevalence (%)") + 
+  xlab("Species") + 
+  scale_colour_manual(name = "Susceptibility",
+                    values = c("#548078", "#E3A630", "#b30000"),
+                    labels = c("Resistant", "Tolerant", "Susceptible"),
+                    guide = "none") +
+  scale_fill_manual(name = "Susceptibility",
+                    values = c("#548078", "#E3A630", "#b30000"),
+                    labels = c("Resistant", "Tolerant", "Susceptible"),
+                    guide = "none") +
+  scale_x_discrete(expand = expansion(mult = c(0, 0.01), add = c(1, 0.25))) +
+  scale_y_continuous(labels = scales::label_percent(scale = 1, suffix = "%"), 
+                     breaks = seq(0, 40, 10), limit = c(0, 43)) +
+  ak_theme 
+
+prev_plot 
+
+```
+
+# Prevalence Cbind model
+```{r prev_cbind_model, eval = TRUE}
+model_2a <- glmmTMB(cbind(nPos_all, nNeg_all) ~ scientific,
+                    data = dcbindScaled, family = "binomial", na.action = "na.fail",
+                    control = glmmTMBControl(optimizer = optim,
+                                             optArgs = list(method = "BFGS")))
+
+summary(model_2a)
+Anova(model_2a)
+```
+I am pretty sure we ran this same model (or at minimum, something very similar) forever ago, sometime last fall. I could not add 'Site' as a random effect (as we did with the 'Abundance ~ scientific' model) because it gave the model convergence issues. 
+
+
+## Prevalence cbind model plot
+```{r prev_cbind_plot, fig.width = 16, fig.height = 8, fig.fullwidth = TRUE, fig.fullheight = TRUE, echo = FALSE}
+textcol <- d %>%
+  dplyr::select(scientific, susceptibility, Site) %>% # subset relevant data
+  mutate(Site = as.factor(Site)) %>%
+  group_by(scientific) %>%
+  mutate(No.Sites = length(unique(Site))) %>%
+  ungroup() %>%
+  dplyr::select(!Site) %>%
+  unique()
+
+
+m2a_predict <- ggpredict(model_2a, terms = "scientific") %>%
+  dplyr::rename("scientific" = "x",
+                "Bsal_prev" = "predicted") %>%
+  left_join(., textcol, by = "scientific") %>%
+  plyr::mutate(Bsal_prev = (Bsal_prev*100),
+               conf.low = (conf.low*100),
+               conf.high = (conf.high*100),
+               susceptibility = as.factor(susceptibility))
+
+
+# xhat <- TeX(r"($\hat{X}_{\textit{a}} =)") ## LaTeX formula: $\hat{X}_{\textit{a}} = ## THIS ALSO WORKS, BUT WILL TRY USING LATEX EXP BELOW
+TeXlabl <- glue::glue("$\\textbf{\\hat{X}_{\\textit{p}}}}}=", .open = "{{") # THIS WORKS
+xhat <- latex2exp::TeX(TeXlabl, output = "expression")
+
+
+# Resistant
+df1 <- m2a_predict %>%
+  filter(susceptibility == "1")
+
+# Tolerant
+df2 <- m2a_predict %>% 
+  filter(susceptibility == "2") 
+
+# Susceptible
+df3 <- m2a_predict %>% 
+  filter(susceptibility == "3") 
+
+prev_cbind_plot <- ggplot(m2a_predict, aes(scientific, sapply(Bsal_prev, FUN = function(x) ifelse(x == 0, 0.1, x)), 
+                                    colour = susceptibility,
+                                    label = paste(sprintf(Bsal_prev, fmt = '%#.1f'), "%"))) +
+  geom_point(size = 3) +
+  geom_errorbar(aes(ymin = conf.low, ymax = conf.high), width = 0.5) +
+  geom_text(aes(colour = susceptibility, x = (as.numeric(scientific) + 0.05), y = conf.high + 5), 
+             size = 6, fontface = "bold", alpha = 0.75) +
+  # annotate(geom = "text", x = (as.numeric(df1$scientific) + 0.1), y = (df1$conf.high + 3),
+  #          label = paste(xhat), parse = TRUE, size = 6, color = "#548078", alpha = 0.75) +
+  # annotate(geom = "text", x = (as.numeric(df2$scientific) + 0.1), y = (df2$conf.high + 3),
+  #          label = paste(xhat), parse = TRUE, size = 6, color = "#E3A630", alpha = 0.75) +
+  # annotate(geom = "text", x = (as.numeric(df3$scientific) + 0.1), y = (df3$conf.high + 3),
+  #          label = paste(xhat), parse = TRUE, size = 6, color = "#b30000", alpha = 0.75) +
+  coord_flip(clip = "off") +
+  ylab("Disease prevalence (%)") +
+  xlab("Species") + 
+  scale_colour_manual(name = "Susceptibility",
+                      values = c("#548078", "#E3A630", "#b30000"),
+                      labels = c("Resistant", "Tolerant", "Susceptible"),
+                      guide = "none") +
+   scale_y_continuous(labels = seq(0, 100, 20),
+                      breaks = seq(0, 100, 20),
+                      limits = c(0, 110)) +
+  scale_x_discrete(expand = expansion(mult = c(0, 0.01), add = c(1, 0.25))) +
+  ak_theme + theme(axis.text.y = element_text(face = "italic"),
+                   legend.title = element_blank()) 
+
+
+prev_cbind_plot
+```
+The prevalence values on this graph closely match the actual prevalence observed in a species from our dataset, but the confidence bands are extremely wide, which is why I think we got rid of it before. The species that have CIs ranging from 0-1 are species that had no Bsal positive cases. 
+
+
+
+# Estimating prevalence + CI using 'epiR' package.
+I used epi.conf() from the epiR in a previous version of analyses I'd sent to you. If I remember correctly, I think we'd decided to take this out because the output of this function gives us the estimated prevalence per some user-defined number of individuals (as on line 255), and was not the result of a model.
+
+Here is the guide I looked at when doing this the first time, if you'd like more info: https://cran.r-project.org/web/packages/epiR/vignettes/epiR_descriptive.html
+```{r prev_epiR, eval = TRUE}
+prev_est <- d %>%
+  group_by(scientific) %>%
+  mutate(ncas_Bsal = sum(BsalDetected == 1), # number of pos. Bsal cases
+         npop = sum(individualCount)) %>% # pop size (total # individuals/spp.)
+  drop_na(date) %>%
+  ungroup() %>%
+  mutate(Bsal_prev = ncas_Bsal/npop) # prevalence as a proportion
+
+
+# Use a matrix containing number of cases (ncas) and population size (npop) to 
+#calculate the prevalence of disease in each population and its 95% confint
+tmp <- as.matrix(cbind(prev_est$ncas_Bsal, prev_est$npop))
+tmp <- epi.conf(tmp, ctype = "prevalence", method = "exact", N = 1000, 
+                design = 1, conf.level = 0.95) * 100
+tmp <- tmp %>% 
+  dplyr::rename(lowerCI = lower,
+                upperCI = upper)
+
+
+# Add back to dataframe
+prev_est <- cbind(prev_est, tmp)
+prev_est <- prev_est[sort.list(prev_est$est),]
+prev_est <- prev_est %>%
+  relocate(c(est, lowerCI, upperCI), .after = diseaseTested)
+
+
+tmp <- prev_est %>%
+  dplyr::select(Site, date, scientific, individualCount) # subset relevant data
+tmp <- aggregate(individualCount ~ scientific, tmp, sum) # aggregate by Site, date, spp. & summarise
+names(tmp)[names(tmp) == 'individualCount'] <- 'totalspp'
+
+
+prev_est <- prev_est %>% 
+  left_join(., tmp, by = "scientific") %>%
+  relocate(totalspp, .after = individualCount) %>%
+  plyr::mutate(est_prev = est,
+               susceptibility = as.factor(susceptibility)) %>%
+  dplyr::select(scientific, susceptibility, est_prev, lowerCI, upperCI, totalspp) %>%
+  unique() %>%
+  dplyr::mutate(row_id = row_number()) %>%
+   relocate(row_id, .before = scientific)
+
+```
+
+
+## Plot of the estimated prevalence + CI using the epi.conf() function
+```{r prev_epiR_plot, fig.width = 16, fig.height = 8, fig.fullwidth = TRUE, fig.fullheight = TRUE, echo = FALSE}
+# Resistant
+df1_p <- prev %>%
+  filter(susceptibility == "1")
+
+# Tolerant
+df2_p <- prev %>% 
+  filter(susceptibility == "2") 
+
+# Susceptible
+df3_p <- prev %>% 
+  filter(susceptibility == "3") 
+
+
+prev_epiR_plot <- ggplot(prev, aes(scientific, sapply(est_prev, FUN = function(x) ifelse(x == 0, 0.1, x)), 
+                                    colour = susceptibility,
+                                    label = paste(sprintf(est_prev, fmt = '%#.1f'), "%"))) +
+  geom_point(size = 3) +
+  geom_errorbar(aes(ymin = lowerCI, ymax = upperCI), width = 0.5) +
+  geom_text(aes(colour = susceptibility, x = (as.numeric(scientific) + 0.05), y = upperCI + 4),
+            size = 6, fontface = "bold", alpha = 0.75) +
+  # annotate(geom = "text", x = (as.numeric(df1_p$scientific) + 0.1), y = (df1_p$upperCI + 3),
+  #          label = paste(xhat), parse = TRUE, size = 6, color = "#548078", alpha = 0.75) +
+  # annotate(geom = "text", x = (as.numeric(df2_p$scientific) + 0.1), y = (df2_p$upperCI + 3),
+  #          label = paste(xhat), parse = TRUE, size = 6, color = "#E3A630", alpha = 0.75) +
+  # annotate(geom = "text", x = (as.numeric(df3_p$scientific) + 0.1), y = (df3_p$upperCI + 3),
+  #          label = paste(xhat), parse = TRUE, size = 6, color = "#b30000", alpha = 0.75) +
+  coord_flip(clip = "off") +
+  ylab("Disease prevalence (%)") +
+  xlab("Species") + 
+  scale_colour_manual(name = "Susceptibility",
+                      values = c("#548078", "#E3A630", "#b30000"),
+                      labels = c("Resistant", "Tolerant", "Susceptible"),
+                      guide = "none") +
+   scale_y_continuous(labels = seq(0, 60, 20),
+                       breaks = seq(0, 60, 20),
+                       limits = c(0, 71)) +
+  scale_x_discrete(expand = expansion(mult = c(0, 0.01), add = c(1, 0.25))) +
+  ak_theme + theme(axis.text.y = element_text(face = "italic"),
+                   legend.title = element_blank()) 
+
+
+prev_epiR_plot
+
+```
+The prevalence estimates are also very similar to our raw data and the cbind model output. The confidence intervals are much more narrow here, which is likely due to the calculation 'method' I specified in the model. I used the 'exact' method because of what I read in the 'Details' section of the help page, and it suited our needs better than the other methods. 
+
+---------- Also from the epiR pdf:
+"The Clopper-Pearson interval is an early and very common method for calculating binomial confidence intervals. The Clopper-Pearson interval is sometimes called an ’exact’ method because it is based on the cumulative probabilities of the binomial distribution (i.e., exactly the correct distribution rather than an approximation).
+
+The design effect is used to adjust the confidence interval around a prevalence or incidence risk estimate in the presence of clustering. The design effect is a measure of the variability between clusters and is calculated as the ratio of the variance calculated assuming a complex sample design divided by the variance calculated assuming simple random sampling."
+---------- 
+
+The main difference between the two is that the cbind model is estimating the Bsal prevalence for each species based solely on the observations we have, while the epi.conf function is using our data to estimate the Bsal prevalence per 1000 individuals. If we're going to go with either of these, I personally think the epi.conf estimate is what we should go with, because it makes more sense to report from an epidemiology
+standpoint and the epiR package was made for descriptive epidemiology. I don't think the cbind model is very meaningful as it is presently because we can't control for things like location, like we did with the abundance model. 
+
+
+
+
+```{r, eval = TRUE}
+prev <- d %>%
+  group_by(scientific) %>%
+  mutate(ncas_Bsal = sum(BsalDetected == 1), # number of pos. Bsal cases
+         npop = sum(individualCount)) %>% # pop size (total # individuals/spp.)
+  drop_na(date) %>%
+  ungroup() %>%
+  mutate(Bsal_prev = (ncas_Bsal/npop)*100) %>% # prevalence as a percentage
+  dplyr::select(scientific, susceptibility, ncas_Bsal, Bsal_prev, npop) %>%
+  unique()
+
+
+bsal_ci <- binconf(prev$ncas_Bsal, prev$npop, method = "exact", return.df = T)
+print(bsal_ci)
+
+bsal_ci <- bsal_ci %>%
+  dplyr::mutate(row_id = row_number()) %>%
+   relocate(row_id, .before = PointEst)
+
+
+prev_est <- prev_est %>% 
+  left_join(., bsal_ci, by = "row_id")
+
+prev_est <- prev_est %>%
+  plyr::mutate(PointEst = PointEst*100,
+               Lower = Lower*100,
+               Upper = Upper*100)
+
+
+prev_binconf_plot <- ggplot(prev_est, aes(scientific, sapply(PointEst, FUN = function(x) ifelse(x == 0, 0.1, x)), 
+                                    colour = susceptibility,
+                                    label = paste(sprintf(PointEst, fmt = '%#.1f'), "%"))) +
+  geom_point(size = 3) +
+  geom_errorbar(aes(ymin = Lower, ymax = Upper), width = 0.5) +
+  geom_text(aes(colour = susceptibility, x = (as.numeric(scientific) + 0.05), y = Upper + 4),
+            size = 6, fontface = "bold", alpha = 0.75) +
+  # annotate(geom = "text", x = (as.numeric(df1_p$scientific) + 0.1), y = (df1_p$upperCI + 3),
+  #          label = paste(xhat), parse = TRUE, size = 6, color = "#548078", alpha = 0.75) +
+  # annotate(geom = "text", x = (as.numeric(df2_p$scientific) + 0.1), y = (df2_p$upperCI + 3),
+  #          label = paste(xhat), parse = TRUE, size = 6, color = "#E3A630", alpha = 0.75) +
+  # annotate(geom = "text", x = (as.numeric(df3_p$scientific) + 0.1), y = (df3_p$upperCI + 3),
+  #          label = paste(xhat), parse = TRUE, size = 6, color = "#b30000", alpha = 0.75) +
+  coord_flip(clip = "off") +
+  ylab("Disease prevalence (%)") +
+  xlab("Species") + 
+  scale_colour_manual(name = "Susceptibility",
+                      values = c("#548078", "#E3A630", "#b30000"),
+                      labels = c("Resistant", "Tolerant", "Susceptible"),
+                      guide = "none") +
+   scale_y_continuous(labels = seq(0, 60, 20),
+                       breaks = seq(0, 60, 20),
+                       limits = c(0, 71)) +
+  scale_x_discrete(expand = expansion(mult = c(0, 0.01), add = c(1, 0.25))) +
+  ak_theme + theme(axis.text.y = element_text(face = "italic"),
+                   legend.title = element_blank()) 
+
+
+prev_binconf_plot
+
+```
