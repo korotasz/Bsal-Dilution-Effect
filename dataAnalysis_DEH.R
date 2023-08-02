@@ -5,8 +5,8 @@ require(pacman)
 require(rstudioapi) # Set working directory to current file location
 require(extrafontdb)
 require(extrafont) 
-extrafont::loadfonts(device = "all", quiet = T) # plot fonts 
-
+#extrafont::loadfonts(device = "win", quiet = T) # plot fonts 
+#font_install('fontcm')
 
 #### Visualization Packages ####
 pckgs <- c("ggsignif", # adds labels to significant groups
@@ -25,6 +25,7 @@ pckgs <- c("ggsignif", # adds labels to significant groups
            "eurostat", # obtain spatial data from europe
             "geodata", # obtain geographic data (world map)
               "ggmap", # creates maps
+                 "sf", # coordinate ref system
           "ggspatial", # north arrow and scale bar
             "mapproj", # apply map projection
          "scatterpie", # add pie charts to maps
@@ -40,6 +41,7 @@ pckgs <- c("ggsignif", # adds labels to significant groups
           "tidyverse", # data wrangling/manipulation
             "glmmTMB", # glmmTMB()
             "emmeans", # lsmeans()
+           "multcomp", # glht()
                 "car", # Anova()
              "DHARMa", # simulateResiduals(), testZeroInflation(), testDispersion() 
               "MuMIn", # model.sel()
@@ -71,7 +73,7 @@ ak_theme <- theme_ipsum() +
         axis.ticks.length = unit(.25, "cm"),
         axis.ticks = element_blank(),
         plot.tag = element_text(size = 36, face = "bold"),
-        plot.title = element_text(size = 42, hjust = 0.5, face = "plain"),
+        plot.title = element_text(size = 42, hjust = 0.5, face = "bold"),
         plot.subtitle = element_markdown(size = 12, face = "plain"),
         plot.margin = margin(1, 1, 1.5, 1.2, "cm"), 
         plot.caption = element_markdown(hjust = 0, size = 14, face = "plain"),
@@ -139,7 +141,11 @@ nicelabs <- c(`(Intercept)` = "Intercept",
 
 
 ## Function to populate dummy columns with uniform labels in ggpredict dataframe
+<<<<<<< HEAD
 ## NEED TO FIX!! Not working as of R v 4.3.1
+=======
+## NEED TO FIX THIS
+>>>>>>> 8724e890ab8ae2b0f73871248fb0376b036d1238
 # create_dummy_col <- function(df){
 #   values <- c("Low", "Med", "High")
 #   keys <-  unique(df[,8])
@@ -159,7 +165,8 @@ obs <- d %>%
   dplyr::select(country, ADM0, decimalLatitude, decimalLongitude, diseaseTested,
                 BsalDetected, BdDetected, individualCount) %>%
   plyr::mutate(BsalDetected = as.factor(dplyr::recode(BsalDetected,
-                                                      "1" = "Bsal positive", "0" = "Bsal negative"))) %>%
+                                                      "1" = "Bsal positive", 
+                                                      "0" = "Bsal negative"))) %>%
   arrange(BsalDetected)
 
 # Summarise number of observations from each country
@@ -178,26 +185,49 @@ labs <- merge(x = sampSize, y = country_lookup,
 # obtain world map
 worldmap <- map_data("world")
 
+# subset european countries of interest
+euro <- worldmap %>%
+  filter(region == c("UK", "Germany", "Spain", "Switzerland"))
+
+# EPSG: 4937 for Europe data
 map <- ggplot() +
   geom_map(data = worldmap, map = worldmap,
+<<<<<<< HEAD
            aes(map_id = region), col = "white", fill = "#B2BEB5") +
   scale_x_continuous(limits = c(-13, 15)) +
   scale_y_continuous(limits = c(35, 60)) +
+=======
+           aes(map_id = region),
+           col = "gray10", fill = "#f3eee6") +
+  geom_map(data = euro, map = worldmap,
+           aes(map_id = region), 
+           col = "gray10", fill = "#B2BEB5") +
+  scale_x_continuous(limits = c(-10, 20),
+                     breaks = seq(-10, 20, 5)) +
+  scale_y_continuous(limits = c(36, 60),
+                     breaks = seq(36, 60, 4)) +
+>>>>>>> 8724e890ab8ae2b0f73871248fb0376b036d1238
   geom_point(data = obs, aes(x = decimalLongitude, y = decimalLatitude, fill = BsalDetected, shape = BsalDetected),
              alpha = 0.3, size = 4, stroke = 1, color = "gray30") +
   scale_fill_manual(values = c("gray40", "#C23113")) +
   scale_shape_manual(values = c(21, 24)) +
-  coord_fixed() +
+  coord_sf(crs = st_crs(4937)) +
+  annotation_scale(location = "br", width_hint = 0.5) +
+  annotation_north_arrow(location = "br", which_north = "true",
+                         pad_x = unit(0, "in"), pad_y = unit(0.25, "in"),
+                         style = north_arrow_fancy_orienteering) +
   labs(x = "Longitude", y = "Latitude") +
-  geom_richtext(data = labs, aes(longitude, latitude, group = country, label = paste("n<sub>obs</sub> =", n)), 
-                nudge_y = -0.25,stat = "identity", size = 8, fill = NA, label.color = NA, na.rm = FALSE, show.legend = NA) +
+#  geom_richtext(data = labs, aes(longitude, latitude, group = country, label = paste("n<sub>obs</sub> =", n)), 
+#                nudge_y = -0.25,stat = "identity", size = 8, fill = NA, label.color = NA, na.rm = FALSE, show.legend = NA) +
   ak_theme + theme(legend.title = element_blank(),
                    legend.position = "top",
+                   panel.background = element_rect(fill = "aliceblue"),
+                   panel.grid.major = element_line(color = gray(0.5), linetype = "dashed", linewidth = 0.5),
                    legend.spacing = unit(1, "cm"), # Space legend labels
                    legend.key.size = unit(1,"cm"),
                    legend.text.align = 0,
                    legend.text = element_text(size = 28, hjust = 0),
-                   axis.text.x = element_text(size = 28),
+                   axis.text.x = element_text(size = 28, angle = 90),
                    axis.title.x = element_text(size = 42, hjust = 0.5, 
                                                margin = margin(t = 10, r = 0, b = 0, l = 0), 
                                                face = "plain"),
@@ -209,9 +239,187 @@ map <- ggplot() +
 
 map
 
-# ggsave("map.pdf", map, device = cairo_pdf, path = file.path(dir, figpath),
-#        width = 2000, height = 2000, scale = 2, units = "px", dpi = 300, limitsize = F)
+## UK map
+uk <- worldmap %>%
+  filter(region == "UK")
 
+uk_map <- ggplot() +
+  geom_map(data = worldmap, map = worldmap,
+           aes(map_id = region),
+           col = "gray10", fill = "#f3eee6") +
+  geom_map(data = uk, map = worldmap,
+           aes(map_id = region), 
+           col = "gray10", fill = "#B2BEB5") +
+  scale_x_continuous(limits = c(-8, 2),
+                     breaks = seq(-8, 4, 2)) +
+  scale_y_continuous(limits = c(50, 60),
+                     breaks = seq(50, 60, 2)) +
+  geom_point(data = obs, aes(x = decimalLongitude, y = decimalLatitude, fill = BsalDetected, shape = BsalDetected),
+             alpha = 0.3, size = 4, stroke = 1, color = "gray30") +
+   geom_richtext(data = labs, aes(longitude, latitude, group = country, label = paste("n =", n)),
+                 nudge_y = -0.25,stat = "identity", size = 10, fill = NA, label.color = NA, na.rm = FALSE, show.legend = NA) +
+  scale_fill_manual(values = c("gray40", "#C23113")) +
+  scale_shape_manual(values = c(21, 24)) +
+  coord_sf(crs = st_crs(4937)) +
+  annotation_scale(location = "bl", width_hint = 0.5) +
+  annotation_north_arrow(location = "bl", which_north = "true",
+                         pad_x = unit(0, "in"), pad_y = unit(0.25, "in"),
+                         style = north_arrow_fancy_orienteering) +
+  labs(x = "", y = "") +
+  ak_theme + theme(legend.position = "none",
+                   panel.background = element_rect(fill = "aliceblue"),
+                   panel.grid.major = element_line(color = gray(0.5), linetype = "dashed", linewidth = 0.5),
+                   axis.text.x = element_text(size = 28, angle = 90),
+                   # axis.title.x = element_text(size = 36, hjust = 0.5, 
+                   #                             margin = margin(t = 10, r = 0, b = 0, l = 0), 
+                   #                             face = "plain"),
+                   axis.text.y = element_text(size = 28, face = "plain")) +
+                   # axis.title.y = element_text(size = 36, hjust = 0.5, 
+                   #                             margin = margin(t = 0, r = 15, b = 0, l = 5), 
+                   #                             face = "plain")) +
+  guides(fill = guide_legend(override.aes = list(alpha = 1)))
+
+uk_map
+
+## Germany map
+deu <- worldmap %>%
+  filter(region == "Germany")
+
+deu_map <- ggplot() +
+  geom_map(data = worldmap, map = worldmap,
+           aes(map_id = region),
+           col = "gray10", fill = "#f3eee6") +
+  geom_map(data = deu, map = worldmap,
+           aes(map_id = region), 
+           col = "gray10", fill = "#B2BEB5") +
+  scale_x_continuous(limits = c(5.5, 15),
+                     breaks = seq(6, 14, 2)) +
+  scale_y_continuous(limits = c(47.5, 55),
+                     breaks = seq(48, 54, 2)) +
+  geom_point(data = obs, aes(x = decimalLongitude, y = decimalLatitude, fill = BsalDetected, shape = BsalDetected),
+             alpha = 0.3, size = 4, stroke = 1, color = "gray30") +
+  geom_richtext(data = labs, aes(longitude, latitude, group = country, label = paste("n =", n)),
+                nudge_y = -0.25,stat = "identity", size = 10, fill = NA, label.color = NA, na.rm = FALSE, show.legend = NA) +
+  scale_fill_manual(values = c("gray40", "#C23113")) +
+  scale_shape_manual(values = c(21, 24)) +
+  coord_sf(crs = st_crs(4937)) +
+  annotation_scale(location = "bl", width_hint = 0.5) +
+  annotation_north_arrow(location = "bl", which_north = "true",
+                         pad_x = unit(0, "in"), pad_y = unit(0.25, "in"),
+                         style = north_arrow_fancy_orienteering) +
+  labs(x = "", y = "") +
+  ak_theme + theme(legend.position = "none",
+                   panel.background = element_rect(fill = "aliceblue"),
+                   panel.grid.major = element_line(color = gray(0.5), linetype = "dashed", linewidth = 0.5),
+                   axis.text.x = element_text(size = 28, angle = 90),
+                   # axis.title.x = element_text(size = 36, hjust = 0.5, 
+                   #                             margin = margin(t = 10, r = 0, b = 0, l = 0), 
+                   #                             face = "plain"),
+                   axis.text.y = element_text(size = 28, face = "plain")) +
+                   # axis.title.y = element_text(size = 36, hjust = 0.5, 
+                   #                             margin = margin(t = 0, r = 15, b = 0, l = 5), 
+                   #                             face = "plain"),) +
+  guides(fill = guide_legend(override.aes = list(alpha = 1)))
+
+deu_map
+
+
+## Spain map
+esp <- worldmap %>%
+  filter(region == "Spain")
+
+esp_map <- ggplot() +
+  geom_map(data = worldmap, map = worldmap,
+           aes(map_id = region),
+           col = "gray10", fill = "#f3eee6") +
+  geom_map(data = esp, map = worldmap,
+           aes(map_id = region), 
+           col = "gray10", fill = "#B2BEB5") +
+  scale_x_continuous(limits = c(-10, 4),
+                     breaks = seq(-10, 4, 2)) +
+  scale_y_continuous(limits = c(36, 44),
+                     breaks = seq(36, 44, 2)) +
+  geom_point(data = obs, aes(x = decimalLongitude, y = decimalLatitude, fill = BsalDetected, shape = BsalDetected),
+             alpha = 0.3, size = 4, stroke = 1, color = "gray30") +
+  geom_richtext(data = labs, aes(longitude, latitude, group = country, label = paste("n =", n)),
+                nudge_y = -0.25,stat = "identity", size = 10, fill = NA, label.color = NA, na.rm = FALSE, show.legend = NA) +
+  scale_fill_manual(values = c("gray40", "#C23113")) +
+  scale_shape_manual(values = c(21, 24)) +
+  coord_sf(crs = st_crs(4937)) +
+  annotation_scale(location = "bl", width_hint = 0.5) +
+  annotation_north_arrow(location = "bl", which_north = "true",
+                         pad_x = unit(0, "in"), pad_y = unit(0.25, "in"),
+                         style = north_arrow_fancy_orienteering) +
+  labs(x = "", y = "") +
+  ak_theme + theme(legend.position = "none",
+                   panel.background = element_rect(fill = "aliceblue"),
+                   panel.grid.major = element_line(color = gray(0.5), linetype = "dashed", linewidth = 0.5),
+                   axis.text.x = element_text(size = 28, angle = 90),
+                   axis.title.x = element_text(size = 36, hjust = 0.5, 
+                                               margin = margin(t = 10, r = 0, b = 0, l = 0), 
+                                               face = "plain"),
+                   axis.text.y = element_text(size = 28, face = "plain")) +
+                   # axis.title.y = element_text(size = 36, hjust = 0.5, 
+                   #                             margin = margin(t = 0, r = 15, b = 0, l = 5), 
+                   #                             face = "plain")) +
+  guides(fill = guide_legend(override.aes = list(alpha = 1)))
+
+esp_map
+
+## Switzerland map
+che <- worldmap %>%
+  filter(region == "Switzerland")
+
+che_map <- ggplot() +
+  geom_map(data = worldmap, map = worldmap,
+           aes(map_id = region),
+           col = "gray10", fill = "#f3eee6") +
+  geom_map(data = che, map = worldmap,
+           aes(map_id = region), 
+           col = "gray10", fill = "#B2BEB5") +
+  scale_x_continuous(limits = c(6, 10.5),
+                     breaks = seq(6, 10, 2)) +
+  scale_y_continuous(limits = c(45.5, 48),
+                     breaks = seq(46, 48, 1)) +
+  geom_point(data = obs, aes(x = decimalLongitude, y = decimalLatitude, fill = BsalDetected, shape = BsalDetected),
+             alpha = 0.3, size = 4, stroke = 1, color = "gray30") +
+  geom_richtext(data = labs, aes(longitude, latitude, group = country, label = paste("n =", n)),
+                nudge_y = -0.25,stat = "identity", size = 10, fill = NA, label.color = NA, na.rm = FALSE, show.legend = NA) +
+  scale_fill_manual(values = c("gray40", "#C23113")) +
+  scale_shape_manual(values = c(21, 24)) +
+  coord_sf(crs = st_crs(4937)) +
+  annotation_scale(location = "bl", width_hint = 0.5) +
+  annotation_north_arrow(location = "bl", which_north = "true",
+                         pad_x = unit(0, "in"), pad_y = unit(0.25, "in"),
+                         style = north_arrow_fancy_orienteering) +
+  labs(x = "", y = "", title = "") +
+  ak_theme + theme(legend.position = "none",
+                   panel.background = element_rect(fill = "aliceblue"),
+                   panel.grid.major = element_line(color = gray(0.5), linetype = "dashed", linewidth = 0.5),
+                   axis.text.x = element_text(size = 28, angle = 90),
+                   # axis.title.x = element_text(size = 36, hjust = 0.5, 
+                   #                             margin = margin(t = 10, r = 0, b = 0, l = 0), 
+                   #                             face = "plain"),
+                   axis.text.y = element_text(size = 28, face = "plain")) +
+                   # axis.title.y = element_text(size = 36, hjust = 0.5, 
+                   #                             margin = margin(t = 0, r = 15, b = 0, l = 5), 
+                   #                             face = "plain")) +
+  guides(fill = guide_legend(override.aes = list(alpha = 1)))
+
+che_map
+
+
+## save all maps
+ggsave("euro_map.pdf", map, device = cairo_pdf, path = file.path(dir, figpath),
+        width = 2000, height = 2000, scale = 2, units = "px", dpi = 300, limitsize = F)
+ggsave("uk_map.pdf", uk_map, device = cairo_pdf, path = file.path(dir, figpath),
+       width = 2000, height = 2000, scale = 2, units = "px", dpi = 300, limitsize = F)
+ggsave("deu_map.pdf", deu_map, device = cairo_pdf, path = file.path(dir, figpath),
+       width = 2000, height = 2000, scale = 2, units = "px", dpi = 300, limitsize = F)
+ggsave("esp_map.pdf", esp_map, device = cairo_pdf, path = file.path(dir, figpath),
+       width = 2000, height = 2000, scale = 2, units = "px", dpi = 300, limitsize = F)
+ggsave("che_map.pdf", che_map, device = cairo_pdf, path = file.path(dir, figpath),
+       width = 2000, height = 2000, scale = 2, units = "px", dpi = 300, limitsize = F)
 
 
 #### 2) Testing assumptions of the dilution effect hypothesis ##################
@@ -252,6 +460,11 @@ prev_plot
 
 # ggsave("prev_plot.pdf", prev_plot, device = cairo_pdf, path = file.path(dir, figpath),
 #         width = 2300, height = 2000, scale = 1.5, units = "px", dpi = 300, limitsize = F)
+<<<<<<< HEAD
+=======
+
+
+>>>>>>> 8724e890ab8ae2b0f73871248fb0376b036d1238
 
 
 ##      2b. The most susceptible species are also the most abundant, while the 
@@ -263,6 +476,7 @@ model_2b <- glmmTMB(logsppAbun ~ scientific + (1|Site),
 summary(model_2b)
 Anova(model_2b)
 
+glht(model_2b)
 
 textcol <- d %>%
   dplyr::select(scientific, susceptibility, Site) %>% # subset relevant data
@@ -447,14 +661,34 @@ fig2combined
 #        width = 2800, height = 2600, scale = 2, units = "px", dpi = 300, limitsize = F)
 
 ## Code to see how many sites each species are found at in each country
-# d %>%
-#   dplyr::select(country, species, Site) %>%
-#   filter(country == "Spain" & species == "marmoratus") %>%
-#   unique() #%>%
-#   nrow()
+tmp <- d %>%
+  dplyr::select(country, Site, prev_above_0, materialSampleID) %>%
+  filter(prev_above_0 == 1) %>%
+  unique()
+  
 
 
 #### 3. Cbind models testing the Dilution Effect Hypothesis ####################
+<<<<<<< HEAD
+=======
+## Data prep
+
+# Drop rows with NA vals in weather data
+dcbindScaled <- dcbind %>% 
+  tidyr::drop_na(., any_of(c(21:36))) %>%
+  filter(country == "Germany" | country == "Spain")
+
+
+# Scale relevant vars
+dcbindScaled <- dcbindScaled %>%
+  mutate_at(c("temp_d", "temp_m", "temp_m_t1", "temp_m_t2",
+              "sMoist_d", "sMoist_m", "sMoist_m_t1", "sMoist_m_t2",
+              "precip_m", "precip_m_t1", "precip_m_t2",
+              "bio1_wc", "bio12_wc", "tavg_wc", "prec_wc"), 
+            ~(scale(., center = T, scale = T %>% as.numeric)))
+
+
+>>>>>>> 8724e890ab8ae2b0f73871248fb0376b036d1238
 ##      3a. Cbind model including all salamander spp. --------------------------
 m_all <- glmmTMB(cbind(nPos_all, nNeg_all) ~ richness*logsiteAbun +
                     temp_d*sMoist_d + (1|scientific),
@@ -473,7 +707,7 @@ Anova(m_all)
 # 
 # summary(m_all2)
 # Anova(m_all2)
-
+# 
 # anova(m_all, m_all2) # models are virtually the same, going with the simpler model to be parsimonious.
 
 
@@ -533,11 +767,16 @@ m_all_plot <- ggplot(m_all_predict, aes(x = richness, y = predicted,
   guides(colour = guide_legend("Site-level abundance"))
 
 m_all_plot
+<<<<<<< HEAD
 # ggsave("m_all_plot.pdf", m_all_plot, device = cairo_pdf, path = file.path(dir, figpath),
 #        width = 1250, height = 1500, scale = 2, units = "px", dpi = 300, limitsize = F)
 
 # ggsave("m_all_plot.tif", m_all_plot, device = "tiff", scale = 2, 
 #        width = 1500, height = 1000, units = "px", 
+=======
+# ggsave("m_all_plot.tif", m_all_plot, device = "tiff", scale = 2, 
+#        width = 1920, height = 1080, units = "px", 
+>>>>>>> 8724e890ab8ae2b0f73871248fb0376b036d1238
 #        path = file.path(dir, figpath), dpi = 300)
 
 
@@ -626,9 +865,12 @@ m_FS_plot <- ggplot(m_FS_predict, aes(x = richness , y = predicted, colour = sit
 
 
 m_FS_plot
+<<<<<<< HEAD
 # ggsave("m_FS_plot.pdf", m_FS_plot, device = cairo_pdf, path = file.path(dir, figpath),
 #        width = 1250, height = 1500, scale = 2, units = "px", dpi = 300, limitsize = F)
 
+=======
+>>>>>>> 8724e890ab8ae2b0f73871248fb0376b036d1238
 # ggsave("m_FS_plot.pdf", m_FS_plot, device = cairo_pdf, scale = 2, width = 1920, height = 1080, units = "px",
 #        path = file.path(dir, figpath), dpi = 300)
 

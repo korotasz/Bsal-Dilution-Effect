@@ -1,0 +1,626 @@
+---
+title: "Ch. 2: Bsal & the Dilution Effect Hypothesis"
+author: "Alexis Korotasz"
+date: "`r Sys.Date()`"
+output:
+  rmdformats::downcute:
+    code_folding: hide
+    toc_float: true # maintains toc on side of document
+    toc_depth: 3 # up to 3 depths of headings (#, ##, and ###)
+    number_sections: true
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(message = FALSE, warning = FALSE, echo = TRUE)
+#remotes::install_version("Rttf2pt1", version = "1.3.8") # install this version, latest ver. not compatible
+#remotes::install_github("gorkang/html2latex") # convert sjPlot::tab_model() hmtl table to tex and pdf in .Rmd docs
+#extrafont::font_import() # load fonts before ggplot2; only need to do this once
+require(pacman)
+require(rstudioapi) # Set working directory to current file location
+require(extrafont) 
+extrafont::loadfonts(device = "win", quiet = T) # plot fonts 
+
+#### Visualization Packages ####
+pckgs <- c("ggsignif", # adds labels to significant groups
+             "ggtext", # for text type/arrangements w/ ggplot2
+           "Rttf2pt1", # to use with the extrafont package
+           "ggthemes", # contains 'scales', 'themes', and 'geoms' packages
+            "cowplot", # arranging plots/figs
+          "gridExtra", # arranging plots/figs
+          "patchwork", # arranging plots/figs
+         "hrbrthemes", # plot colors
+       "RColorBrewer", # plot colors
+            "viridis", # plot colors
+           "eurostat", # obtain spatial data from europe
+            "geodata", # obtain geographic data (world map)
+              "ggmap", # creates maps
+          "ggspatial", # north arrow and scale bar
+            "mapproj", # apply map projection
+         "scatterpie", # add pie charts to maps
+             "ggpubr", # prepares plots to be ready for publication
+             "sjPlot", # plot_model(), tab_model()
+          "htmltools", # visualizes model outputs as html tables
+#### Analysis Specific Packages ####
+          "tidyverse", # data wrangling/manipulation
+            "glmmTMB", # glmmTMB()
+            "emmeans", # lsmeans()
+                "car", # Anova()
+             "DHARMa", # simulateResiduals(), testZeroInflation(), testDispersion() 
+              "MuMIn", # model.sel()
+          "ggeffects", # ggpredict()
+               "epiR", # calculate prevalence & CIs
+             "sjmisc" # data and variable transformation
+)
+
+## Load packages
+pacman::p_load(pckgs, update = FALSE, character.only = T)
+
+
+## Set working directory
+knitr::opts_knit$set(root.dir = dirname(rstudioapi::getActiveDocumentContext()$path))
+
+## Set plot theme 
+ak_theme <- theme_ipsum() +
+  theme(axis.text.x = element_text(size = 24),
+        axis.title.x = element_text(size = 28, hjust = 0.5, 
+                                    margin = margin(t = 10, r = 0, b = 0, l = 0), 
+                                    face = "plain"),
+        axis.text.y = element_text(size = 24),
+        axis.title.y = element_text(size = 28, hjust = 0.5, 
+                                    margin = margin(t = 0, r = 15, b = 0, l = 5), 
+                                    face = "plain"),
+        axis.ticks.length = unit(.25, "cm"),
+        axis.ticks = element_blank(),
+        plot.tag = element_text(size = 32, face = "plain"),
+        plot.title = element_text(size = 32, hjust = 0.5, face = "plain"),
+        plot.subtitle = element_markdown(size = 12, face = "plain"),
+        plot.margin = margin(6, 12, 2, 2, "pt"), 
+        plot.caption = element_markdown(hjust = 0, size = 14, face = "plain"),
+        plot.caption.position = "plot",
+        legend.position = "top", 
+#        legend.spacing = unit(1, "cm"), # Space legend labels
+        legend.key.size = unit(2,"cm"), 
+        legend.text.align = 1,
+        legend.text = element_text(size = 18, hjust = -1),
+        legend.title = element_text(size = 18, face = "bold"), 
+        panel.border = element_blank(),
+        panel.background = element_blank(),
+        panel.spacing.y = unit(1.5,"cm"),
+        strip.text = element_text(size = 14, face = "bold", hjust = 0.5),
+        axis.line = element_line(color = 'black'))
+
+
+#### Load csv files ####
+d <- read.csv("bsalData_clean.csv", header = T, encoding = "UTF-8")
+dcbind <- read.csv("bsalData_cbind.csv", header = T, encoding = "UTF-8")
+
+
+
+# log transform + scale vars
+d <- d %>%
+  mutate(logsppAbun = log(sppAbun),
+         logsiteAbun = log(siteAbun),
+         scientific = as.factor(scientific),
+         susceptibility = as.factor(susceptibility)) %>%
+         relocate(c(logsppAbun, logsiteAbun), .after = sppAbun) %>%
+         filter(scientific != "Ichthyosaura alpestris") # invasive 
+
+
+dcbind <- dcbind %>%
+  mutate(logsppAbun = log(sppAbun),
+         logsiteAbun = log(siteAbun),
+         scientific = as.factor(scientific),
+         susceptibility = as.factor(susceptibility)) %>%
+         relocate(c(logsppAbun, logsiteAbun), .after = sppAbun) %>%
+         filter(scientific != "Ichthyosaura alpestris") # invasive
+
+## Vector of cleaner labels for model output table
+nicelabs <- c(`(Intercept)` = "Intercept",
+              richness = "Richness",
+              logsiteAbun = "log(Site abundance)",
+              "richness:logsiteAbun" = "Richness:log(Site abundance)",
+              temp_d = "Temp (t0)", temp_m_t1 = "Temp (t-30)", temp_m_t2 = "Temp (t-60)",
+              sMoist_d = "Soil moisture (t0)", sMoist_m_t1 = "Soil moisture (t-30)",
+              sMoist_m_t2 = "Soil moisture (t-60)",
+              "temp_d:sMoist_d" = "Temp (t0):Soil moisture (t0)",
+              "temp_m_t1:sMoist_m_t1" = "Temp (t-30):Soil moisture (t-30)",
+              "temp_m_t2:sMoist_m_t2" = "Temp (t-60):Soil moisture (t-60)")
+
+
+## Function to populate dummy columns with uniform labels in ggpredict dataframe
+create_dummy_col <- function(df){
+  values <- c("Low", "Med", "High")
+  keys <-  unique(df[,8])
+  index <- setNames(as.list(values), keys)
+  
+  df$dummy <- dplyr::recode(df[,8], !!!index)
+  
+  return(df)
+}
+
+```
+
+# Data Visualization {.tabset}
+
+## Data distribution map
+
+```{r staticMap, fig.width = 8, fig.height = 8, fig.fullwidth = TRUE, fig.fullheight = TRUE, echo = FALSE}
+obs <- d %>%
+  dplyr::select(country, ADM0, decimalLatitude, decimalLongitude, diseaseTested,
+                BsalDetected, BdDetected, individualCount) %>%
+  plyr::mutate(BsalDetected = as.factor(dplyr::recode(BsalDetected,
+                                                      "1" = "Bsal positive", "0" = "Bsal negative"))) %>%
+  arrange(BsalDetected)
+
+# Summarise number of observations from each country
+sampSize <- obs %>%
+  group_by(country) %>%
+  summarise(n = n())
+
+# Get the coordinates of each country
+country_lookup <- read.csv("countries.csv", stringsAsFactors = F)
+names(country_lookup)[1] <- "country_code"
+
+# Combine data
+labs <- merge(x = sampSize, y = country_lookup, 
+              by.x = "country", by.y = "name", all.x = T)
+
+# obtain world map
+worldmap <- map_data("world")
+
+map2 <- ggplot() +
+  geom_map(data = worldmap, map = worldmap,
+           aes(x = long, y = lat, map_id = region),
+           col = "white", fill = "#B2BEB5") +
+  scale_x_continuous(limits = c(-13, 15)) +
+  scale_y_continuous(limits = c(35, 60)) +
+  geom_point(data = obs, aes(x = decimalLongitude, y = decimalLatitude, fill = BsalDetected, shape = BsalDetected),
+             alpha = 0.3, size = 4, stroke = 1, color = "gray30") +
+  scale_fill_manual(values = c("gray40", "#C23113")) +
+  scale_shape_manual(values = c(21, 24)) +
+  coord_fixed() +
+  labs(x = "Longitude", y = "Latitude") +
+  geom_richtext(data = labs, aes(longitude, latitude, group = country, label = paste("n<sub>obs</sub> =", n)), 
+                nudge_y = -0.25,stat = "identity", size = 8, fill = NA, label.color = NA, na.rm = FALSE, show.legend = NA) +
+  ak_theme + theme(legend.title = element_blank(),
+                   legend.position = "top",
+                   legend.spacing = unit(1, "cm"), # Space legend labels
+                   legend.key.size = unit(1,"cm"),
+                   legend.text.align = 0,
+                   legend.text = element_text(size = 28, hjust = 0),
+                   axis.text.x = element_text(size = 28),
+                   axis.title.x = element_text(size = 42, hjust = 0.5, 
+                                               margin = margin(t = 10, r = 0, b = 0, l = 0), 
+                                               face = "plain"),
+                   axis.text.y = element_text(size = 28, face = "plain"),
+                   axis.title.y = element_text(size = 42, hjust = 0.5, 
+                                               margin = margin(t = 0, r = 15, b = 0, l = 5), 
+                                               face = "plain"),) +
+  guides(fill = guide_legend(override.aes = list(alpha = 1)))
+
+map2
+
+```
+
+**Fig. 1.1** This map displays the overall distribution of Bsal positive and negative cases in our data across Europe after processing. Germany by far had the greatest number of observations of any country in our data (n = 4641), followed by Spain (n = 759), Switzerland (n = 510), and, lastly, England (n = 84). The only countries that had positive cases of Bsal were Germany and Spain with a reported Bsal prevalence of 5.93% and 23.98%, respectively. Although Switzerland and England did not record any positive cases of Bsal, we still included the data in our initial set of analyses when testing prerequisites of the Dilution Effect Hypothesis (Section 2.2.1 below).
+
+## Interactive map
+
+```{r interactiveMap, output.width = "100%", echo = FALSE}
+#### Map Specific Packages ####
+map_pckgs <- c("tidyverse",
+               "htmltools",
+               "htmlwidgets", # save leaflet output as html file
+               "stars", # spatiotemporal data handling
+               "RColorBrewer",
+               "ggspatial", # north arrow and scale bar,
+               "raster", # raster data handling
+               "sf", # vector data handling
+               "sp", 
+               "leaflet", # making interactive maps
+               "leaftime", # add time scale to map
+               "geojsonio",
+               "geojsonlint",
+               "ggpubr"# validate GeoJSON and display it on a map
+)
+
+## Load packages
+pacman::p_load(map_pckgs, character.only = T)
+d_map <- d
+d_map <- d %>%
+  mutate(color = case_when(
+    susceptibility == "1" ~ "Resistant",
+    susceptibility == "2" ~ "Tolerant",
+    susceptibility == "3" ~ "Susceptible"
+  ),
+  fatalStatus = case_when(
+    fatal == "1" ~ "Dead",
+    fatal == "0" ~ "Alive",
+    is.na(fatal) == T ~ "Unk")
+  )
+
+## Interactive Map
+map_pckgs <- c("tidyverse",
+               "htmltools",
+               "htmlwidgets", # save leaflet output as html file
+               "stars", # spatiotemporal data handling
+               "RColorBrewer",
+               "ggspatial", # north arrow and scale bar,
+               "raster", # raster data handling
+               "sf", # vector data handling
+               "sp", 
+               "leaflet", # making interactive maps
+               "leaftime", # add time scale to map
+               "geojsonio",
+               "geojsonlint",
+               "ggpubr"# validate GeoJSON and display it on a map
+)
+
+## Load packages
+pacman::p_load(map_pckgs, character.only = T)
+mapData <- d
+mapData <- d %>%
+  mutate(color = case_when(
+    susceptibility == "1" ~ "Resistant",
+    susceptibility == "2" ~ "Tolerant",
+    susceptibility == "3" ~ "Susceptible"
+  ),
+  fatalStatus = case_when(
+    fatal == "1" ~ "Dead",
+    fatal == "0" ~ "Alive",
+    is.na(fatal) == T ~ "Unk")
+  )
+
+## Interactive Map
+pal <- colorFactor(palette = c("#b30000", "#548078", "#E3A630"), 
+                   domain = c("Susceptible", "Resistant", "Tolerant"),
+                   ordered = TRUE) # marker colors
+cols <- c("#b30000", "#548078", "#E3A630") # legend
+labs <- c("Susceptible", "Resistant", "Tolerant") # legend
+#d_geo <- geojsonio::geojson_json(d, lat = "decimalLatitude", lon = "decimalLongitude")
+
+map <- leaflet(data = mapData) %>%
+  addProviderTiles(provider = "Stamen.TonerLite", group = "Basic Map") %>%
+  addProviderTiles(provider = "Esri.WorldImagery", group = "World Imagery") %>%
+  addLayersControl(baseGroups = c("Basic Map", "World Imagery")) %>%
+  addCircleMarkers(lng = mapData$decimalLongitude, lat = mapData$decimalLatitude,
+                   radius = 10,
+                   color = ~pal(mapData$color),
+                   fillOpacity = ifelse(mapData$fatalStatus == "Alive", 1, 0.5),
+                   stroke = FALSE,
+                   clusterOptions = markerClusterOptions(),
+                   label = mapData$scientific,
+                   labelOptions = labelOptions(direction = "auto", offset = c(0,0),
+                                               style = list("color" = "black",
+                                                            "font-family" = "sans-serif",
+                                                            "font-style" = "italic",
+                                                            "font-weight" = "bold",
+                                                            "box-shadow" = "1px 1px rgba(0,0,0,0.25)",
+                                                            "font-size" = "12px",
+                                                            "padding" = "4px"
+                                               )),
+                   popup = paste("<b>Site:</b>", mapData$Site, "<br>",
+                                 "<b>Bsal Detected:</b>", ifelse(mapData$BsalDetected == 1, "Yes", "No"), "<br>",
+                                 "<b>Bd Detected:</b>", ifelse(mapData$BdDetected == 1, "Yes", "No"), "<br>",
+                                 "<b>Status:</b>", mapData$fatalStatus)) %>%
+  setView(lat = 47.81757743622691, lng = 6.5171597480332135, zoom = 4) %>%
+  addLegend(position = "bottomleft",
+            colors = ~cols,
+            labels = ~labs,
+            title = paste("Bsal Susceptibility"),
+            opacity = 0.75) %>%
+  addScaleBar(position = "bottomleft",
+              options = scaleBarOptions(maxWidth = 100,
+                                        metric = TRUE,
+                                        updateWhenIdle = TRUE))
+map
+```
+
+**Fig. 1.2** This interactive map displays the approximate location of each observation in our final dataset at the finest taxonomic scale available (primarily at the species level but, in some cases, at the genus level). All observations include the associated site number and susceptibility level of the organism. When available, we also included an organism's morbidity status (*i.e.*, whether they tested positive for Bsal, Bd, or both) and their mortality status (*i.e.*, whether they were found alive or dead^1^).
+
+^1^Dead animals or animals whose mortality status is unknown are marked with opaque circles. Animals who are alive are denoted with solid circles.
+
+# Testing assumptions of the Dilution Effect Hypothesis
+
+## Host species differ in their reservoir competence.
+
+```{r hostCompetence, fig.width = 12, fig.height = 7, fig.fullwidth = TRUE, fig.fullheight = TRUE, echo = FALSE, eval = TRUE}
+prev <- d %>%
+  group_by(scientific) %>%
+  mutate(ncas_Bsal = sum(BsalDetected == 1), # number of pos. Bsal cases
+         npop = sum(individualCount)) %>% # pop size (total # individuals/spp.)
+  drop_na(date) %>%
+  ungroup() %>%
+  mutate(Bsal_prev = (ncas_Bsal/npop)*100) %>% # prevalence as a percentage
+  dplyr::select(scientific, susceptibility, ncas_Bsal, Bsal_prev, npop) %>%
+  unique()
+
+
+# Descriptive plot showing disease prevalence values per species
+prev_plot <- ggplot(prev, aes(scientific, sapply(Bsal_prev, FUN = function(x) ifelse(x == 0, 0.1, x)), 
+                              fill = susceptibility, label = paste(sprintf(Bsal_prev, fmt = '%#.1f'), "%"))) +
+  geom_col(position = "identity") +
+  geom_text(aes(colour = susceptibility), nudge_y = 4, size = 6, fontface = "bold", alpha = 0.75) +
+  coord_flip(clip = "off") +
+  ylab("Disease prevalence (%)") + 
+  xlab("Species") + 
+  scale_colour_manual(name = "Susceptibility",
+                    values = c("#548078", "#E3A630", "#b30000"),
+                    labels = c("Resistant", "Tolerant", "Susceptible"),
+                    guide = "none") +
+  scale_fill_manual(name = "Susceptibility",
+                    values = c("#548078", "#E3A630", "#b30000"),
+                    labels = c("Resistant", "Tolerant", "Susceptible"),
+                    guide = "none") +
+  scale_x_discrete(expand = expansion(mult = c(0, 0.01), add = c(1, 0.25))) +
+  scale_y_continuous(labels = scales::label_percent(scale = 1, suffix = "%"), 
+                     breaks = seq(0, 40, 10), limit = c(0, 43)) +
+  ak_theme 
+
+prev_plot 
+
+```
+
+**Fig. 2.1** Bsal prevalence among species. Susceptibility to Bsal is denoted here by color. There is variation in both host susceptibility and disease prevalence among species. 
+
+## The most susceptible species are also the most abundant, while the least susceptible species are the least abundant. {.tabset}
+### Species abundance at a given site
+```{r model1a, eval = TRUE}
+m1a <- glmmTMB(logsppAbun ~ scientific + (1|Site),
+               data = d,
+               control = glmmTMBControl(optimizer = optim,
+                                        optArgs = list(method = "BFGS")))
+summary(m1a)
+Anova(m1a)
+```
+
+```{r m1a_plot, fig.width = 12, fig.height = 7, fig.fullwidth = TRUE, fig.fullheight = TRUE, echo = FALSE, eval = TRUE}
+textcol <- d %>%
+dplyr::select(scientific, susceptibility, Site) %>% # subset relevant data
+mutate(Site = as.factor(Site)) %>%
+group_by(scientific) %>%
+mutate(No.Sites = length(unique(Site))) %>%
+ungroup() %>%
+dplyr::select(!Site) %>%
+unique()
+
+
+m1a_predict <- ggpredict(m1a, terms = "scientific") %>%
+  rename("scientific" = "x",
+         "logsppAbun" = "predicted",
+         "expectedAbun" = "group") %>%
+  left_join(., textcol, by = "scientific") %>%
+  plyr::mutate(sppAbun = exp(logsppAbun),
+          conf.low = exp(conf.low),
+          conf.high = exp(conf.high),
+          expectedAbun = round(sppAbun, 0),
+          susceptibility = as.factor(susceptibility))
+
+
+
+m1a_plot <- ggplot(m1a_predict, aes(scientific, sppAbun, colour = susceptibility)) +
+  geom_point(size = 3) +
+  geom_errorbar(aes(ymin = conf.low, ymax = conf.high), width = 0.5) +
+  geom_richtext(aes(y = (conf.high + 0.25), 
+                    label = paste("n<sub>sites</sub>=", No.Sites)), #Site #s 
+                vjust = 0.4, hjust = 0, alpha = 0.5, size = 5.5,
+                label.size = NA, fontface = "bold", show.legend = F) +
+  coord_flip(clip = "off") +
+  ylab("Abundance") +
+  xlab("Species") + 
+  scale_colour_manual(name = "Susceptibility",
+                      values = c("#548078", "#E3A630", "#b30000"),
+                      labels = c("Resistant", "Tolerant", "Susceptible")) +
+  scale_y_continuous(labels = seq(0, 20, 5),
+                     breaks = seq(0, 20, 5),
+                     limits = c(0, 22)) +
+  scale_x_discrete(expand = expansion(mult = c(0, 0.01), add = c(1, 0.5))) +
+  ak_theme + theme(axis.text.y = element_text(face = "italic")) 
+#  labs(caption = c("Predicted species abundance at a given site and sampling 
+#       occurrence. Error bars represent 95% confidence intervals and 'n'  
+#       represents the predicted species abundance given by the model."))
+
+m1a_plot
+```
+
+**Fig. 2.2a** There were significant differences in host abundance among species at a site ($\chi^2$ = 1217.1; *p* < 0.001). Error bars represent 95% confidence intervals and *n* represents the total number of sites each species was sampled from.
+
+### Host susceptibility and abundance
+```{r model1c, eval = TRUE}
+m1c <- glmmTMB(logsppAbun ~ susceptibility + (1|Site),
+               data = d,
+               control = glmmTMBControl(optimizer = optim,
+                                        optArgs = list(method = "BFGS")))
+summary(m1c)
+Anova(m1c)
+```
+
+
+```{r m1c_plot, fig.width = 12, fig.height = 7, fig.fullwidth = TRUE, fig.fullheight = TRUE, echo = FALSE, eval = TRUE}
+m1c_predict <- ggpredict(m1c, terms = c("susceptibility")) %>%
+  rename("susceptibility" = "x",
+         "group" = "group") %>%
+  mutate(susceptibility = as.factor(susceptibility),
+         predicted = exp(as.numeric(predicted)),
+         conf.high = exp(as.numeric(conf.high)),
+         conf.low = exp(as.numeric(conf.low)))
+
+m1c_rug <- d %>%
+  group_by(susceptibility) %>%
+  summarise(n = n())
+
+m1c_predict <- merge(m1c_predict, m1c_rug)
+
+
+m1c_plot <- ggplot(m1c_predict, aes(susceptibility, predicted, color = susceptibility)) +
+  geom_point(size = 5) +
+  geom_errorbar(aes(ymin = conf.low, ymax = conf.high), width = 0.2, linewidth = 1) +
+  geom_richtext(aes(y = (conf.high + 0.75), label = paste0("n<sub>obs</sub>= ", n)), 
+             alpha = 0.6, size = 6, label.size = NA, fontface = "bold", show.legend = F) +
+  annotate("text", x = 3, y = 6.4, label = "***", size = 10, fontface = "bold", 
+           colour = "#b30000") +
+  scale_x_discrete(labels = c("Resistant", "Tolerant", "Susceptible")) +
+  ylab("Species abundance") + 
+  xlab("Susceptibility level") +
+  scale_y_discrete(limits = factor(0:8), breaks = c("0", "2", "4", "6", "8")) +
+  scale_colour_manual(name = "Susceptibility",
+                      values = c("#548078", "#E3A630", "#b30000"),
+                      labels = c("Resistant", "Tolerant", "Susceptible")) +
+  ak_theme + theme(legend.position = "none")
+ # + labs(caption = c("Resistant = No to low infection and no clinical signs of 
+ # disease; Tolerant = low infection loads with low or variable mortality; and 
+ # Susceptible = High<br>infection loads resulting in consistently high mortality. 
+ # Error bars represent 95% confidence intervals and 'n' represents the number of 
+ # animals from<br>the dataset in each susceptibility category. In total, there 
+ # were 11 species classified as 'Resistant', 4 species classified as 'Tolerant',
+ # and 4 species<br>classified as 'Susceptible."))
+
+# Thus, given that rare species are lost from communities first, biodiversity 
+# loss might increase disease risk in ecosystems with Bsal. On average, less 
+# abundant species at a given site tend to be more resistant while more abundant 
+# species tend to be susceptible.
+
+m1c_plot
+
+```
+**Fig. 2.2b** Each species was categorized as Resistant (i.e., no to low infection and no clinical signs of disease), Tolerant (i.e.,) low infection loads with low or variable mortality) or Susceptible (i.e., High infection loads resulting in consistently high mortality). Error bars represent 95% confidence intervals and 'n' represents the total number of animals from our data in each susceptibility category. In total, there were 11 species classified as 'Resistant', 4 species classified as 'Tolerant', and 4 species classified as 'Susceptible." Species abundance was significantly associated with the susceptibility category of species ($\chi^2$ = 431.68; *p* < 2.2×10-16), with susceptible species at a significantly higher abundance than either tolerant or resistant individuals. 
+
+
+# Testing the Dilution Effect Hypothesis {.tabset}
+## 'All species' cbind model
+```{r dataPrep, eval = TRUE, echo = FALSE}
+# Drop rows with NA vals in weather data
+dcbindScaled <- tidyr::drop_na(dcbind, any_of(c(21:36)))
+
+# Scale relevant vars
+dcbindScaled <- dcbindScaled %>%
+  mutate_at(c("temp_d", "temp_m", "temp_m_t1", "temp_m_t2",
+              "sMoist_d", "sMoist_m", "sMoist_m_t1", "sMoist_m_t2",
+              "precip_m", "precip_m_t1", "precip_m_t2",
+              "bio1_wc", "bio12_wc", "tavg_wc", "prec_wc"), 
+            ~(scale(., center = T, scale = T %>% as.numeric)))
+```
+
+```{r allsppModel, eval = TRUE}
+m_all <- glmmTMB(cbind(nPos_all, nNeg_all) ~  richness*logsiteAbun + 
+                   temp_d*sMoist_d + (1|scientific),
+                 data = dcbindScaled, family = "binomial",
+                 control = glmmTMBControl(optimizer = optim, 
+                                          optArgs = list(method = "BFGS")))
+
+summary(m_all)
+Anova(m_all)
+```
+
+**Table 3.1** This table shows the results of the "all species" model. There was a significant interaction between richness and site abundance (*p* = 0.014)
+```{r Table3.1, eval = TRUE, comment = FALSE}
+tab_model(m_all, show.obs = T, collapse.ci = T, 
+          show.icc = F, show.ngroups = F, show.re.var = F,
+          rm.terms = c("temp_d", "sMoist_d", "temp_d:sMoist_d"),
+          dv.labels = "All species model",
+          string.pred = "Terms",
+          string.p = "P-Value",
+          show.p = T,
+          pred.labels = nicelabs)
+```
+
+```{r m_allPlot, fig.width = 12, fig.height = 7, fig.fullwidth = TRUE, fig.fullheight = TRUE, echo = FALSE, eval = TRUE}
+m_all_predict <- ggpredict(m_all,  terms = c("richness", "logsiteAbun")) %>%
+  rename("richness" = "x",
+         "logsiteAbun" = "group") %>%
+  plyr::mutate(richness = as.numeric(as.character(richness)),
+         logsiteAbun = as.numeric(as.character(logsiteAbun)),
+         # Convert scaled prediction to original data scale:
+         siteAbun = as.factor(round(exp(as.numeric(logsiteAbun)), 0)))
+
+m_all_plot <- ggplot(m_all_predict, aes(x = richness, y = predicted, 
+                                   colour = siteAbun)) +
+  geom_line(aes(linetype = siteAbun), linewidth = 1) +
+  geom_rug(data = dcbindScaled, aes(x = richness, y = 0), sides = "b", 
+           alpha = 0.5, position = position_jitter(width = 0.4, height = 0.1), 
+           inherit.aes = F, na.rm = T) +
+  labs(x = "Species richness",
+       y = "Bsal prevalence across\nall salamander species (%)",
+       title = "All spp. model", 
+       linetype = "Site-level abundance") +
+#  geom_ribbon(aes(x = richness, ymin = conf.low, ymax = conf.high, 
+#              fill = siteAbun), alpha = 0.2, colour = NA, show.legend = F) +
+  scale_linetype_manual(values = c("solid", "longdash", "twodash")) +
+  scale_color_grey(start = 0.8, end = 0.2) +
+  scale_x_continuous(labels = seq(0, 10, 1), breaks = seq(0, 10, 1)) + 
+  scale_y_continuous(labels = scales::percent_format(accuracy = 0.1), 
+                     breaks = seq(0, .02, 0.005), limits = c(0, 0.022)) + 
+  ak_theme + theme(plot.tag.position = c(0.96, 0.9)) + 
+  guides(colour = guide_legend("Site-level abundance"))
+
+m_all_plot
+
+
+```
+**Fig. 3.1** We detected a significant negative interaction between richness and log-site abundance ($\chi^2$ = 5.9787; *p* = 0.014). Abundance had a greater positive effect on Bsal prevalence at low than at high richness because at high richness all sites, regardless of host abundance, tended to converge towards zero prevalence, consistent with a dilution effect.
+
+## Fire salamander model
+```{r FSModel, eval = TRUE}
+m_FS <- glmmTMB(cbind(nPos_FS, nNeg_FS) ~  richness*logsiteAbun + temp_d*sMoist_d + (1|scientific),
+                 data = subset(dcbindScaled, scientific =="Salamandra salamandra"), family = "binomial",
+                 control = glmmTMBControl(optimizer = optim, 
+                                          optArgs = list(method = "BFGS")))
+
+summary(m_FS)
+Anova(m_FS)
+```
+
+**Table 3.2** This table shows the results of the "fire salamander" model. While there was no significant interaction between richness and site abundance, as with the "all species model," Bsal prevalence was positively associated with species abundance (*p* = 0.042). 
+```{r Table3.2, eval = TRUE, comment = FALSE}
+tab_model(m_FS, show.obs = T, collapse.ci = T, 
+          show.icc = F, show.ngroups = F, show.re.var = F,
+          rm.terms = c("temp_d", "sMoist_d", "temp_d:sMoist_d"),
+          dv.labels = "Fire salamander model",
+          string.pred = "Terms",
+          string.p = "P-Value",
+          show.p = T,
+          pred.labels = nicelabs)
+```
+
+```{r m_FSPlot, fig.width = 12, fig.height = 7, fig.fullwidth = TRUE, fig.fullheight = TRUE, echo = FALSE, eval = TRUE}
+m_FS_predict <- ggpredict(m_FS,  terms = c("richness", "logsiteAbun")) %>%
+  rename("richness" = "x",
+         "logsiteAbun" = "group") %>%
+  plyr::mutate(richness = as.numeric(as.character(richness)),
+         logsiteAbun = as.numeric(as.character(logsiteAbun)),
+         # Convert scaled prediction to original data scale:
+         siteAbun = as.factor(round(exp(as.numeric(logsiteAbun)), 0)))
+
+m_FS_plot <- ggplot(m_FS_predict, aes(x = richness , y = predicted, colour = siteAbun)) +
+  geom_line(aes(linetype = siteAbun), linewidth = 1) +
+  geom_rug(data = subset(dcbindScaled, scientific =="Salamandra salamandra"), aes(x = richness, y = 0), sides = "b", alpha = 0.5,
+           position = position_jitter(width = 0.4, height = 0.1), inherit.aes = F, na.rm = T) +
+  labs(title =  "Fire salamander model", linetype = "Site-level abundance") +
+  #  geom_ribbon(aes(x = richness, ymin = conf.low, ymax = conf.high, fill = siteAbun), alpha = 0.2, colour = NA, show.legend = F) +
+  ylab("Fire salamander\nBsal prevalence (%)") +
+  xlab("Species richness") +
+  scale_linetype_manual(values = c("solid", "longdash", "twodash")) +
+  scale_color_grey(start = 0.8, end = 0.2) +
+  scale_x_continuous(labels = seq(0, 10, 1), breaks = seq(0, 10, 1)) +
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1), limits = c(0, 0.15)) +
+  ak_theme + theme(plot.tag.position = c(0.96, 0.9)) + guides(colour = guide_legend("Site-level abundance"))
+
+m_FS_plot
+```
+<!-- **Fig. 3.2** We detected a significant negative interaction between richness and log-site abundance ($\chi^2$ = 5.9787; *p* = 0.014). Abundance had a greater positive effect on Bsal prevalence at low than at high richness because at high richness all sites, regardless of host abundance, tended to converge towards zero prevalence, consistent with a dilution effect. -->
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
