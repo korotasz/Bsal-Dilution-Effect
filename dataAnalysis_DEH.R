@@ -35,6 +35,7 @@ pckgs <- c("ggsignif", # adds labels to significant groups
                "ragg", # converts plots to tiff files
           "htmltools", # visualizes model outputs as html tables
             "webshot", # converts html files to png
+             "magick", # image_read() -- needed for cowplot::draw_image
 #### Analysis Specific Packages ####
           "tidyverse", # data wrangling/manipulation
             "glmmTMB", # glmmTMB()
@@ -109,6 +110,21 @@ dcbind <- dcbind %>%
          susceptibility = as.factor(susceptibility)) %>%
   relocate(c(logsppAbun, logsiteAbun), .after = sppAbun) 
 
+## Data prep for cbind models
+# Drop rows with NA vals in weather data
+dcbindScaled <- dcbind %>% 
+  tidyr::drop_na(., any_of(c(21:36))) %>%
+  filter(country == "Germany" | country == "Spain")
+
+# Scale relevant vars
+dcbindScaled <- dcbindScaled %>%
+  mutate_at(c("temp_d", "temp_m", "temp_m_t1", "temp_m_t2",
+              "sMoist_d", "sMoist_m", "sMoist_m_t1", "sMoist_m_t2",
+              "precip_m", "precip_m_t1", "precip_m_t2",
+              "bio1_wc", "bio12_wc", "tavg_wc", "prec_wc"), 
+            ~(scale(., center = T, scale = T %>% as.numeric)))
+
+
 ## Vector of cleaner labels for model output table
 nicelabs <- c(`(Intercept)` = "Intercept",
               richness = "Richness",
@@ -123,17 +139,18 @@ nicelabs <- c(`(Intercept)` = "Intercept",
 
 
 ## Function to populate dummy columns with uniform labels in ggpredict dataframe
-create_dummy_col <- function(df){
-  values <- c("Low", "Med", "High")
-  keys <-  unique(df[,8])
-  index <- setNames(as.list(values), keys)
-  
-  df$dummy <- dplyr::recode(as.list(df[,8]), !!!index)
-  
-  # df$dummy <- dplyr::mutate(df = as.factor(dplyr::recode(df[,6], !!!index)))
-  
-  return(df)
-}
+## NEED TO FIX!! Not working as of R v 4.3.1
+# create_dummy_col <- function(df){
+#   values <- c("Low", "Med", "High")
+#   keys <-  unique(df[,8])
+#   index <- setNames(as.list(values), keys)
+#   
+#   df$dummy <- dplyr::recode(as.list(df[,8]), !!!index)
+#   
+#   # df$dummy <- dplyr::mutate(df = as.factor(dplyr::recode(df[,6], !!!index)))
+#   
+#   return(df)
+# }
 
 
 #### 1) Descriptive Figures ####################################################
@@ -163,8 +180,7 @@ worldmap <- map_data("world")
 
 map <- ggplot() +
   geom_map(data = worldmap, map = worldmap,
-           aes(x = long, y = lat, map_id = region),
-           col = "white", fill = "#B2BEB5") +
+           aes(map_id = region), col = "white", fill = "#B2BEB5") +
   scale_x_continuous(limits = c(-13, 15)) +
   scale_y_continuous(limits = c(35, 60)) +
   geom_point(data = obs, aes(x = decimalLongitude, y = decimalLatitude, fill = BsalDetected, shape = BsalDetected),
@@ -234,10 +250,8 @@ prev_plot <- ggplot(prev, aes(scientific, sapply(Bsal_prev, FUN = function(x) if
 
 prev_plot 
 
-ggsave("prev_plot.pdf", prev_plot, device = cairo_pdf, path = file.path(dir, figpath),
-        width = 2300, height = 2000, scale = 1.5, units = "px", dpi = 300, limitsize = F)
-
-
+# ggsave("prev_plot.pdf", prev_plot, device = cairo_pdf, path = file.path(dir, figpath),
+#         width = 2300, height = 2000, scale = 1.5, units = "px", dpi = 300, limitsize = F)
 
 
 ##      2b. The most susceptible species are also the most abundant, while the 
@@ -318,8 +332,8 @@ m2b_plot <- ggplot(m2b_predict, aes(scientific, sppAbun, colour = susceptibility
 
 m2b_plot
 
-ggsave("abundance_plot.pdf", m2b_plot, device = cairo_pdf, path = file.path(dir, figpath),
-         width = 2200, height = 1400, scale = 2, units = "px", dpi = 300, limitsize = F)
+# ggsave("abundance_plot.pdf", m2b_plot, device = cairo_pdf, path = file.path(dir, figpath),
+#          width = 2200, height = 1400, scale = 2, units = "px", dpi = 300, limitsize = F)
 
 
 
@@ -354,7 +368,7 @@ m2c_plot <- ggplot(m2c_predict, aes(susceptibility, predicted, color = susceptib
                 alpha = 0.75, size = 8, label.size = NA, fill = NA, fontface = "bold", show.legend = F) +
   annotate("text", x = 3, y = 6.75, label = "***", size = 10, fontface = "bold", 
            colour = "#b30000") +
-  stat_compare_means() +
+#  stat_compare_means() +
   scale_x_discrete(labels = c("Resistant", "Tolerant", "Susceptible")) +
   ylab("Species abundance") + 
   xlab("Susceptibility level") +
@@ -367,8 +381,8 @@ m2c_plot <- ggplot(m2c_predict, aes(susceptibility, predicted, color = susceptib
 
 m2c_plot
 
-ggsave("susceptibility_plot.pdf", m2c_plot, device = cairo_pdf, path = file.path(dir, figpath),
-         width = 2200, height = 1300, scale = 2, units = "px", dpi = 300, limitsize = F)
+# ggsave("susceptibility_plot.pdf", m2c_plot, device = cairo_pdf, path = file.path(dir, figpath),
+#          width = 2200, height = 1300, scale = 2, units = "px", dpi = 300, limitsize = F)
 
 
 ## Create guide to force a common legend
@@ -412,6 +426,16 @@ fig2c <- m2c_plot + labs(caption = NULL) +
                       commonLegend
 
 
+fig2ab <-(fig2a | fig2b) + plot_layout(guides = "collect", heights = c(20, 16)) +
+  plot_annotation(tag_levels = "A") & theme(legend.position = "top",
+                                            legend.box.margin = margin(0, 1, 1, 1, "cm"),
+                                            legend.text = element_text(margin = margin(r = 1, unit = "cm")),
+                                            legend.title = element_blank())
+fig2ab
+
+# ggsave("fig2ab.pdf", fig2ab, device = cairo_pdf, path = file.path(dir, figpath),
+#        width = 2800, height = 2600, scale = 2, units = "px", dpi = 300, limitsize = F)
+
 fig2combined <- ((fig2a | fig2b)/fig2c) + plot_layout(guides = "collect", heights = c(20, 16)) +
                 plot_annotation(tag_levels = "A") & theme(legend.position = "top",
                                                           legend.box.margin = margin(0, 1, 1, 1, "cm"),
@@ -419,8 +443,8 @@ fig2combined <- ((fig2a | fig2b)/fig2c) + plot_layout(guides = "collect", height
                                                           legend.title = element_blank())
 fig2combined
 
-ggsave("fig2_combined.pdf", fig2combined, device = cairo_pdf, path = file.path(dir, figpath),
-       width = 2800, height = 2600, scale = 2, units = "px", dpi = 300, limitsize = F)
+# ggsave("fig2_combined.pdf", fig2combined, device = cairo_pdf, path = file.path(dir, figpath),
+#        width = 2800, height = 2600, scale = 2, units = "px", dpi = 300, limitsize = F)
 
 ## Code to see how many sites each species are found at in each country
 # d %>%
@@ -431,22 +455,6 @@ ggsave("fig2_combined.pdf", fig2combined, device = cairo_pdf, path = file.path(d
 
 
 #### 3. Cbind models testing the Dilution Effect Hypothesis ####################
-## Data prep
-
-# Drop rows with NA vals in weather data
-dcbindScaled <- dcbind %>% 
-  tidyr::drop_na(., any_of(c(21:36))) %>%
-  filter(country == "Germany" | country == "Spain")
-
-# Scale relevant vars
-dcbindScaled <- dcbindScaled %>%
-  mutate_at(c("temp_d", "temp_m", "temp_m_t1", "temp_m_t2",
-              "sMoist_d", "sMoist_m", "sMoist_m_t1", "sMoist_m_t2",
-              "precip_m", "precip_m_t1", "precip_m_t2",
-              "bio1_wc", "bio12_wc", "tavg_wc", "prec_wc"), 
-            ~(scale(., center = T, scale = T %>% as.numeric)))
-
-
 ##      3a. Cbind model including all salamander spp. --------------------------
 m_all <- glmmTMB(cbind(nPos_all, nNeg_all) ~ richness*logsiteAbun +
                     temp_d*sMoist_d + (1|scientific),
@@ -513,18 +521,24 @@ m_all_plot <- ggplot(m_all_predict, aes(x = richness, y = predicted,
   #              fill = siteAbun), alpha = 0.2, colour = NA, show.legend = F) +
   scale_linetype_manual(values = c("solid", "longdash", "twodash")) +
   scale_color_grey(start = 0.8, end = 0.2) +
-  scale_x_continuous(labels = seq(0, 10, 1), breaks = seq(0, 10, 1)) +
+  scale_x_continuous(labels = seq(0, 10, 1), 
+                     breaks = seq(0, 10, 1)) +
   scale_y_continuous(labels = scales::percent_format(accuracy = 1), 
-                      breaks = seq(0, .05, 0.01), limits = c(0, 0.05)) + 
+                     breaks = seq(0, .05, 0.01), 
+                     limits = c(0, 0.05),
+                     minor_breaks = seq(0, 0.05, 0.01)) + 
   ak_theme + theme(plot.tag.position = c(0.96, 0.9),
                    legend.title = element_blank(),
                    axis.text.y = element_text(face = "plain")) + 
   guides(colour = guide_legend("Site-level abundance"))
 
 m_all_plot
-ggsave("m_all_plot.tif", m_all_plot, device = "tiff", scale = 2, 
-       width = 1920, height = 1080, units = "px", 
-       path = file.path(dir, figpath), dpi = 300)
+# ggsave("m_all_plot.pdf", m_all_plot, device = cairo_pdf, path = file.path(dir, figpath),
+#        width = 1250, height = 1500, scale = 2, units = "px", dpi = 300, limitsize = F)
+
+# ggsave("m_all_plot.tif", m_all_plot, device = "tiff", scale = 2, 
+#        width = 1500, height = 1000, units = "px", 
+#        path = file.path(dir, figpath), dpi = 300)
 
 
 ##      3b. Cbind model for fire salamanders only ------------------------------
@@ -602,8 +616,9 @@ m_FS_plot <- ggplot(m_FS_predict, aes(x = richness , y = predicted, colour = sit
   scale_x_continuous(labels = seq(0, 10, 1), 
                      breaks = seq(0, 10, 1)) +
   scale_y_continuous(labels = scales::percent_format(accuracy = 1), 
-                     breaks = seq(0, 0.12, 0.02), 
-                     limits = c(0, 0.12)) +
+                     breaks = seq(0, 0.12, 0.04), 
+                     limits = c(0, 0.12),
+                     minor_breaks = seq(0, 0.12, 0.01)) +
   ak_theme + theme(plot.tag.position = c(0.96, 0.9),
                    legend.title = element_blank(),
                    axis.text.y = element_text(face = "plain")) + 
@@ -611,19 +626,22 @@ m_FS_plot <- ggplot(m_FS_predict, aes(x = richness , y = predicted, colour = sit
 
 
 m_FS_plot
-ggsave("m_FS_plot.pdf", m_FS_plot, device = cairo_pdf, scale = 2, width = 1920, height = 1080, units = "px",
-       path = file.path(dir, figpath), dpi = 300)
+# ggsave("m_FS_plot.pdf", m_FS_plot, device = cairo_pdf, path = file.path(dir, figpath),
+#        width = 1250, height = 1500, scale = 2, units = "px", dpi = 300, limitsize = F)
+
+# ggsave("m_FS_plot.pdf", m_FS_plot, device = cairo_pdf, scale = 2, width = 1920, height = 1080, units = "px",
+#        path = file.path(dir, figpath), dpi = 300)
 
 
 ## Create combined plot for manuscript
-fig3a <- m_all_plot + labs(caption = NULL, x = NULL, y = NULL) + 
-  theme(plot.tag.position = c(0.95, 0.9),
+fig3a <- m_all_plot + labs(caption = NULL, y = NULL, x = NULL) + 
+  theme(plot.tag.position = c(0.95, 0.95),
         plot.margin = margin(.5, .75, .5, .5, "cm"),
         legend.position = c(0.5, 0.9),
         legend.background = element_rect(fill = alpha ("white", 0.75), color = NA),
         legend.box = "horizontal",
         legend.key.size = unit(1,"cm"),
-        legend.text = element_text(margin = margin(r = 1, unit = "cm"), size = 22),
+        legend.text = element_text(margin = margin(r = 1, unit = "cm"), size = 24),
         legend.title = element_blank()) +
   guides(shape = guide_legend(label.position = "left"),
          linetype = guide_legend(nrow = 1))
@@ -631,28 +649,54 @@ fig3a <- m_all_plot + labs(caption = NULL, x = NULL, y = NULL) +
 fig3a
 
 fig3b <- m_FS_plot + labs(caption = NULL, y = NULL) + 
-  theme(plot.tag.position = c(0.95, 0.9),
+  theme(plot.tag.position = c(0.95, 0.95),
         plot.margin = margin(.5, .75, .5, .5, "cm"),
         legend.position = c(0.5, 0.9),
         legend.background = element_rect(fill = alpha ("white", 0.75), color = NA),
         legend.box = "horizontal",
         legend.key.size = unit(1,"cm"),
-        legend.text = element_text(margin = margin(r = 1, unit = "cm"), size = 22),
+        legend.text = element_text(margin = margin(r = 1, unit = "cm"), size = 24),
         legend.title = element_blank()) +
   guides(shape = guide_legend(label.position = "left"),
          linetype = guide_legend(nrow = 1))
 fig3b
 
-modPlots <- (fig3a/fig3b) + 
-  plot_annotation(tag_levels = "A")
-
-modPlots
 
 
-tmp <- modPlots + grid::grid.draw(grid::textGrob("ylab", x = 0.02, rot = 90))
-tmp
+# ## Vertical plots* 
+# #-- need to alter x and y labs in fig3a/3b if switching between h and v plots
+FS_imgpath <- str_c("C:/Development/Chapter-4-Analyses/csvFiles/firesalamander.png") # add image to 3b
 
-ggsave("modelPlots.pdf", modPlots, device = cairo_pdf, scale = 2, width = 1920, height = 2400, units = "px",
+fig3ab_v <- (fig3a / fig3b) + plot_annotation(tag_levels = "A")
+
+fig3ab_v_combined <- ggdraw(fig3ab_v) + 
+  draw_label("Bsal prevalence (%)", x = 0, y = 0.5, angle = 90,
+             size = 34, fontfamily = "Arial") + 
+  draw_image(image = FS_imgpath, x = 0.35, y = -0.15, scale = 0.25) +
+  ak_theme + theme(axis.line = element_blank())
+fig3ab_v_combined
+
+
+ggsave("modelPlots_vertical.pdf", fig3ab_v_combined, device = cairo_pdf, scale = 2, 
+       width = 1750, height = 2400, units = "px",
+       path = file.path(dir, figpath), dpi = 300)
+
+
+## Horizontal plots
+
+
+fig3ab_h <- (fig3a | fig3b) + plot_annotation(tag_levels = "A")
+
+fig3ab_h_combined <- ggdraw(fig3ab_h) + 
+  draw_label("Species richness", x = 0.5, y = 0, angle = 0,
+             size = 34, fontfamily = "Arial") + 
+  draw_image(image = FS_imgpath, x = 0.4, y = 0.22, scale = 0.25) +
+  ak_theme + theme(axis.line = element_blank())
+fig3ab_h_combined
+
+
+ggsave("modelPlots_horizontal.pdf", fig3ab_h_combined, device = cairo_pdf, scale = 2, 
+       width = 2400, height = 1250, units = "px",
        path = file.path(dir, figpath), dpi = 300)
 
 
