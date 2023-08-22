@@ -34,8 +34,9 @@ pckgs <- c("ggsignif", # adds labels to significant groups
              "sjPlot", # plot_model(), tab_model()
                "ragg", # converts plots to tiff files
           "htmltools", # visualizes model outputs as html tables
-            "webshot", # converts html files to png
+           "webshot2", # converts html files to png
              "magick", # image_read() -- needed for cowplot::draw_image
+              "Hmisc", # binconf() provides CI of binomial distribution
 #### Analysis Specific Packages ####
           "tidyverse", # data wrangling/manipulation
             "glmmTMB", # glmmTMB()
@@ -111,13 +112,8 @@ dcbind <- dcbind %>%
   relocate(c(logsppAbun, logsiteAbun), .after = sppAbun) 
 
 ## Data prep for cbind models
-# Drop rows with NA vals in weather data
-dcbindScaled <- dcbind %>% 
-  tidyr::drop_na(., any_of(c(21:36))) %>%
-  filter(country == "Germany" | country == "Spain")
-
 # Scale relevant vars
-dcbindScaled <- dcbindScaled %>%
+dcbindScaled <- dcbind %>%
   mutate_at(c("temp_d", "temp_m", "temp_m_t1", "temp_m_t2",
               "sMoist_d", "sMoist_m", "sMoist_m_t1", "sMoist_m_t2",
               "precip_m", "precip_m_t1", "precip_m_t2",
@@ -140,17 +136,17 @@ nicelabs <- c(`(Intercept)` = "Intercept",
 
 ## Function to populate dummy columns with uniform labels in ggpredict dataframe
 ## NEED TO FIX!! Not working as of R v 4.3.1
-# create_dummy_col <- function(df){
-#   values <- c("Low", "Med", "High")
-#   keys <-  unique(df[,8])
-#   index <- setNames(as.list(values), keys)
-#   
-#   df$dummy <- dplyr::recode(as.list(df[,8]), !!!index)
-#   
-#   # df$dummy <- dplyr::mutate(df = as.factor(dplyr::recode(df[,6], !!!index)))
-#   
-#   return(df)
-# }
+create_dummy_col <- function(df){
+  values <- c("Low", "Med", "High")
+  keys <-  unique(df[,8])
+  index <- setNames(as.list(values), keys)
+
+  df$dummy <- dplyr::recode(as.list(df[,8]), !!!index)
+
+  # df$dummy <- dplyr::mutate(df = as.factor(dplyr::recode(df[,6], !!!index)))
+
+  return(df)
+}
 
 
 #### 1) Descriptive Figures ####################################################
@@ -159,12 +155,13 @@ obs <- d %>%
   dplyr::select(country, ADM0, decimalLatitude, decimalLongitude, diseaseTested,
                 BsalDetected, BdDetected, individualCount) %>%
   plyr::mutate(BsalDetected = as.factor(dplyr::recode(BsalDetected,
-                                                      "1" = "Bsal positive", "0" = "Bsal negative"))) %>%
+                                                      "1" = "Bsal positive", 
+                                                      "0" = "Bsal negative"))) %>%
   arrange(BsalDetected)
 
 # Summarise number of observations from each country
 sampSize <- obs %>%
-  group_by(country) %>%
+  group_by(country, BsalDetected) %>%
   summarise(n = n())
 
 # Get the coordinates of each country
@@ -178,12 +175,13 @@ labs <- merge(x = sampSize, y = country_lookup,
 # obtain world map
 worldmap <- map_data("world")
 
-map <- ggplot() +
+Euro_map <- ggplot() +
   geom_map(data = worldmap, map = worldmap,
            aes(map_id = region), col = "white", fill = "#B2BEB5") +
   scale_x_continuous(limits = c(-13, 15)) +
   scale_y_continuous(limits = c(35, 60)) +
-  geom_point(data = obs, aes(x = decimalLongitude, y = decimalLatitude, fill = BsalDetected, shape = BsalDetected),
+  geom_point(data = obs, aes(x = decimalLongitude, y = decimalLatitude, 
+                             fill = BsalDetected, shape = BsalDetected),
              alpha = 0.3, size = 4, stroke = 1, color = "gray30") +
   scale_fill_manual(values = c("gray40", "#C23113")) +
   scale_shape_manual(values = c(21, 24)) +
@@ -207,9 +205,9 @@ map <- ggplot() +
                                                face = "plain"),) +
   guides(fill = guide_legend(override.aes = list(alpha = 1)))
 
-map
+Euro_map
 
-# ggsave("map.pdf", map, device = cairo_pdf, path = file.path(dir, figpath),
+# ggsave("Euro_map.pdf", Euro_map, device = cairo_pdf, path = file.path(dir, figpath),
 #        width = 2000, height = 2000, scale = 2, units = "px", dpi = 300, limitsize = F)
 
 
@@ -224,34 +222,71 @@ prev <- d %>%
   ungroup() %>%
   mutate(Bsal_prev = (ncas_Bsal/npop)*100) %>% # prevalence as a percentage
   dplyr::select(scientific, susceptibility, ncas_Bsal, Bsal_prev, npop) %>%
-  unique()
+  unique() %>%
+  dplyr::mutate(row_id = row_number()) %>%
+  relocate(row_id, .before = scientific)
 
 
-# Descriptive plot showing disease prevalence values per species
-prev_plot <- ggplot(prev, aes(scientific, sapply(Bsal_prev, FUN = function(x) ifelse(x == 0, 0.1, x)), 
-                              fill = susceptibility, label = paste(sprintf(Bsal_prev, fmt = '%#.1f'), "%"))) +
-  geom_col(position = "identity") +
-  geom_text(aes(colour = susceptibility), nudge_y = 4, size = 6, fontface = "bold", alpha = 0.75) +
+# Use binconf function to sample binomial distribution and get CIs for prevalence
+bsal_ci <- binconf(prev$ncas_Bsal, prev$npop, method = "exact", return.df = T)
+
+deu <- sampSize %>%
+  filter(country == "Germany") %>%
+  plyr::mutate(BsalDetected = as.factor(dplyr::recode(BsalDetected,
+                                                      "Bsal positive" = "Pos", "Bsal negative" = "Neg"))) %>%
+  pivot_wider(names_from = BsalDetected, values_from = n) %>%
+  mutate(pop = sum(Pos, Neg),
+         prev = round((Pos/pop)*100, 2))
+print(deu$prev)
+
+esp <- sampSize %>%
+  filter(country == "Spain") %>%
+  plyr::mutate(BsalDetected = as.factor(dplyr::recode(BsalDetected,
+                                                      "Bsal positive" = "Pos", "Bsal negative" = "Neg"))) %>%
+  pivot_wider(names_from = BsalDetected, values_from = n) %>%
+  mutate(pop = sum(Pos, Neg),
+         prev = round((Pos/pop)*100, 2))
+print(esp$prev)
+
+
+# Convert binconf point estimates + CIs to percentages for plotting
+bsal_ci <-  bsal_ci %>%
+  plyr::mutate(PointEst = round((PointEst*100), 1),
+               Lower = round((Lower*100), 1),
+               Upper = round((Upper*100), 1)) %>%
+  dplyr::mutate(row_id = row_number()) %>%
+  relocate(row_id, .before = PointEst)
+
+
+# Join with original 'prev' dataset, so we can plot actual vs expected
+prev <- prev %>% 
+  left_join(., bsal_ci, by = "row_id")
+
+prev_binconf_plot <- ggplot(prev, aes(scientific, sapply(PointEst, FUN = function(x) ifelse(x == 0.0, round(x, 0), x)), 
+                                          colour = susceptibility,
+                                          label = paste(PointEst,"%"))) +
+  geom_point(size = 5) +
+  geom_errorbar(aes(ymin = Lower, ymax = Upper), width = 0.5, linewidth = 1) +
+  geom_text(aes(colour = susceptibility, x = (as.numeric(scientific) + 0.05), y = Upper + 5),
+            size = 6, fontface = "bold", alpha = 0.75) +
   coord_flip(clip = "off") +
-  ylab("Disease prevalence (%)") + 
+  ylab("Disease prevalence (%)") +
   xlab("Species") + 
   scale_colour_manual(name = "Susceptibility",
-                    values = c("#548078", "#E3A630", "#b30000"),
-                    labels = c("Resistant", "Tolerant", "Susceptible"),
-                    guide = "none") +
-  scale_fill_manual(name = "Susceptibility",
-                    values = c("#548078", "#E3A630", "#b30000"),
-                    labels = c("Resistant", "Tolerant", "Susceptible"),
-                    guide = "none") +
+                      values = c("#548078", "#E3A630", "#b30000"),
+                      labels = c("Resistant", "Tolerant", "Susceptible"),
+                      guide = "none") +
+  scale_y_continuous(labels = seq(0, 60, 20),
+                     breaks = seq(0, 60, 20),
+                     limits = c(0, 67)) +
   scale_x_discrete(expand = expansion(mult = c(0, 0.01), add = c(1, 0.25))) +
-  scale_y_continuous(labels = scales::label_percent(scale = 1, suffix = "%"), 
-                     breaks = seq(0, 40, 10), limit = c(0, 43)) +
-  ak_theme 
+  ak_theme + theme(axis.text.y = element_text(face = "italic"),
+                   legend.title = element_blank()) 
 
-prev_plot 
+prev_binconf_plot
 
-# ggsave("prev_plot.pdf", prev_plot, device = cairo_pdf, path = file.path(dir, figpath),
-#         width = 2300, height = 2000, scale = 1.5, units = "px", dpi = 300, limitsize = F)
+ggsave("prev_binconf_plot.pdf", prev_binconf_plot, device = cairo_pdf, path = file.path(dir, figpath),
+         width = 2600, height = 2000, scale = 1.5, units = "px", dpi = 300, limitsize = F)
 
 
 ##      2b. The most susceptible species are also the most abundant, while the 
@@ -264,6 +299,12 @@ summary(model_2b)
 Anova(model_2b)
 
 
+# Calculate observed avg
+spavg <- d %>%
+  dplyr::select(scientific, sppAbun, Site) # subset relevant data
+spavg <- aggregate(sppAbun ~ scientific, spavg, mean) # aggregate by Site, & spp. and summarise
+names(spavg)[names(spavg) == 'sppAbun'] <- 'avg_sppAbun'
+
 textcol <- d %>%
   dplyr::select(scientific, susceptibility, Site) %>% # subset relevant data
   mutate(Site = as.factor(Site)) %>%
@@ -271,7 +312,8 @@ textcol <- d %>%
   mutate(No.Sites = length(unique(Site))) %>%
   ungroup() %>%
   dplyr::select(!Site) %>%
-  unique()
+  unique() %>%
+  left_join(., spavg, by = "scientific")
 
 
 m2b_predict <- ggpredict(model_2b, terms = "scientific") %>%
@@ -279,10 +321,9 @@ m2b_predict <- ggpredict(model_2b, terms = "scientific") %>%
          "logsppAbun" = "predicted",
          "expectedAbun" = "group") %>%
   left_join(., textcol, by = "scientific") %>%
-  plyr::mutate(sppAbun = exp(logsppAbun),
+  plyr::mutate(expectedAbun = exp(logsppAbun),
                conf.low = exp(conf.low),
                conf.high = exp(conf.high),
-               expectedAbun = round(sppAbun, 0),
                susceptibility = as.factor(susceptibility))
 
 
@@ -290,7 +331,7 @@ m2b_predict <- ggpredict(model_2b, terms = "scientific") %>%
 TeXlabl <- glue::glue("$\\textbf{\\hat{X}_{\\textit{a}}}}}=", .open = "{{") # THIS WORKS
 xhat <- latex2exp::TeX(TeXlabl, output = "expression")
 
-
+# Create color coded labels for graph annotation
 # Resistant
 df1 <- m2b_predict %>%
   filter(susceptibility == "1")
@@ -303,17 +344,18 @@ df2 <- m2b_predict %>%
 df3 <- m2b_predict %>% 
   filter(susceptibility == "3") 
 
-m2b_plot <- ggplot(m2b_predict, aes(scientific, sppAbun, colour = susceptibility,
-                                    label = expectedAbun)) +
-  geom_point(size = 3) +
-  geom_errorbar(aes(ymin = conf.low, ymax = conf.high), width = 0.5) +
-  geom_text(aes(colour = susceptibility, x = (as.numeric(scientific)+0.05), y = conf.high + 3.5), 
+
+m2b_plot <- ggplot(m2b_predict, aes(x = scientific, label = round(expectedAbun,0))) +
+  geom_point(aes(y = expectedAbun, colour = susceptibility), size = 5) +
+  # geom_point(aes(y = avg_sppAbun colour = susceptibility), size = 5, shape = 1) +
+  geom_errorbar(aes(ymin = conf.low, ymax = conf.high, colour = susceptibility), width = 0.5, linewidth = 1) +
+  geom_text(aes(colour = susceptibility, x = (as.numeric(scientific) + 0.05), y = conf.high + 3), 
             size = 6, fontface = "bold", alpha = 0.75) +
-  annotate(geom = "text", x = (as.numeric(df1$scientific) + 0.1), y = (df1$conf.high + 2),
+  annotate(geom = "text", x = (as.numeric(df_m2_1$scientific) + 0.1), y = (df_m2_1$conf.high + 1.5),
            label = paste(xhat), parse = TRUE, size = 6, color = "#548078", alpha = 0.75) +
-  annotate(geom = "text", x = (as.numeric(df2$scientific) + 0.1), y = (df2$conf.high + 2),
+  annotate(geom = "text", x = (as.numeric(df_m2_2$scientific) + 0.1), y = (df_m2_2$conf.high + 1.5),
            label = paste(xhat), parse = TRUE, size = 6, color = "#E3A630", alpha = 0.75) +
-  annotate(geom = "text", x = (as.numeric(df3$scientific) + 0.1), y = (df3$conf.high + 2),
+  annotate(geom = "text", x = (as.numeric(df_m2_3$scientific) + 0.1), y = (df_m2_3$conf.high + 1.5),
            label = paste(xhat), parse = TRUE, size = 6, color = "#b30000", alpha = 0.75) +
   coord_flip(clip = "off") +
   ylab("Abundance") +
@@ -332,8 +374,8 @@ m2b_plot <- ggplot(m2b_predict, aes(scientific, sppAbun, colour = susceptibility
 
 m2b_plot
 
-# ggsave("abundance_plot.pdf", m2b_plot, device = cairo_pdf, path = file.path(dir, figpath),
-#          width = 2200, height = 1400, scale = 2, units = "px", dpi = 300, limitsize = F)
+ggsave("fig2b.pdf", m2b_plot, device = cairo_pdf, path = file.path(dir, figpath),
+          width = 2000, height = 1400, scale = 2, units = "px", dpi = 300, limitsize = F)
 
 
 
@@ -368,32 +410,36 @@ m2c_plot <- ggplot(m2c_predict, aes(susceptibility, predicted, color = susceptib
                 alpha = 0.75, size = 8, label.size = NA, fill = NA, fontface = "bold", show.legend = F) +
   annotate("text", x = 3, y = 6.75, label = "***", size = 10, fontface = "bold", 
            colour = "#b30000") +
+  annotate("text", x = 0.65, y = 9, label = "C", size = 12, fontface = "bold", 
+           colour = "black") +
 #  stat_compare_means() +
   scale_x_discrete(labels = c("Resistant", "Tolerant", "Susceptible")) +
   ylab("Species abundance") + 
   xlab("Susceptibility level") +
-  scale_y_discrete(limits = factor(0:8), breaks = c("0", "2", "4", "6", "8")) +
+  scale_y_continuous(limits = c(0,9),
+                   breaks = seq(0, 8, 2)) +
   scale_colour_manual(name = "Susceptibility",
                       values = c("#548078", "#E3A630", "#b30000"),
                       labels = c("Resistant", "Tolerant", "Susceptible"),
                       guide = "none") + 
-  ak_theme
+  ak_theme + theme(axis.text.y = element_text(size = 26, face = "plain"),)
 
 m2c_plot
 
-# ggsave("susceptibility_plot.pdf", m2c_plot, device = cairo_pdf, path = file.path(dir, figpath),
-#          width = 2200, height = 1300, scale = 2, units = "px", dpi = 300, limitsize = F)
+
+ggsave("fig2c.pdf", m2c_plot, device = cairo_pdf, path = file.path(dir, figpath),
+          width = 2000, height = 1300, scale = 2, units = "px", dpi = 300, limitsize = F)
 
 
 ## Create guide to force a common legend
 commonLegend <- guides(fill = guide_legend(override.aes = list(color = c("#548078", "#E3A630", "#b30000"),
                                                     shape = c(16, 16, 16), 
                                                     size = c(2, 2, 2),
-                                                    alpha = c(1, 1, 1)),))
+                                                    alpha = c(1, 1, 1))))
 
 ## Create combined plot for manuscript
-fig2a <- prev_plot + labs(caption = NULL) + 
-                     theme(plot.tag.position = c(0.96, 0.78),
+fig2a <- prev_binconf_plot + labs(caption = NULL) + 
+                     theme(plot.tag.position = c(0.96, 0.92),
                            plot.margin = margin(.5, .75, .5, .75, "cm"),
                            axis.ticks.length = unit(.25, "cm"),
                            axis.ticks = element_blank(),
@@ -411,7 +457,7 @@ fig2b <- m2b_plot + labs(caption = NULL) +
                              axis.ticks.length = unit(.25, "cm"),
                              axis.ticks = element_blank(),
                              plot.margin = margin(.5, .75, .5, .5, "cm"),
-                             plot.tag.position = c(0.92, 0.78)) +
+                             plot.tag.position = c(0.92, 0.92)) +
                        commonLegend
 
 fig2c <- m2c_plot + labs(caption = NULL) + 
@@ -433,8 +479,8 @@ fig2ab <-(fig2a | fig2b) + plot_layout(guides = "collect", heights = c(20, 16)) 
                                             legend.title = element_blank())
 fig2ab
 
-# ggsave("fig2ab.pdf", fig2ab, device = cairo_pdf, path = file.path(dir, figpath),
-#        width = 2800, height = 2600, scale = 2, units = "px", dpi = 300, limitsize = F)
+ggsave("fig2ab.pdf", fig2ab, device = cairo_pdf, path = file.path(dir, figpath),
+        width = 2800, height = 1400, scale = 2, units = "px", dpi = 300, limitsize = F)
 
 fig2combined <- ((fig2a | fig2b)/fig2c) + plot_layout(guides = "collect", heights = c(20, 16)) +
                 plot_annotation(tag_levels = "A") & theme(legend.position = "top",
@@ -455,6 +501,11 @@ fig2combined
 
 
 #### 3. Cbind models testing the Dilution Effect Hypothesis ####################
+# Drop rows with NA vals in weather data
+dcbindScaled <- dcbind %>% 
+  tidyr::drop_na(., any_of(c(21:36))) %>%
+  filter(country == "Germany" | country == "Spain")
+
 ##      3a. Cbind model including all salamander spp. --------------------------
 m_all <- glmmTMB(cbind(nPos_all, nNeg_all) ~ richness*logsiteAbun +
                     temp_d*sMoist_d + (1|scientific),
@@ -479,20 +530,21 @@ Anova(m_all)
 
 #### Clean model outputs
 ## ABUNDANCE x RICHNESS
-# tab_model(m_all, show.obs = T, collapse.ci = T, 
-#           show.icc = F, show.ngroups = F, show.re.var = F,
-#           rm.terms = c("temp_d", "sMoist_d", "temp_d:sMoist_d"),
-#           dv.labels = "All species model",
-#           string.pred = "Terms",
-#           string.p = "P-Value",
-#           show.p = T,
-#           pred.labels = nicelabs)
-# 
-# 
-# # take html file and make .png file
-# webshot(file.path(dir, figpath, "m_all_rich.html"),
-#         file.path(dir, figpath, "m_all_rich.png"),
-#         vwidth = 365, vheight = 500)
+tab_model(m_all, show.obs = T, collapse.ci = T,
+          show.icc = F, show.ngroups = F, show.re.var = F,
+          rm.terms = c("temp_d", "sMoist_d", "temp_d:sMoist_d"),
+          dv.labels = "All species model",
+          string.pred = "Terms",
+          string.p = "P-Value",
+          show.p = T,
+          pred.labels = nicelabs,
+          file = file.path(dir, figpath, "m_all.html"))
+
+
+# take html file and make .png file
+webshot2::webshot(file.path(dir, figpath, "m_all.html"),
+        file.path(dir, figpath, "m_all.png"),
+        vwidth = 365, vheight = 500)
 
 
 
@@ -572,20 +624,21 @@ Anova(m_FS)
 
 #### Clean model outputs
 ## ABUNDANCE x RICHNESS
-# tab_model(m_FS, show.obs = T, collapse.ci = T, 
-#           show.icc = F, show.ngroups = F, show.re.var = F,
-#           rm.terms = c("temp_d", "sMoist_d", "temp_d:sMoist_d"),
-#           dv.labels = "Fire salamander model",
-#           string.pred = "Terms",
-#           string.p = "P-Value",
-#           show.p = T,
-#           pred.labels = nicelabs)
-# 
-# 
-# # take html file and make .png file
-# webshot(file.path(dir, figpath, "m_FS.html"),
-#         file.path(dir, figpath, "m_FS.png"),
-#         vwidth = 365, vheight = 500)
+tab_model(m_FS, show.obs = T, collapse.ci = T,
+          show.icc = F, show.ngroups = F, show.re.var = F,
+          rm.terms = c("temp_d", "sMoist_d", "temp_d:sMoist_d"),
+          dv.labels = "Fire salamander model",
+          string.pred = "Terms",
+          string.p = "P-Value",
+          show.p = T,
+          pred.labels = nicelabs,
+          file = file.path(dir, figpath, "m_FS.html"))
+
+
+# take html file and make .png file
+webshot2::webshot(file.path(dir, figpath, "m_FS.html"),
+                  file.path(dir, figpath, "m_FS.png"),
+                  vwidth = 365, vheight = 500)
 
 
 

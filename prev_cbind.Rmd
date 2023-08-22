@@ -300,7 +300,7 @@ tmp <- tmp %>%
 
 # Add back to dataframe
 prev_est <- cbind(prev_est, tmp)
-prev_est <- prev_est[sort.list(prev_est$est),]
+#prev_est <- prev_est[sort.list(prev_est$est),]
 prev_est <- prev_est %>%
   relocate(c(est, lowerCI, upperCI), .after = diseaseTested)
 
@@ -395,11 +395,18 @@ prev <- d %>%
   dplyr::select(scientific, susceptibility, ncas_Bsal, Bsal_prev, npop) %>%
   unique()
 
-
+library(Hmisc)
 bsal_ci <- binconf(prev$ncas_Bsal, prev$npop, method = "exact", return.df = T)
 print(bsal_ci)
 
-bsal_ci <- bsal_ci %>%
+bsal_ci <- bsal_ci[sort.list(bsal_ci$PointEst),]
+
+
+  
+bsal_ci <-  bsal_ci %>%
+  plyr::mutate(PointEst = PointEst*100,
+               Lower = Lower*100,
+               Upper = Upper*100) %>%
   dplyr::mutate(row_id = row_number()) %>%
    relocate(row_id, .before = PointEst)
 
@@ -407,13 +414,8 @@ bsal_ci <- bsal_ci %>%
 prev_est <- prev_est %>% 
   left_join(., bsal_ci, by = "row_id")
 
-prev_est <- prev_est %>%
-  plyr::mutate(PointEst = PointEst*100,
-               Lower = Lower*100,
-               Upper = Upper*100)
 
-
-prev_binconf_plot <- ggplot(prev_est, aes(scientific, sapply(PointEst, FUN = function(x) ifelse(x == 0, 0.1, x)), 
+prev_binconf_plot <- ggplot(prev_est, aes(scientific, sapply(PointEst, FUN = function(x) ifelse(PointEst == 0, 0.1, PointEst)), 
                                     colour = susceptibility,
                                     label = paste(sprintf(PointEst, fmt = '%#.1f'), "%"))) +
   geom_point(size = 3) +
