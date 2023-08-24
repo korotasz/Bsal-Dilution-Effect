@@ -24,7 +24,9 @@ pckgs <- c("ggsignif", # adds labels to significant groups
              "scales", # plot customization
            "eurostat", # obtain spatial data from europe
             "geodata", # obtain geographic data (world map)
-              "ggmap", # creates maps
+      "rnaturalearth", # obtain spatial polygons that can be used with sf
+                 "sf", # mapping
+              # "ggmap", # creates maps
           "ggspatial", # north arrow and scale bar
             "mapproj", # apply map projection
          "scatterpie", # add pie charts to maps
@@ -151,6 +153,7 @@ create_dummy_col <- function(df){
 
 #### 1) Descriptive Figures ####################################################
 ## Figure 1. Data distribution map
+# Summarise number of observations from each country
 obs <- d %>%
   dplyr::select(country, ADM0, decimalLatitude, decimalLongitude, diseaseTested,
                 BsalDetected, BdDetected, individualCount) %>%
@@ -159,7 +162,9 @@ obs <- d %>%
                                                       "0" = "Bsal negative"))) %>%
   arrange(BsalDetected)
 
-# Summarise number of observations from each country
+obs_transformed <- st_as_sf(obs, coords = c("decimalLongitude", "decimalLatitude"), crs = 4326) %>%
+  st_transform(., crs = 3035)
+
 sampSize <- obs %>%
   group_by(country, BsalDetected) %>%
   summarise(n = n())
@@ -169,26 +174,42 @@ country_lookup <- read.csv("countries.csv", stringsAsFactors = F)
 names(country_lookup)[1] <- "country_code"
 
 # Combine data
-labs <- merge(x = sampSize, y = country_lookup, 
+mapLabels <- merge(x = sampSize, y = country_lookup, 
               by.x = "country", by.y = "name", all.x = T)
 
-# obtain world map
-worldmap <- map_data("world")
+# Obtain world map
+worldmap <- ne_countries(scale = "medium", type = "map_units", returnclass = "sf")
 
+# Polygons are re-projected to the EPSG:3035 (Lambert Azimuthal Equal Area Projection) 
+# This projection covers all of Europe (on- and off-shore), is based on the GCS ETRS 89,
+# and has been used in the EU's INSPIRE directive. In other words, it is well established.
+# Coordinates are displayed in meters and must be translated back into decimal degrees.
+europe <- worldmap %>%
+  filter(continent == "Europe" & !name %in% c("Russia")) %>%
+  st_transform(., crs = 3035) 
+
+# Specify countries with Bsal field sampling efforts
+countriesSampled <- worldmap %>% 
+  filter(sovereignt %in% c("Spain", "Switzerland", "Germany", "United Kingdom") 
+         & !name %in% c("Guernsey", "Isle of Man", "Jersey", "N. Ireland", 
+                        "Scotland", "Wales", "Anguilla", "Bermuda", "Br. Indian Ocean Ter.",
+                        "Cayman Is.",  "Falkland Is.", "Montserrat", "Pitcairn Is.",
+                        "S. Geo. and S. Sandw. Is.", "Saint Helena", "Turks and Caicos Is.",
+                        "British Virgin Is.")) %>%
+  st_transform(., crs = 3035) 
+
+
+# Map
 Euro_map <- ggplot() +
-  geom_map(data = worldmap, map = worldmap,
-           aes(map_id = region), col = "white", fill = "#B2BEB5") +
-  scale_x_continuous(limits = c(-13, 15)) +
-  scale_y_continuous(limits = c(35, 60)) +
-  geom_point(data = obs, aes(x = decimalLongitude, y = decimalLatitude, 
-                             fill = BsalDetected, shape = BsalDetected),
-             alpha = 0.3, size = 4, stroke = 1, color = "gray30") +
-  scale_fill_manual(values = c("gray40", "#C23113")) +
-  scale_shape_manual(values = c(21, 24)) +
-  coord_fixed() +
-  labs(x = "Longitude", y = "Latitude") +
-  geom_richtext(data = labs, aes(longitude, latitude, group = country, label = paste("n<sub>obs</sub> =", n)), 
-                nudge_y = -0.25,stat = "identity", size = 8, fill = NA, label.color = NA, na.rm = FALSE, show.legend = NA) +
+  geom_sf(data = europe, col = "gray40", fill = "#ECECEC", show.legend = F) +
+  geom_sf(data = countriesSampled, aes(fill = sovereignt), col = "gray40", fill = "#B2BEB5", show.legend = F) +
+  geom_sf_text(data = countriesSampled, aes(label = name), position = "identity", size = 5) +
+  geom_sf(data = obs_transformed, aes(geometry = geometry, fill = BsalDetected, shape = BsalDetected),
+          alpha = 0.3, size = 4, stroke = 1, color = "gray30", show.legend = "point") +
+  scale_fill_manual(values = c("gray40", "#b30000"), guide = "none") +
+  scale_shape_manual(values = c(21, 24), guide = "none") +
+  coord_sf(xlim = c(2652777.0489846086, 4632884.549024921), # c(-16, 15)
+           ylim = c(1615336.1806950625, 3665962.1500697937)) + # c(37, 56)
   ak_theme + theme(legend.title = element_blank(),
                    legend.position = "top",
                    legend.spacing = unit(1, "cm"), # Space legend labels
@@ -196,21 +217,60 @@ Euro_map <- ggplot() +
                    legend.text.align = 0,
                    legend.text = element_text(size = 28, hjust = 0),
                    axis.text.x = element_text(size = 28),
-                   axis.title.x = element_text(size = 42, hjust = 0.5, 
-                                               margin = margin(t = 10, r = 0, b = 0, l = 0), 
-                                               face = "plain"),
+                   axis.title.x = element_blank(),
                    axis.text.y = element_text(size = 28, face = "plain"),
-                   axis.title.y = element_text(size = 42, hjust = 0.5, 
-                                               margin = margin(t = 0, r = 15, b = 0, l = 5), 
-                                               face = "plain"),) +
-  guides(fill = guide_legend(override.aes = list(alpha = 1)))
+                   axis.title.y = element_blank()) +
+  guides(fill = guide_legend(override.aes = list(color = c("gray40", "#b30000"),
+                                                 shape = c(21, 24), 
+                                                 size = c(5, 5),
+                                                 alpha = c(1, 1))))
 
-Euro_map
+  
+
+Euro_map  
+
+germany <- ggplot() +
+  geom_sf(data = europe, col = "gray40", fill = "#ECECEC", show.legend = F) +
+  geom_sf(data = countriesSampled, aes(fill = sovereignt), col = "gray40", fill = "#B2BEB5", show.legend = F) +
+  geom_sf_text(data = countriesSampled, aes(label = name), position = "identity", size = 7) +
+  geom_sf(data = obs_transformed, aes(geometry = geometry, fill = BsalDetected, shape = BsalDetected),
+          alpha = 0.3, size = 4, stroke = 1, color = "gray30", show.legend = "point") +
+  scale_fill_manual(values = c("gray40", "#b30000"), guide = "none") +
+  scale_shape_manual(values = c(21, 24), guide = "none") +
+  coord_sf(xlim = c(4031004.6092165913, 4662450.609393332), # c(5, 15)
+           ylim = c(2742165.4171582675, 3505801.4326768997)) + # c(47.5, 54.4)
+  annotation_scale(location = "tr", width_hint = 0.5, text_cex = 2.5, text_face = "plain",
+                   pad_y = unit(0.5, "cm")) +
+  annotation_north_arrow(location = "tl", which_north = "true", 
+                         height = unit(2, "cm"), width = unit(2, "cm"),
+                         pad_x = unit(0.25, "cm"), pad_y = unit(0.2, "cm"),
+                         style = north_arrow_fancy_orienteering(line_width = 1.8, text_size = 18)) +
+  ak_theme + theme(legend.title = element_blank(),
+                   legend.position = "top",
+                   legend.spacing = unit(1, "cm"), # Space legend labels
+                   legend.key.size = unit(1,"cm"),
+                   legend.text.align = 0,
+                   legend.text = element_text(size = 28, hjust = 0),
+                   axis.text.x = element_text(size = 28),
+                   axis.title.x = element_blank(),
+                   axis.text.y = element_text(size = 28, face = "plain"),
+                   axis.title.y = element_blank()) +
+  guides(fill = guide_legend(override.aes = list(color = c("gray40", "#b30000"),
+                                                 shape = c(21, 24), 
+                                                 size = c(5, 5),
+                                                 alpha = c(1, 1))))
+
+germany
+
+
+
+
+
 
 # ggsave("Euro_map.pdf", Euro_map, device = cairo_pdf, path = file.path(dir, figpath),
 #        width = 2000, height = 2000, scale = 2, units = "px", dpi = 300, limitsize = F)
 
-
+# http://127.0.0.1:29403/graphics/70691af6-0ed8-4077-8e3e-00e9c65965ad.png
 
 #### 2) Testing assumptions of the dilution effect hypothesis ##################
 ##      2a. Hosts differ in their reservoir competence.
