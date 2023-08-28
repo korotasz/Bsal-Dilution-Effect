@@ -322,20 +322,23 @@ esp_map
 swz <- mapLabels %>% filter(country == "Switzerland") %>%
   plyr::mutate(label = paste(country, " (n = ", n, ")", sep = ""))
 
+# geometry <- data.frame(st_coordinates(st_cast(swz$geometry, "POINT"))) # scale_y_continuous didn't like the format of geom_sf_label
+# 
+# swz <- cbind(swz, geometry)
 
 che_map <- ggplot() +
   geom_sf(data = europe, col = "gray40", fill = "#ECECEC", show.legend = F) +
   geom_sf(data = countriesSampled, aes(fill = sovereignt), col = "gray40", fill = "#B2BEB5", show.legend = F) +
-  geom_sf_label(data = swz, aes(label = paste(label)), #nudge_x = -50000, nudge_y = 120000,
-                size = 7, fontface = "bold", label.size = NA, alpha = 0.5) +
+  geom_sf_label(data = swz, aes(label = paste(label)), nudge_x = -40000, nudge_y = 120000,
+                size = 7, fontface = "bold", label.size = NA, alpha = 0.5, inherit.aes = F) +
   geom_sf(data = obs_transformed, aes(geometry = geometry, fill = BsalDetected, shape = BsalDetected),
           alpha = 0.3, size = 4, stroke = 1, color = "gray30", show.legend = "point") +
   scale_fill_manual(values = c("gray40", "#b30000"), guide = "none") +
   scale_shape_manual(values = c(21, 24), guide = "none") +
   coord_sf(xlim = c(4010139.011070984, 4359878.636359634), # c(6, 11)
-           ylim = c(2515327.8389015356, 2765224.576573791)) + # c(45.75, 48)
-  scale_y_continuous(breaks = c(46, 47, 48),
-                     limits = c(45.75, 48)) +
+           ylim = c(2498679.761531601, 2765224.576573791)) + # c(45.75, 48)
+  # scale_y_continuous(breaks = c(46, 47, 48),
+  #                    limits = c(45.75, 48)) +
   annotation_scale(location = "br", width_hint = 0.5, text_cex = 2, text_face = "plain",
                    pad_y = unit(0.5, "cm")) +
   annotation_north_arrow(location = "bl", which_north = "true", 
@@ -358,7 +361,6 @@ che_map <- ggplot() +
                                                  alpha = c(1, 1))))
 
 che_map
-
 
 ## UK map
 uk <- mapLabels %>% filter(country == "United Kingdom") %>%
@@ -402,17 +404,51 @@ gbr_map
 
 
 
-fig1_map <- ((gbr_map/esp_map)|europe_map|(deu_map/che_map)) + 
-  plot_layout(guides = "collect", 
+fig1a <- europe_map + theme(plot.tag.position = c(0.96, 0.85)) 
+fig1b <- gbr_map + theme(plot.tag.position = c(0.95, 0.72)) 
+fig1c <- esp_map + theme(plot.tag.position = c(0.95, 0.95)) 
+fig1d <- deu_map + theme(plot.tag.position = c(0.96, 0.8)) 
+fig1e <- che_map + theme(plot.tag.position = c(0.96, 0.92))
+
+p <- ggplot() + labs(x = "Longitude", y = "Latitude")
+x_axis <- cowplot::get_plot_component(p, "xlab-b") 
+y_axis <- cowplot::get_plot_component(p, "ylab-l") 
+
+layout <- "
+BAAA
+BAAA
+BAAA
+#CCC
+"
+
+
+fig1_map <- ((fig1b/fig1c)|(fig1a)|(fig1d/fig1e)) +
+  plot_annotation(tag_levels = list(c("B", "C", "A", "D", "E"))) +
+  plot_layout(guides = "collect",
               widths = c(1, 2, 1),
               heights = c(1, 2, 1)) &
-  theme(plot.margin = margin(0.5, 0.5, 0.5, 0.5, "cm"), 
+  theme(plot.margin = margin(0.5, 0.5, 0.5, 0.5, "cm"),
         legend.position = "top",
         legend.box.margin = margin(0, 1, 1, 1, "cm"),
         legend.text = element_text(margin = margin(r = 1, unit = "cm")),
         legend.title = element_blank())
 
 fig1_map
+
+fig1_map_annotated <- list(fig1_map, # A
+                           y_axis, # B
+                           x_axis) %>% # C
+  wrap_plots() + plot_layout(heights = c(40, 1), widths = c(1, 50, 50), design = layout) +
+  theme(axis.title.x = element_text(size = 34, hjust = 0.5, 
+                                      margin = margin(t = 10, r = 0, b = 0, l = 0), 
+                                      face = "plain"),
+          axis.title.y = element_text(size = 34, hjust = 0.5, 
+                                      margin = margin(t = 0, r = 15, b = 0, l = 5), 
+                                      face = "plain"),)
+
+
+
+fig1_map_annotated
 
 #ggsave("Euro_map.pdf", Euro_map, device = cairo_pdf, path = file.path(dir, figpath),
 #        width = 4000, height = 2000, scale = 2, units = "px", dpi = 300, limitsize = F)
