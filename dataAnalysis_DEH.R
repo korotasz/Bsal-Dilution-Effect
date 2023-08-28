@@ -138,17 +138,17 @@ nicelabs <- c(`(Intercept)` = "Intercept",
 
 ## Function to populate dummy columns with uniform labels in ggpredict dataframe
 ## NEED TO FIX!! Not working as of R v 4.3.1
-create_dummy_col <- function(df){
-  values <- c("Low", "Med", "High")
-  keys <-  unique(df[,8])
-  index <- setNames(as.list(values), keys)
-
-  df$dummy <- dplyr::recode(as.list(df[,8]), !!!index)
-
-  # df$dummy <- dplyr::mutate(df = as.factor(dplyr::recode(df[,6], !!!index)))
-
-  return(df)
-}
+# create_dummy_col <- function(df){
+#   values <- c("Low", "Med", "High")
+#   keys <-  unique(df[,8])
+#   index <- setNames(as.list(values), keys)
+# 
+#   df$dummy <- dplyr::recode(as.list(df[,8]), !!!index)
+# 
+#   # df$dummy <- dplyr::mutate(df = as.factor(dplyr::recode(df[,6], !!!index)))
+# 
+#   return(df)
+# }
 
 
 #### 1) Descriptive Figures ####################################################
@@ -206,7 +206,7 @@ countriesSampled <- worldmap %>%
 
 
 # Map
-map1a <- ggplot() +
+europe_map <- ggplot() +
   geom_sf(data = europe, col = "gray40", fill = "#ECECEC", show.legend = F) +
   geom_sf(data = countriesSampled, aes(fill = sovereignt), col = "gray40", fill = "#B2BEB5", show.legend = F) +
   geom_sf(data = obs_transformed, aes(geometry = geometry, fill = BsalDetected, shape = BsalDetected),
@@ -239,17 +239,17 @@ map1a <- ggplot() +
 
   
 
-map1a  
+europe_map  
 
 ## Germany map
 g <- mapLabels %>% filter(country == "Germany") %>%
   plyr::mutate(label = paste(country, " (n = ", n, ")", sep = ""))
 
-map1b <- ggplot() +
+deu_map <- ggplot() +
   geom_sf(data = europe, col = "gray40", fill = "#ECECEC", show.legend = F) +
   geom_sf(data = countriesSampled, aes(fill = sovereignt), col = "gray40", fill = "#B2BEB5", show.legend = F) +
-  geom_sf_label(data = g, aes(label = paste(label)), nudge_x = -80000, nudge_y = 400000,
-                size = 8.5, fontface = "bold", label.size = NA, alpha = 0.5) +
+  geom_sf_label(data = g, aes(label = paste(label)), nudge_x = -100000, nudge_y = 400000,
+                size = 7, fontface = "bold", label.size = NA, alpha = 0.5) +
   geom_sf(data = obs_transformed, aes(geometry = geometry, fill = BsalDetected, shape = BsalDetected),
           alpha = 0.3, size = 4, stroke = 1, color = "gray30", show.legend = "point") +
   scale_fill_manual(values = c("gray40", "#b30000"), guide = "none") +
@@ -268,32 +268,32 @@ map1b <- ggplot() +
                    legend.key.size = unit(1,"cm"),
                    legend.text.align = 0,
                    legend.text = element_text(size = 28, hjust = 0),
-                   axis.text.x = element_text(size = 28),
+                   axis.text.x = element_text(size = 24),
                    axis.title.x = element_blank(),
-                   axis.text.y = element_text(size = 28, face = "plain"),
+                   axis.text.y = element_text(size = 24, face = "plain"),
                    axis.title.y = element_blank()) +
   guides(fill = guide_legend(override.aes = list(color = c("gray40", "#b30000"),
                                                  shape = c(21, 24), 
                                                  size = c(5, 5),
                                                  alpha = c(1, 1))))
 
-map1b
+deu_map
 
 ## Spain map
 s <- mapLabels %>% filter(country == "Spain") %>%
   plyr::mutate(label = paste(country, " (n = ", n, ")", sep = ""))
 
-map1c <- ggplot() +
+esp_map <- ggplot() +
   geom_sf(data = europe, col = "gray40", fill = "#ECECEC", show.legend = F) +
   geom_sf(data = countriesSampled, aes(fill = sovereignt), col = "gray40", fill = "#B2BEB5", show.legend = F) +
-   geom_sf_label(data = s, aes(label = paste(label)), nudge_x = -110000, nudge_y = 520000,
-                 size = 8.5, fontface = "bold", label.size = NA, alpha = 0.5) +
+  geom_sf_label(data = s, aes(label = paste(label)), nudge_x = -90000, nudge_y = 520000,
+                 size = 7, fontface = "bold", label.size = NA, alpha = 0.5) +
   geom_sf(data = obs_transformed, aes(geometry = geometry, fill = BsalDetected, shape = BsalDetected),
           alpha = 0.3, size = 4, stroke = 1, color = "gray30", show.legend = "point") +
   scale_fill_manual(values = c("gray40", "#b30000"), guide = "none") +
   scale_shape_manual(values = c(21, 24), guide = "none") +
-  coord_sf(xlim = c(2762860.9104916425, 3860001.17234379), # c(-, 5)
-           ylim = c(1349301.5796557514, 2550763.7938421355)) + # c(47.5, 54.4)
+  coord_sf(xlim = c(2762860.9104916425, 3804910.3673174703), # c(-6, 4.5)
+           ylim = c(1396746.8807063631, 2550763.7938421355)) + # c(33.5, 45)
   annotation_scale(location = "br", width_hint = 0.5, text_cex = 2, text_face = "plain",
                    pad_y = unit(0.5, "cm")) +
   annotation_north_arrow(location = "bl", which_north = "true", 
@@ -306,33 +306,36 @@ map1c <- ggplot() +
                    legend.key.size = unit(1,"cm"),
                    legend.text.align = 0,
                    legend.text = element_text(size = 28, hjust = 0),
-                   axis.text.x = element_text(size = 28),
+                   axis.text.x = element_text(size = 24),
                    axis.title.x = element_blank(),
-                   axis.text.y = element_text(size = 28, face = "plain"),
+                   axis.text.y = element_text(size = 24, face = "plain"),
                    axis.title.y = element_blank()) +
   guides(fill = guide_legend(override.aes = list(color = c("gray40", "#b30000"),
                                                  shape = c(21, 24), 
                                                  size = c(5, 5),
                                                  alpha = c(1, 1))))
 
-map1c
+esp_map
 
 
 ## Switzerland map
 swz <- mapLabels %>% filter(country == "Switzerland") %>%
   plyr::mutate(label = paste(country, " (n = ", n, ")", sep = ""))
 
-map1d <- ggplot() +
+
+che_map <- ggplot() +
   geom_sf(data = europe, col = "gray40", fill = "#ECECEC", show.legend = F) +
   geom_sf(data = countriesSampled, aes(fill = sovereignt), col = "gray40", fill = "#B2BEB5", show.legend = F) +
-  geom_sf_label(data = swz, aes(label = paste(label)), nudge_x = -100000, nudge_y = 140000,
-                size = 8.5, fontface = "bold", label.size = NA, alpha = 0.5) +
+  geom_sf_label(data = swz, aes(label = paste(label)), #nudge_x = -50000, nudge_y = 120000,
+                size = 7, fontface = "bold", label.size = NA, alpha = 0.5) +
   geom_sf(data = obs_transformed, aes(geometry = geometry, fill = BsalDetected, shape = BsalDetected),
           alpha = 0.3, size = 4, stroke = 1, color = "gray30", show.legend = "point") +
   scale_fill_manual(values = c("gray40", "#b30000"), guide = "none") +
   scale_shape_manual(values = c(21, 24), guide = "none") +
-  coord_sf(xlim = c(3948000.6576533397, 4398558.085073267), # c(5, 11)
-           ylim = c(2432561.7175302957, 2777782.3601754582)) +
+  coord_sf(xlim = c(4010139.011070984, 4359878.636359634), # c(6, 11)
+           ylim = c(2515327.8389015356, 2765224.576573791)) + # c(45.75, 48)
+  scale_y_continuous(breaks = c(46, 47, 48),
+                     limits = c(45.75, 48)) +
   annotation_scale(location = "br", width_hint = 0.5, text_cex = 2, text_face = "plain",
                    pad_y = unit(0.5, "cm")) +
   annotation_north_arrow(location = "bl", which_north = "true", 
@@ -345,28 +348,29 @@ map1d <- ggplot() +
                    legend.key.size = unit(1,"cm"),
                    legend.text.align = 0,
                    legend.text = element_text(size = 28, hjust = 0),
-                   axis.text.x = element_text(size = 28),
+                   axis.text.x = element_text(size = 24),
                    axis.title.x = element_blank(),
-                   axis.text.y = element_text(size = 28, face = "plain"),
+                   axis.text.y = element_text(size = 24, face = "plain"),
                    axis.title.y = element_blank()) +
   guides(fill = guide_legend(override.aes = list(color = c("gray40", "#b30000"),
                                                  shape = c(21, 24), 
                                                  size = c(5, 5),
                                                  alpha = c(1, 1))))
 
-map1d
+che_map
+
 
 ## UK map
 uk <- mapLabels %>% filter(country == "United Kingdom") %>%
   plyr::mutate(country = as.factor(dplyr::recode(country,
-                                                      "England" = "United Kingdom"))) %>%
+                                                      "United Kingdom" = "England"))) %>%
   plyr::mutate(label = paste(country, " (n = ", n, ")", sep = "")) 
 
-map1e <- ggplot() +
+gbr_map <- ggplot() +
   geom_sf(data = europe, col = "gray40", fill = "#ECECEC", show.legend = F) +
   geom_sf(data = countriesSampled, aes(fill = sovereignt), col = "gray40", fill = "#B2BEB5", show.legend = F) +
-  geom_sf_label(data = uk, aes(label = paste(label)), nudge_x = -80000, nudge_y = 0,
-                size = 8.5, fontface = "bold", label.size = NA, alpha = 0.5) +
+  geom_sf_label(data = uk, aes(label = paste(label)), nudge_x = -90000, nudge_y = 0,
+                size = 7, fontface = "bold", label.size = NA, alpha = 0.5) +
   geom_sf(data = obs_transformed, aes(geometry = geometry, fill = BsalDetected, shape = BsalDetected),
           alpha = 0.3, size = 4, stroke = 1, color = "gray30", show.legend = "point") +
   scale_fill_manual(values = c("gray40", "#b30000"), guide = "none") +
@@ -385,31 +389,33 @@ map1e <- ggplot() +
                    legend.key.size = unit(1,"cm"),
                    legend.text.align = 0,
                    legend.text = element_text(size = 28, hjust = 0),
-                   axis.text.x = element_text(size = 28),
+                   axis.text.x = element_text(size = 24),
                    axis.title.x = element_blank(),
-                   axis.text.y = element_text(size = 28, face = "plain"),
+                   axis.text.y = element_text(size = 24, face = "plain"),
                    axis.title.y = element_blank()) +
   guides(fill = guide_legend(override.aes = list(color = c("gray40", "#b30000"),
                                                  shape = c(21, 24), 
                                                  size = c(5, 5),
                                                  alpha = c(1, 1))))
 
-map1e
+gbr_map
 
 
 
-fig13bcde <-(map1b | map1c)/(map1d | map1e) + plot_layout(guides = "collect", heights = c(20, 16)) & 
-  theme(plot.margin = margin(.5, .5, .5, .5, "cm"), 
+fig1_map <- ((gbr_map/esp_map)|europe_map|(deu_map/che_map)) + 
+  plot_layout(guides = "collect", 
+              widths = c(1, 2, 1),
+              heights = c(1, 2, 1)) &
+  theme(plot.margin = margin(0.5, 0.5, 0.5, 0.5, "cm"), 
         legend.position = "top",
         legend.box.margin = margin(0, 1, 1, 1, "cm"),
         legend.text = element_text(margin = margin(r = 1, unit = "cm")),
         legend.title = element_blank())
 
-fig13bcde
+fig1_map
 
-
-# ggsave("Euro_map.pdf", Euro_map, device = cairo_pdf, path = file.path(dir, figpath),
-#        width = 2000, height = 2000, scale = 2, units = "px", dpi = 300, limitsize = F)
+#ggsave("Euro_map.pdf", Euro_map, device = cairo_pdf, path = file.path(dir, figpath),
+#        width = 4000, height = 2000, scale = 2, units = "px", dpi = 300, limitsize = F)
 
 # http://127.0.0.1:29403/graphics/70691af6-0ed8-4077-8e3e-00e9c65965ad.png
 
