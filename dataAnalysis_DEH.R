@@ -209,13 +209,19 @@ countriesSampled <- worldmap %>%
 map1a <- ggplot() +
   geom_sf(data = europe, col = "gray40", fill = "#ECECEC", show.legend = F) +
   geom_sf(data = countriesSampled, aes(fill = sovereignt), col = "gray40", fill = "#B2BEB5", show.legend = F) +
-  geom_sf_text(data = countriesSampled, aes(label = name), position = "identity", size = 5) +
   geom_sf(data = obs_transformed, aes(geometry = geometry, fill = BsalDetected, shape = BsalDetected),
           alpha = 0.3, size = 4, stroke = 1, color = "gray30", show.legend = "point") +
+  geom_sf_text(data = countriesSampled, aes(label = name), position = "identity", size = 5) +
   scale_fill_manual(values = c("gray40", "#b30000"), guide = "none") +
   scale_shape_manual(values = c(21, 24), guide = "none") +
   coord_sf(xlim = c(2652777.0489846086, 4632884.549024921), # c(-16, 15)
            ylim = c(1615336.1806950625, 3665962.1500697937)) + # c(37, 56)
+  annotation_scale(location = "br", width_hint = 0.5, text_cex = 2, text_face = "plain",
+                   pad_y = unit(0.5, "cm")) +
+  annotation_north_arrow(location = "bl", which_north = "true", 
+                         height = unit(1.5, "cm"), width = unit(1.5, "cm"),
+                         pad_x = unit(0, "cm"), pad_y = unit(0, "cm"),
+                         style = north_arrow_fancy_orienteering(line_width = 1.8, text_size = 18)) +
   ak_theme + theme(legend.title = element_blank(),
                    legend.position = "top",
                    legend.spacing = unit(1, "cm"), # Space legend labels
@@ -392,11 +398,13 @@ map1e
 
 
 
-fig13bcde <-(map1b | map1c)/(map1d | map1e) + plot_layout(guides = "collect", heights = c(20, 16)) +
-  plot_annotation(tag_levels = "A") & theme(legend.position = "top",
-                                            legend.box.margin = margin(0, 1, 1, 1, "cm"),
-                                            legend.text = element_text(margin = margin(r = 1, unit = "cm")),
-                                            legend.title = element_blank())
+fig13bcde <-(map1b | map1c)/(map1d | map1e) + plot_layout(guides = "collect", heights = c(20, 16)) & 
+  theme(plot.margin = margin(.5, .5, .5, .5, "cm"), 
+        legend.position = "top",
+        legend.box.margin = margin(0, 1, 1, 1, "cm"),
+        legend.text = element_text(margin = margin(r = 1, unit = "cm")),
+        legend.title = element_blank())
+
 fig13bcde
 
 
