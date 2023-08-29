@@ -248,7 +248,7 @@ g <- mapLabels %>% filter(country == "Germany") %>%
 deu_map <- ggplot() +
   geom_sf(data = europe, col = "gray40", fill = "#ECECEC", show.legend = F) +
   geom_sf(data = countriesSampled, aes(fill = sovereignt), col = "gray40", fill = "#B2BEB5", show.legend = F) +
-  geom_sf_label(data = g, aes(label = paste(label)), nudge_x = -100000, nudge_y = 400000,
+  geom_sf_label(data = g, aes(label = paste(label)), nudge_x = -160000, nudge_y = 400000,
                 size = 7, fontface = "bold", label.size = NA, alpha = 0.5) +
   geom_sf(data = obs_transformed, aes(geometry = geometry, fill = BsalDetected, shape = BsalDetected),
           alpha = 0.3, size = 4, stroke = 1, color = "gray30", show.legend = "point") +
@@ -286,7 +286,7 @@ s <- mapLabels %>% filter(country == "Spain") %>%
 esp_map <- ggplot() +
   geom_sf(data = europe, col = "gray40", fill = "#ECECEC", show.legend = F) +
   geom_sf(data = countriesSampled, aes(fill = sovereignt), col = "gray40", fill = "#B2BEB5", show.legend = F) +
-  geom_sf_label(data = s, aes(label = paste(label)), nudge_x = -90000, nudge_y = 520000,
+  geom_sf_label(data = s, aes(label = paste(label)), nudge_x = -180000, nudge_y = 520000,
                  size = 7, fontface = "bold", label.size = NA, alpha = 0.5) +
   geom_sf(data = obs_transformed, aes(geometry = geometry, fill = BsalDetected, shape = BsalDetected),
           alpha = 0.3, size = 4, stroke = 1, color = "gray30", show.legend = "point") +
@@ -329,7 +329,7 @@ swz <- mapLabels %>% filter(country == "Switzerland") %>%
 che_map <- ggplot() +
   geom_sf(data = europe, col = "gray40", fill = "#ECECEC", show.legend = F) +
   geom_sf(data = countriesSampled, aes(fill = sovereignt), col = "gray40", fill = "#B2BEB5", show.legend = F) +
-  geom_sf_label(data = swz, aes(label = paste(label)), nudge_x = -40000, nudge_y = 120000,
+  geom_sf_label(data = swz, aes(label = paste(label)), nudge_x = -80000, nudge_y = 120000,
                 size = 7, fontface = "bold", label.size = NA, alpha = 0.5, inherit.aes = F) +
   geom_sf(data = obs_transformed, aes(geometry = geometry, fill = BsalDetected, shape = BsalDetected),
           alpha = 0.3, size = 4, stroke = 1, color = "gray30", show.legend = "point") +
@@ -371,7 +371,7 @@ uk <- mapLabels %>% filter(country == "United Kingdom") %>%
 gbr_map <- ggplot() +
   geom_sf(data = europe, col = "gray40", fill = "#ECECEC", show.legend = F) +
   geom_sf(data = countriesSampled, aes(fill = sovereignt), col = "gray40", fill = "#B2BEB5", show.legend = F) +
-  geom_sf_label(data = uk, aes(label = paste(label)), nudge_x = -90000, nudge_y = 0,
+  geom_sf_label(data = uk, aes(label = paste(label)), nudge_x = -150000, nudge_y = 0,
                 size = 7, fontface = "bold", label.size = NA, alpha = 0.5) +
   geom_sf(data = obs_transformed, aes(geometry = geometry, fill = BsalDetected, shape = BsalDetected),
           alpha = 0.3, size = 4, stroke = 1, color = "gray30", show.legend = "point") +
@@ -404,21 +404,22 @@ gbr_map
 
 
 
-fig1a <- europe_map + theme(plot.tag.position = c(0.96, 0.85)) 
-fig1b <- gbr_map + theme(plot.tag.position = c(0.95, 0.72)) 
+fig1a <- europe_map + theme(plot.tag.position = c(0.92, 0.88)) 
+fig1b <- gbr_map + theme(plot.tag.position = c(0.95, 0.78)) 
 fig1c <- esp_map + theme(plot.tag.position = c(0.95, 0.95)) 
-fig1d <- deu_map + theme(plot.tag.position = c(0.96, 0.8)) 
+fig1d <- deu_map + theme(plot.tag.position = c(0.96, 0.82)) 
 fig1e <- che_map + theme(plot.tag.position = c(0.96, 0.92))
 
-p <- ggplot() + labs(x = "Longitude", y = "Latitude")
+p <- ggplot() + labs(x = "Longitude", y = "Latitude") + ak_theme + theme(plot.margin = margin(0, 0, 0, 0, "cm"),
+                                                                         panel.spacing.y = unit(0,"cm"))
 x_axis <- cowplot::get_plot_component(p, "xlab-b") 
 y_axis <- cowplot::get_plot_component(p, "ylab-l") 
 
 layout <- "
+#AAA
 BAAA
-BAAA
-BAAA
-#CCC
+#AAA
+##C#
 "
 
 
@@ -427,7 +428,7 @@ fig1_map <- ((fig1b/fig1c)|(fig1a)|(fig1d/fig1e)) +
   plot_layout(guides = "collect",
               widths = c(1, 2, 1),
               heights = c(1, 2, 1)) &
-  theme(plot.margin = margin(0.5, 0.5, 0.5, 0.5, "cm"),
+  theme(plot.margin = margin(0.25, 0.25, 0, -0.5, "cm"),
         legend.position = "top",
         legend.box.margin = margin(0, 1, 1, 1, "cm"),
         legend.text = element_text(margin = margin(r = 1, unit = "cm")),
@@ -435,23 +436,17 @@ fig1_map <- ((fig1b/fig1c)|(fig1a)|(fig1d/fig1e)) +
 
 fig1_map
 
-fig1_map_annotated <- list(fig1_map, # A
-                           y_axis, # B
-                           x_axis) %>% # C
-  wrap_plots() + plot_layout(heights = c(40, 1), widths = c(1, 50, 50), design = layout) +
-  theme(axis.title.x = element_text(size = 34, hjust = 0.5, 
-                                      margin = margin(t = 10, r = 0, b = 0, l = 0), 
-                                      face = "plain"),
-          axis.title.y = element_text(size = 34, hjust = 0.5, 
-                                      margin = margin(t = 0, r = 15, b = 0, l = 5), 
-                                      face = "plain"),)
-
+fig1_map_annotated <- wrap_plots(wrap_elements(fig1_map), ggdraw(y_axis), ggdraw(x_axis)) +
+  plot_layout(widths = c(.15, 2.25),
+              heights = c(2.25, 0.25),
+              design = layout) + theme(plot.margin = margin(0.25, 0.25, 0.25, 0.25, "cm"))
+ 
 
 
 fig1_map_annotated
 
-#ggsave("Euro_map.pdf", Euro_map, device = cairo_pdf, path = file.path(dir, figpath),
-#        width = 4000, height = 2000, scale = 2, units = "px", dpi = 300, limitsize = F)
+ggsave("Euro_map.pdf", fig1_map_annotated, device = cairo_pdf, path = file.path(dir, figpath),
+        width = 4000, height = 2000, scale = 2, units = "px", dpi = 300, limitsize = F)
 
 # http://127.0.0.1:29403/graphics/70691af6-0ed8-4077-8e3e-00e9c65965ad.png
 
