@@ -169,7 +169,7 @@ obs_transformed <- st_as_sf(obs, coords = c("decimalLongitude", "decimalLatitude
 # summarise data
 sampSize <- obs %>%
   group_by(country) %>%
-  summarise(n = n())
+  summarise(n = n()) 
 
 # Get the coordinates of each country
 country_lookup <- read.csv("countries.csv", stringsAsFactors = F)
@@ -448,7 +448,9 @@ fig1_map_annotated
 ggsave("Euro_map.pdf", fig1_map_annotated, device = cairo_pdf, path = file.path(dir, figpath),
         width = 4000, height = 2000, scale = 2, units = "px", dpi = 300, limitsize = F)
 
-# http://127.0.0.1:29403/graphics/70691af6-0ed8-4077-8e3e-00e9c65965ad.png
+rm(che_map, countriesSampled, country_lookup, deu_map, esp_map, europe, europe_map,
+   fig1_map, fig1a, fig1b, fig1c, fig1d, fig1e, g, gbr_map, mapLabels, obs, obs_transformed,
+   p, s, sampSize, swz, uk, worldmap, x_axis, y_axis, layout)
 
 #### 2) Testing assumptions of the dilution effect hypothesis ##################
 ##      2a. Hosts differ in their reservoir competence.
@@ -468,6 +470,17 @@ prev <- d %>%
 # Use binconf function to sample binomial distribution and get CIs for prevalence
 bsal_ci <- binconf(prev$ncas_Bsal, prev$npop, method = "exact", return.df = T)
 
+sampSize <- d %>%
+  dplyr::select(country, ADM0, decimalLatitude, decimalLongitude, diseaseTested,
+                BsalDetected, BdDetected, individualCount) %>%
+  plyr::mutate(BsalDetected = as.factor(dplyr::recode(BsalDetected,
+                                                      "1" = "Bsal positive", 
+                                                      "0" = "Bsal negative"))) %>%
+  group_by(country, BsalDetected) %>%
+  summarise(n = n()) %>%
+  ungroup()
+
+
 deu <- sampSize %>%
   filter(country == "Germany") %>%
   plyr::mutate(BsalDetected = as.factor(dplyr::recode(BsalDetected,
@@ -475,7 +488,7 @@ deu <- sampSize %>%
   pivot_wider(names_from = BsalDetected, values_from = n) %>%
   mutate(pop = sum(Pos, Neg),
          prev = round((Pos/pop)*100, 2))
-print(deu$prev)
+print(deu$prev) # prevalence
 
 esp <- sampSize %>%
   filter(country == "Spain") %>%
@@ -484,7 +497,7 @@ esp <- sampSize %>%
   pivot_wider(names_from = BsalDetected, values_from = n) %>%
   mutate(pop = sum(Pos, Neg),
          prev = round((Pos/pop)*100, 2))
-print(esp$prev)
+print(esp$prev) # prevalence
 
 
 # Convert binconf point estimates + CIs to percentages for plotting
@@ -589,11 +602,11 @@ m2b_plot <- ggplot(m2b_predict, aes(x = scientific, label = round(expectedAbun,0
   geom_errorbar(aes(ymin = conf.low, ymax = conf.high, colour = susceptibility), width = 0.5, linewidth = 1) +
   geom_text(aes(colour = susceptibility, x = (as.numeric(scientific) + 0.05), y = conf.high + 3), 
             size = 6, fontface = "bold", alpha = 0.75) +
-  annotate(geom = "text", x = (as.numeric(df_m2_1$scientific) + 0.1), y = (df_m2_1$conf.high + 1.5),
+  annotate(geom = "text", x = (as.numeric(df1$scientific) + 0.1), y = (df1$conf.high + 1.5),
            label = paste(xhat), parse = TRUE, size = 6, color = "#548078", alpha = 0.75) +
-  annotate(geom = "text", x = (as.numeric(df_m2_2$scientific) + 0.1), y = (df_m2_2$conf.high + 1.5),
+  annotate(geom = "text", x = (as.numeric(df2$scientific) + 0.1), y = (df2$conf.high + 1.5),
            label = paste(xhat), parse = TRUE, size = 6, color = "#E3A630", alpha = 0.75) +
-  annotate(geom = "text", x = (as.numeric(df_m2_3$scientific) + 0.1), y = (df_m2_3$conf.high + 1.5),
+  annotate(geom = "text", x = (as.numeric(df3$scientific) + 0.1), y = (df3$conf.high + 1.5),
            label = paste(xhat), parse = TRUE, size = 6, color = "#b30000", alpha = 0.75) +
   coord_flip(clip = "off") +
   ylab("Abundance") +
@@ -640,17 +653,18 @@ m2c_rug <- d %>%
 
 m2c_predict <- merge(m2c_predict, m2c_rug)
 
+comparisons <- list(c())
 
 m2c_plot <- ggplot(m2c_predict, aes(susceptibility, predicted, color = susceptibility)) +
   geom_point(size = 5) +
   geom_errorbar(aes(ymin = conf.low, ymax = conf.high), width = 0.2, linewidth = 1) +
+  stat_compare_means() +
   geom_richtext(aes(y = (conf.high + 1), label = paste0("n<span style = 'font-size:15pt'><sub>*obs*</sub> </span>= ", n)), 
                 alpha = 0.75, size = 8, label.size = NA, fill = NA, fontface = "bold", show.legend = F) +
   annotate("text", x = 3, y = 6.75, label = "***", size = 10, fontface = "bold", 
            colour = "#b30000") +
   annotate("text", x = 0.65, y = 9, label = "C", size = 12, fontface = "bold", 
            colour = "black") +
-#  stat_compare_means() +
   scale_x_discrete(labels = c("Resistant", "Tolerant", "Susceptible")) +
   ylab("Species abundance") + 
   xlab("Susceptibility level") +
@@ -956,6 +970,7 @@ fig3b
 
 # ## Vertical plots* 
 # #-- need to alter x and y labs in fig3a/3b if switching between h and v plots
+# http://127.0.0.1:29403/graphics/70691af6-0ed8-4077-8e3e-00e9c65965ad.png
 FS_imgpath <- str_c("C:/Development/Chapter-4-Analyses/csvFiles/firesalamander.png") # add image to 3b
 
 fig3ab_v <- (fig3a / fig3b) + plot_annotation(tag_levels = "A")
