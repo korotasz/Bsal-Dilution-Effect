@@ -22,6 +22,7 @@ extrafont::loadfonts(device = "win", quiet = T) # plot fonts
 
 #### Visualization Packages ####
 pckgs <- c("ggsignif", # adds labels to significant groups
+          "rmarkdown", # required for renv env. lock
              "ggtext", # for text type/arrangements w/ ggplot2
            "Rttf2pt1", # to use with the extrafont package
            "ggthemes", # contains 'scales', 'themes', and 'geoms' packages

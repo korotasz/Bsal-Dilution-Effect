@@ -10,6 +10,7 @@ extrafont::loadfonts(device = "all", quiet = T) # plot fonts
 
 #### Visualization Packages ####
 pckgs <- c("ggsignif", # adds labels to significant groups
+               "renv", # environment lock  
              "ggtext", # for text type/arrangements w/ ggplot2
            "Rttf2pt1", # to use with the extrafont package
            "ggthemes", # contains 'scales', 'themes', and 'geoms' packages
@@ -26,7 +27,6 @@ pckgs <- c("ggsignif", # adds labels to significant groups
             "geodata", # obtain geographic data (world map)
       "rnaturalearth", # obtain spatial polygons that can be used with sf
                  "sf", # mapping
-              # "ggmap", # creates maps
           "ggspatial", # north arrow and scale bar
             "mapproj", # apply map projection
          "scatterpie", # add pie charts to maps
@@ -52,7 +52,7 @@ pckgs <- c("ggsignif", # adds labels to significant groups
 )
 
 ## Load packages
-pacman::p_load(pckgs, update = FALSE, character.only = T)
+pacman::p_load(pckgs, update = F, install = T, character.only = T)
 
 
 ## Set working directory
@@ -60,6 +60,26 @@ dir <- dirname(rstudioapi::getActiveDocumentContext()$path)
 csvpath <- (path.expand("/csvFiles"))
 figpath <- (path.expand("figures"))
 setwd(file.path(dir, csvpath))
+
+# Set the working directory to initialize/activate the project
+setwd(file.path(dir))
+
+#-------------------------------------------------------------------------------
+#  *** ONLY NEED TO DO THIS ONCE; I HAVE ALREADY DONE THIS FOR THIS PROJ. ***
+
+## Create a project-local environment to ensure code reproducibility
+# renv::init() # this also activates the project
+
+
+## Save the state of the project (including package versions); only need to re-run this
+##  if you update packages/introduce new packages in this project.
+#renv::settings$snapshot.type("explicit") # records and reflects latest proj. changes in "renv.lock" file
+
+#-------------------------------------------------------------------------------
+
+## Navigate to the folder where csv files are
+setwd(file.path(dir, csvpath))
+
 
 ## Set plot theme 
 ak_theme <- theme_ipsum() +
@@ -445,8 +465,8 @@ fig1_map_annotated <- wrap_plots(wrap_elements(fig1_map), ggdraw(y_axis), ggdraw
 
 fig1_map_annotated
 
-ggsave("Euro_map.pdf", fig1_map_annotated, device = cairo_pdf, path = file.path(dir, figpath),
-        width = 4000, height = 2000, scale = 2, units = "px", dpi = 300, limitsize = F)
+# ggsave("Euro_map.pdf", fig1_map_annotated, device = cairo_pdf, path = file.path(dir, figpath),
+#         width = 4000, height = 2000, scale = 2, units = "px", dpi = 300, limitsize = F)
 
 rm(che_map, countriesSampled, country_lookup, deu_map, esp_map, europe, europe_map,
    fig1_map, fig1a, fig1b, fig1c, fig1d, fig1e, g, gbr_map, mapLabels, obs, obs_transformed,
@@ -536,8 +556,8 @@ prev_binconf_plot <- ggplot(prev, aes(scientific, sapply(PointEst, FUN = functio
 
 prev_binconf_plot
 
-ggsave("prev_binconf_plot.pdf", prev_binconf_plot, device = cairo_pdf, path = file.path(dir, figpath),
-         width = 2600, height = 2000, scale = 1.5, units = "px", dpi = 300, limitsize = F)
+# ggsave("prev_binconf_plot.pdf", prev_binconf_plot, device = cairo_pdf, path = file.path(dir, figpath),
+#          width = 2600, height = 2000, scale = 1.5, units = "px", dpi = 300, limitsize = F)
 
 
 ##      2b. The most susceptible species are also the most abundant, while the 
@@ -625,8 +645,8 @@ m2b_plot <- ggplot(m2b_predict, aes(x = scientific, label = round(expectedAbun,0
 
 m2b_plot
 
-ggsave("fig2b.pdf", m2b_plot, device = cairo_pdf, path = file.path(dir, figpath),
-          width = 2000, height = 1400, scale = 2, units = "px", dpi = 300, limitsize = F)
+# ggsave("fig2b.pdf", m2b_plot, device = cairo_pdf, path = file.path(dir, figpath),
+#           width = 2000, height = 1400, scale = 2, units = "px", dpi = 300, limitsize = F)
 
 
 
