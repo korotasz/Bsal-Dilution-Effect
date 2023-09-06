@@ -260,7 +260,7 @@ weather2 <- weather %>%
   unite(decimalLatitude, decimalLongitude, sep = ", ", col = "LatLon", remove = F)
 
 ## Export to use in Python and PyQGIS to obtain weather data
-#write.csv(weather2, 'C:/Users/alexi/OneDrive/Documents/01_GradSchool/_Dissertation work/Chapter4/03_code/weather.csv',
+#write.csv(weather2, 'C:/Users/alexi/OneDrive/Documents/01_GradSchool/_Dissertation work/Chapter4/03_code/weather.csv', fileEncoding = "UTF-8")
 
 
 ## Python 3.9.4 used to download .nc4 files from NASA's EarthData data repository for each date and location.

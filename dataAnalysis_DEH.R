@@ -889,7 +889,7 @@ Anova(m_FS)
 # Anova(m_FS2)
 # 
 # 
-# anova(m_FS, m_FS2) # same as the "all spp. model" -- simpler model is just as effective at accounting for variance
+ anova(m_FS2, m_FS) # same as the "all spp. model" -- simpler model is just as effective at accounting for variance
 
 
 
