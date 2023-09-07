@@ -599,7 +599,7 @@ m2b_predict <- ggpredict(model_2b, terms = "scientific") %>%
 
 
 # xhat <- TeX(r"($\hat{X}_{\textit{a}} =)") ## LaTeX formula: $\hat{X}_{\textit{a}} = ## THIS ALSO WORKS, BUT WILL TRY USING LATEX EXP BELOW
-TeXlabl <- glue::glue("$\\textbf{\\hat{X}_{\\textit{a}}}}}=", .open = "{{") # THIS WORKS
+TeXlabl <- glue::glue("$\\textbf{\\hat{x}_{\\textit{a}}}}}=", .open = "{{") # THIS WORKS
 xhat <- latex2exp::TeX(TeXlabl, output = "expression")
 
 # Create color coded labels for graph annotation
@@ -1198,3 +1198,5 @@ ggsave("modelPlots_horizontal.pdf", fig3ab_h_combined, device = cairo_pdf, scale
 # ggsave("m4_fatality.tif", m4_plot, device = "tiff", scale = 2, width = 1920, height = 1080, units = "px", 
 #        path = file.path(dir, figpath), dpi = 300)
 # 
+
+

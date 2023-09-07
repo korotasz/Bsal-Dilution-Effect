@@ -1150,21 +1150,23 @@ prev <- Bsalpos_FS %>%
          bio7_wc = bio7, bio8_wc = bio8, bio9_wc = bio9, bio10_wc = bio10, bio11_wc = bio11, bio12_wc = bio12, bio13_wc = bio13, bio14_wc = bio14, bio15_wc = bio15, bio16_wc = bio16,
          bio17_wc = bio17, bio18_wc = bio18, bio19_wc = bio19) 
 
+
 dcbind <- Bsalpos_FS %>%
   relocate(c(cumulative_prev, prev_above_0), .after = Site) %>%
   group_by(Site, date, scientific) %>%
-  mutate(nPos_FS = sum(BsalDetected == 1 & scientific == "Salamandra salamandra"),
+  mutate(nPos_FS = sum(BsalDetected != 0 & scientific == "Salamandra salamandra"),
          nNeg_FS = sum(BsalDetected == 0 & scientific == "Salamandra salamandra"),
-         nDead_FS = sum(fatal == 1 & scientific == "Salamandra salamandra", na.rm = T),
+         nDead_FS = sum(fatal != 0 & scientific == "Salamandra salamandra", na.rm = T),
          nAlive_FS = sum(fatal == 0 & scientific == "Salamandra salamandra", na.rm = T),
          nFatalUnk_FS = sum(is.na(fatal) & scientific == "Salamandra salamandra"), 
-         nPos_all = sum(BsalDetected == 1),
+         nPos_all = sum(BsalDetected != 0),
          nNeg_all = sum(BsalDetected == 0),
-         nDead_all = sum(fatal == 1, na.rm = T),
+         nDead_all = sum(fatal != 0, na.rm = T),
          nAlive_all = sum(fatal == 0, na.rm = T),
          nFatalUnk_all = sum(is.na(fatal)),
          prev_above_0 = as.factor(prev_above_0)) %>%
-  slice(1) %>%
+  # slice(1) %>%
+  ungroup() %>%
   relocate(c(nPos_FS, nNeg_FS, nDead_FS, nAlive_FS, nFatalUnk_FS, nPos_all, nNeg_all, nDead_all, nAlive_all, nFatalUnk_all), .after = susceptibility) %>%
   dplyr::select(country, decimalLatitude, decimalLongitude, Site, prev_above_0, date, date_t1, date_t2, scientific, susceptibility, 
                 nPos_FS, nNeg_FS, nDead_FS, nAlive_FS, nFatalUnk_FS, nPos_all, nNeg_all, nDead_all, nAlive_all, nFatalUnk_all,
@@ -1173,12 +1175,22 @@ dcbind <- Bsalpos_FS %>%
                 diagnosticLab, principalInvestigator, collectorList) %>%
   rename(tmin_wc = tmin, tmax_wc = tmax, tavg_wc = tavg, prec_wc = prec, bio1_wc = bio1, bio2_wc = bio2, bio3_wc = bio3, bio4_wc = bio4, bio5_wc = bio5, bio6_wc = bio6,
          bio7_wc = bio7, bio8_wc = bio8, bio9_wc = bio9, bio10_wc = bio10, bio11_wc = bio11, bio12_wc = bio12, bio13_wc = bio13, bio14_wc = bio14, bio15_wc = bio15, bio16_wc = bio16,
-         bio17_wc = bio17, bio18_wc = bio18, bio19_wc = bio19) %>%
-  ungroup()
+         bio17_wc = bio17, bio18_wc = bio18, bio19_wc = bio19) 
 
 
 dcbind <- with(dcbind, dcbind[order(Site, scientific), ])
 
+
+## Double check everything matches
+dcbind %>% dplyr::select(scientific, nPos_all, nNeg_all) %>%
+  group_by(scientific) %>%
+  summarise(nPos = sum(nPos_all != 0), nNeg = sum(nNeg_all != 0),
+            n = sum(nPos_all, nNeg_all))
+
+d %>% dplyr::select(scientific, individualCount, BsalDetected) %>%
+  group_by(scientific) %>%
+  summarise(nPos = sum(BsalDetected != 0), nNeg = sum(BsalDetected == 0),
+            n = n())
 
 setwd(file.path(dir, csvpath))
 ## File for final prev dataframe:
