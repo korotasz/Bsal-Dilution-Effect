@@ -678,13 +678,12 @@ comparisons <- list(c())
 m2c_plot <- ggplot(m2c_predict, aes(susceptibility, predicted, color = susceptibility)) +
   geom_point(size = 5) +
   geom_errorbar(aes(ymin = conf.low, ymax = conf.high), width = 0.2, linewidth = 1) +
-  stat_compare_means() +
   geom_richtext(aes(y = (conf.high + 1), label = paste0("n<span style = 'font-size:15pt'><sub>*obs*</sub> </span>= ", n)), 
                 alpha = 0.75, size = 8, label.size = NA, fill = NA, fontface = "bold", show.legend = F) +
   annotate("text", x = 3, y = 6.75, label = "***", size = 10, fontface = "bold", 
            colour = "#b30000") +
-  annotate("text", x = 0.65, y = 9, label = "C", size = 12, fontface = "bold", 
-           colour = "black") +
+  # annotate("text", x = 0.65, y = 9, label = "C", size = 12, fontface = "bold", 
+  #          colour = "black") +
   scale_x_discrete(labels = c("Resistant", "Tolerant", "Susceptible")) +
   ylab("Species abundance") + 
   xlab("Susceptibility level") +
@@ -761,8 +760,8 @@ fig2combined <- ((fig2a | fig2b)/fig2c) + plot_layout(guides = "collect", height
                                                           legend.title = element_blank())
 fig2combined
 
-# ggsave("fig2_combined.pdf", fig2combined, device = cairo_pdf, path = file.path(dir, figpath),
-#        width = 2800, height = 2600, scale = 2, units = "px", dpi = 300, limitsize = F)
+ggsave("fig2_combined.pdf", fig2combined, device = cairo_pdf, path = file.path(dir, figpath),
+       width = 2800, height = 2600, scale = 2, units = "px", dpi = 300, limitsize = F)
 
 ## Code to see how many sites each species are found at in each country
 # d %>%
@@ -831,16 +830,15 @@ m_all_predict <- ggpredict(m_all,  terms = c("richness", "logsiteAbun")) %>%
                siteAbun = as.factor(round(exp(as.numeric(logsiteAbun)), 0)))
 
 
-m_all_plot <- ggplot(m_all_predict, aes(x = richness, y = predicted, 
-                                        colour = siteAbun)) +
-  geom_line(aes(linetype = siteAbun), linewidth = 1) +
+m_all_plot <- ggplot(m_all_predict, aes(x = richness, y = predicted, linetype = siteAbun, colour = siteAbun)) +
+  geom_line(aes(linetype = siteAbun, colour = siteAbun), linewidth = 1) +
   geom_rug(data = dcbindScaled, aes(x = richness, y = 0), sides = "b", 
            alpha = 0.5, position = position_jitter(width = 0.4, height = 0.1), 
            inherit.aes = F, na.rm = T) +
   labs(x = "Species richness",
        y = "Bsal prevalence (%)",
        # title = "All spp. model", 
-       linetype = "Site-level abundance") +
+       ) +
   #  geom_ribbon(aes(x = richness, ymin = conf.low, ymax = conf.high, 
   #              fill = siteAbun), alpha = 0.2, colour = NA, show.legend = F) +
   scale_linetype_manual(values = c("solid", "longdash", "twodash")) +
@@ -852,9 +850,9 @@ m_all_plot <- ggplot(m_all_predict, aes(x = richness, y = predicted,
                      limits = c(0, 0.05),
                      minor_breaks = seq(0, 0.05, 0.01)) + 
   ak_theme + theme(plot.tag.position = c(0.96, 0.9),
-                   legend.title = element_blank(),
                    axis.text.y = element_text(face = "plain")) + 
-  guides(colour = guide_legend("Site-level abundance"))
+  guides(colour = guide_legend("Site-level abundance", title.position = "top", title.hjust = 0.5),
+         linetype = guide_legend("Site-level abundance", title.position = "top", title.hjust = 0.5))
 
 m_all_plot
 # ggsave("m_all_plot.pdf", m_all_plot, device = cairo_pdf, path = file.path(dir, figpath),
@@ -927,8 +925,8 @@ m_FS_predict <- ggpredict(m_FS,  terms = c("richness", "logsiteAbun")) %>%
                # Convert scaled prediction to original data scale:
                siteAbun = as.factor(round(exp(as.numeric(logsiteAbun)), 0)))
 
-m_FS_plot <- ggplot(m_FS_predict, aes(x = richness , y = predicted, colour = siteAbun)) +
-  geom_line(aes(linetype = siteAbun), linewidth = 1) +
+m_FS_plot <- ggplot(m_FS_predict, aes(x = richness , y = predicted, colour = siteAbun, linetype = siteAbun)) +
+  geom_line(aes(linetype = siteAbun, colour = siteAbun), linewidth = 1) +
   geom_rug(data = FSdata, aes(x = richness, y = 0), sides = "b", alpha = 0.5,
            position = position_jitter(width = 0.4, height = 0.1), inherit.aes = F, na.rm = T) +
   labs(linetype = "Site-level abundance",
@@ -945,9 +943,9 @@ m_FS_plot <- ggplot(m_FS_predict, aes(x = richness , y = predicted, colour = sit
                      limits = c(0, 0.12),
                      minor_breaks = seq(0, 0.12, 0.01)) +
   ak_theme + theme(plot.tag.position = c(0.96, 0.9),
-                   legend.title = element_blank(),
                    axis.text.y = element_text(face = "plain")) + 
-  guides(colour = guide_legend("Site-level abundance"))
+  guides(colour = guide_legend("Site-level abundance", title.position = "top", title.hjust = 0.5),
+         linetype = guide_legend("Site-level abundance", title.position = "top", title.hjust = 0.5))
 
 
 m_FS_plot
@@ -967,9 +965,8 @@ fig3a <- m_all_plot + labs(caption = NULL, y = NULL, x = NULL) +
         legend.box = "horizontal",
         legend.key.size = unit(1,"cm"),
         legend.text = element_text(margin = margin(r = 1, unit = "cm"), size = 24),
-        legend.title = element_blank()) +
-  guides(shape = guide_legend(label.position = "left"),
-         linetype = guide_legend(nrow = 1))
+        legend.title = element_text(face = "plain")) +
+  guides(linetype = guide_legend(nrow = 1, "Site-level abundance", title.position = "top", title.hjust = 0.5))
 
 fig3a
 
@@ -980,31 +977,30 @@ fig3b <- m_FS_plot + labs(caption = NULL, y = NULL) +
         legend.background = element_rect(fill = alpha ("white", 0.75), color = NA),
         legend.box = "horizontal",
         legend.key.size = unit(1,"cm"),
-        legend.text = element_text(margin = margin(r = 1, unit = "cm"), size = 24),
-        legend.title = element_blank()) +
-  guides(shape = guide_legend(label.position = "left"),
-         linetype = guide_legend(nrow = 1))
+        legend.title = element_text(face = "plain"),
+        legend.text = element_text(margin = margin(r = 1, unit = "cm"), size = 24)) +
+  guides(linetype = guide_legend(nrow = 1, "Site-level abundance", title.position = "top", title.hjust = 0.5))
 fig3b
-
 
 
 # ## Vertical plots* 
 # #-- need to alter x and y labs in fig3a/3b if switching between h and v plots
 # http://127.0.0.1:29403/graphics/70691af6-0ed8-4077-8e3e-00e9c65965ad.png
-FS_imgpath <- str_c("C:/Development/Chapter-4-Analyses/csvFiles/firesalamander.png") # add image to 3b
+
+fs_img <- image_read("firesalamander.png") # add image to 3b
 
 fig3ab_v <- (fig3a / fig3b) + plot_annotation(tag_levels = "A")
 
 fig3ab_v_combined <- ggdraw(fig3ab_v) + 
   draw_label("Bsal prevalence (%)", x = 0, y = 0.5, angle = 90,
              size = 34, fontfamily = "Arial") + 
-  draw_image(image = FS_imgpath, x = 0.35, y = -0.15, scale = 0.25) +
+  draw_image(image = fs_img, x = 0.35, y = -0.15, scale = 0.25) +
   ak_theme + theme(axis.line = element_blank())
 fig3ab_v_combined
 
 
 ggsave("modelPlots_vertical.pdf", fig3ab_v_combined, device = cairo_pdf, scale = 2, 
-       width = 1750, height = 2400, units = "px",
+       width = 2000, height = 2400, units = "px",
        path = file.path(dir, figpath), dpi = 300)
 
 
