@@ -193,8 +193,6 @@ II. **Host diversity might not be enough to confer protection from Bsal to highl
     -   Unique combinations of lat/lon were used to assign Site #s.
     -   Unique combinations of lat/lon/date used to obtain weather data included in models. </font>
 
-<HR>
-
 ## Static map
 
 ```{r staticMap, fig.width = 24, fig.height = 12, fig.fullwidth = TRUE, fig.fullheight = TRUE, echo = FALSE}
@@ -589,8 +587,6 @@ map
 ```
 
 **Fig. 1.2.2** This interactive map displays the approximate location of each observation in our final dataset at the finest taxonomic scale available (primarily at the species level but, in some cases, at the genus level). All observations include the associated site number and susceptibility level of the organism. When available, we also included an organism's morbidity status (*i.e.*, whether they tested positive for Bsal, Bd, or both) and their mortality status (*i.e.*, whether they were found alive or dead^1^).
-
-<HR>
 
 <p><small><sup>1</sup>Dead animals or animals whose mortality status is unknown are marked with opaque circles. Animals who are alive are denoted with solid circles.</small></p>
 
