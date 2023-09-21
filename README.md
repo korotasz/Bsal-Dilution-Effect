@@ -14,10 +14,7 @@ This chapter of my dissertation leveraged publicly available data to test the di
 
 ### Using the Code
 ![fork](https://cdn.ttgtmedia.com/rms/onlineimages/cdo-git_clone_vs_fork-f.png)
-1. Please **fork** this repo if you intend to use or modify any of the code to avoid future merge conflicts. GitHub has an excellent example of [how to fork repositories](https://docs.github.com/en/get-started/quickstart/fork-a-repo#forking-a-repository) from the browser. Alternatively, the code to do so from **Command Prompt** can be copied below.
-   ```
-   git fork https://github.com/korotasz/Chapter-2-Analyses/
-   ```
+1. Please **fork** this repo if you intend to use or modify any of the code to avoid future merge conflicts. GitHub has an excellent example of [how to fork repositories](https://docs.github.com/en/get-started/quickstart/fork-a-repo#forking-a-repository) from the browser.
 
 2. After you have forked this repository, you may then **clone** the forked repository to your local system. Cloning forked repositories may be done [from Git Bash](https://docs.github.com/en/get-started/quickstart/fork-a-repo#cloning-your-forked-repository) or from **Command Prompt**. In either case, the syntax is the same for cloning repositories:
    ```
