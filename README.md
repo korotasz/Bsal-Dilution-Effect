@@ -21,7 +21,7 @@ This chapter of my dissertation leveraged publicly available data to test the di
 
 2. After you have forked this repository, you may then **clone** the forked repository to your local system. Cloning forked repositories may be done [from Git Bash](https://docs.github.com/en/get-started/quickstart/fork-a-repo#cloning-your-forked-repository) or from **Command Prompt**. In either case, the syntax is the same for cloning repositories:
    ```
-   git clone [forked/repo/url]
+   git clone https://github.com/**GitHub_username**/**forked-repo-name**
    ```
 
 3. In R, navigate to the folder containing the cloned repository and open the [Chapter-2-Analyses.Rproj](https://github.com/korotasz/Chapter-2-Analyses/blob/main/Chapter-2-Analyses.Rproj) file.
