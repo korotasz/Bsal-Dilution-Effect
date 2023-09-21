@@ -46,11 +46,11 @@ This chapter of my dissertation leveraged publicly available data to test the di
 The purpose of this repository is to ensure code reproducibility for this project. While feedback is appreciated, I ask that you refrain from submitting pull requests.
 
 ### Collaborators
-This project exists thanks to everyone who helped in some way. Your contributions are appreciated.
-[Jason R. Rohr](https://scholar.google.com/citations?user=yaRksUAAAAAJ&hl=en)
-[Jaime Bosch](https://scholar.google.com/citations?user=t5frSGQAAAAJ&hl=en)
-[An Martel](https://biblio.ugent.be/person/F5F50C8C-F0ED-11E1-A9DE-61C894A0A6B4)
-[Frank Pasmans](https://biblio.ugent.be/person/F573FD86-F0ED-11E1-A9DE-61C894A0A6B4)
+Collaborators on this project include [Jaime Bosch](https://scholar.google.com/citations?user=t5frSGQAAAAJ&hl=en), [An Martel](https://biblio.ugent.be/person/F5F50C8C-F0ED-11E1-A9DE-61C894A0A6B4), [Frank Pasmans](https://biblio.ugent.be/person/F573FD86-F0ED-11E1-A9DE-61C894A0A6B4), and [Jason R. Rohr](https://scholar.google.com/citations?user=yaRksUAAAAAJ&hl=en). This project exists thanks to their contributions.
+
+
+
+
 
 ## License
 [Creative Commons Zero v1.0 Universal](https://github.com/korotasz/Chapter-2-Analyses/blob/main/LICENSE)
