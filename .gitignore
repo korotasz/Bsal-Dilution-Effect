@@ -13,3 +13,4 @@ wc2.1_2.5m/
 figures/*
 csvFiles/nativeStatus.xlsx
 .Rproj.user
+csvFiles/shapefiles*
