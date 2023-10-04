@@ -1,18 +1,22 @@
+require(renv)
 require(pacman)
+
+## Activate project
+renv::activate()
+
 #### Packages ####
-pckgs <- c("renv", # create environment lock for R to ensure code reproducibility
-      "tidyverse", # data wrangling/manipulation
-       "reshape2", # data wrangling/manipulation
-          "rgdal", # geospatial analyses
-      "lubridate", # deals with dates
-     "data.table", # 
-         "raster", # raster manipulation/working with geospatial data
-          "ncdf4", # download and work with EarthData satellite data
-       "maptools", # package to create maps
-          "gstat", # spatio-temporal geostatistical modelling
-             "sp", # working with geospatial data
-             "sf", # workin with geospatial data
-             "fs"  # construct relative paths to files/directories
+pckgs <- c("tidyverse", # data wrangling/manipulation
+            "reshape2", # data wrangling/manipulation
+               "rgdal", # geospatial analyses
+           "lubridate", # deals with dates
+          "data.table", # 
+              "raster", # raster manipulation/working with geospatial data
+             "geodata", # get admin levels for each country
+            "maptools", # package to create maps
+               "gstat", # spatio-temporal geostatistical modelling
+                  "sp", # working with geospatial data
+                  "sf", # workin with geospatial data
+                  "fs"  # construct relative paths to files/directories
 )
 
 ## Load packages
@@ -21,6 +25,7 @@ pacman::p_load(pckgs, character.only = T)
 
 dir <- dirname(rstudioapi::getActiveDocumentContext()$path)
 csvpath <- (path.expand("/csvFiles"))
+shppath <- (path.expand("/csvFiles/shapefiles"))
 setwd(file.path(dir, csvpath))
 
 euram <- read.csv("euram.csv", header = T, encoding = "UTF-8")
@@ -48,8 +53,8 @@ prev <- prev %>%
   rename(sex = sex_merged) %>%
   # Rename countries in the "countries" column based on lat/long coords
   mutate(country = dplyr::recode(country,
-                          USA = "United States",
-                          Italy = "Switzerland")) %>%
+#                                 Italy = "Switzerland",
+                                 USA = "United States")) %>%
   # Change name of these columns
   rename(species = specificEpithet,
          sampleRemarks = eventRemarks,
@@ -63,22 +68,22 @@ prev <- prev %>%
 
 ## Delete irrelevant columns
 data.frame(colnames(prev)) # returns indexed data frame 
-prev <- prev[-c(3, 22, 24:28, 33, 35, 37:42)]
+prev <- prev[-c(3, 22, 24:28, 33, 35, 37:41)]
 
 ## Rearrange dataframe
 data.frame(colnames(prev)) 
-prev <- prev[, c(2, 30:32, 4:5, 3, 19:20, 6, 8:10, 33:34, 24:26, 
-                 13:18, 27, 7, 11:12, 21:22, 1, 23, 28:29)]
+prev <- prev[, c(2, 31:33, 4:5, 3, 19:20, 6, 8:10, 34:35, 24:26, 
+                 13:18, 27, 7, 11:12, 21:22, 1, 23, 28:30)]
 
 
 ## Remove columns from Spain
 data.frame(colnames(spain)) 
-spain <- spain[, -c(8:9, 32:54, 56)]
+spain <- spain[, -c(8:9, 32:54)]
 
 
 ## Rearrange columns in Spain df
 spain <- spain[, c(2:10, 1, 11:13, 15, 14, 28:29, 26, 18, 
-                   20:24, 27, 16:17, 19, 25, 30:32)]
+                   20:24, 27, 16:17, 19, 25, 30:33)]
 spain <- spain %>%
   replace(., . == "", NA) %>%
   rename(specimenFate = specimenDisposition) %>%
@@ -100,6 +105,82 @@ prev <- prev %>%
   # drop rows that include sampling from Peru or the US (imported with euram df)
   dplyr::filter(!(country == "Peru")) %>%
   dplyr::filter(!(country == "United States"))
+
+
+#### Obtaining climate data from geodata package -------------------------------
+# Construct file path to store Euro country shapefiles
+dir.create(file.path(dir, shppath)) # Will give warning if path already exists
+setwd(file.path(dir, shppath))
+
+## 1. Use 'raster' pckg to get shapefiles for each country and epsg.io to find the best coordinate system for Europe (we will use EPSG:3035).
+#        Using a CRS for the country/region we are looking at will yield more accurate results.
+poly <- gadm(country = c('BEL', 'DEU', 'CHE', 'ITA', 'GBR', 'ESP'), level = 2, 
+             path = file.path(dir, shppath), version = "latest", resolution = 1) %>%
+  st_as_sf(.) %>%
+  st_cast(., "MULTIPOLYGON") %>%
+  st_transform(., crs = 3035) # native crs for gadm = 4326
+
+points <- prev %>% 
+  dplyr::select(decimalLongitude, decimalLatitude) %>%
+  st_as_sf(x = ., coords = c("decimalLongitude", "decimalLatitude"), crs = 4326) %>%
+  st_transform(., crs = 3035)
+  
+
+## Intersect lat/lon coordinates with each raster to get the correct admin levels associated with our data
+out <- st_intersection(points, poly) %>%
+  st_transform(., crs = 4326)
+
+## Get admin levels in a dataframe format
+adminlvls <- data.frame(out) %>%
+  mutate(L1 = row_number())
+geometry <- data.frame(st_coordinates(st_cast(out$geometry, "POINT"))) %>%
+  mutate(L1 = row_number())
+
+## Join lat/lon data to identifiers (ADM levels) 
+adminlvls <- adminlvls %>%
+  left_join(., geometry, by = "L1") %>% # X = LON, Y = LAT
+  dplyr::select(GID_0, COUNTRY, NAME_1, NAME_2, Y, X) %>%
+  plyr::mutate(country = COUNTRY,
+               ADM0 = GID_0,
+               ADM1 = NAME_1,
+               ADM2 = NAME_2,
+               decimalLatitude = Y,
+               decimalLongitude = X) %>%
+  dplyr::select(-c(GID_0, COUNTRY, NAME_1, NAME_2, Y, X))
+## Check for missing admin levels!! 
+# adminlvls %>%
+#   filter(is.na(ADM2)) only one location missing (ADM2 in GBR).
+
+
+#     f. Add back to main dataframe 
+df1 <- prev %>%
+  dplyr::select(decimalLatitude, decimalLongitude) %>%
+  arrange()
+  mutate(L1 = row_number()) 
+df2 <- adminlvls %>%
+  dplyr::select(decimalLatitude, decimalLongitude) %>%
+  mutate(L1 = row_number()) 
+
+joined <- left_join(df1, df2, by = "L1", keep = T)
+View(joined)
+#  subset(., select = -c(country, ADM0, ADM1, ADM2)) %>%
+test <-  left_join(prev, adminlvls, by = c("decimalLatitude", "decimalLongitude")) #%>%
+  relocate(c(country, ADM0, ADM1, ADM2, decimalLatitude, decimalLongitude), .before = yearCollected) 
+
+## The following was used to check for missing vals -- retaining just in case
+# missing <- colombia %>%
+#   dplyr::select(ADM0, ADM1, ADM2, Lat, Lon, EpiYear, EpiWeek, Disease, Incidence) %>%
+#   filter(is.na(Lat)) %>%
+#   dplyr::select(ADM1, ADM2) %>%
+#   unique()
+
+
+##########
+
+
+
+
+
 
 ## Export data frame to work with in QGIS
 #write.csv(prev, 'C:/Users/alexi/OneDrive/Documents/01_GradSchool/_Dissertation work/Chapter4/03_code/locations.csv',
