@@ -2,7 +2,7 @@ require(renv)
 require(pacman)
 
 ## Activate project
-renv::activate() ## need to run renv::restore(packages = "renv")
+#renv::activate() ## need to run renv::restore(packages = "renv")
 
 #### Packages ####
 pckgs <- c("tidyverse", # data wrangling/manipulation
@@ -104,12 +104,15 @@ prev <- prev %>%
   dplyr::filter(!(materialSampleID=="")) %>%
   # drop rows that include sampling from Peru or the US (imported with euram df)
   dplyr::filter(!(country == "Peru")) %>%
-  dplyr::filter(!(country == "United States"))
+  dplyr::filter(!(country == "United States")) %>%
+  rename(year = yearCollected,
+         month = monthCollected,
+         day = dayCollected)
 
 
 #### Obtaining climate data from geodata package -------------------------------
 # Construct file path to store Euro country shapefiles
-dir.create(file.path(dir, shppath)) # Will give warning if path already exists
+#dir.create(file.path(dir, shppath)) # Will give warning if path already exists
 setwd(file.path(dir, shppath))
 
 ## 1. Use 'raster' pckg to get shapefiles for each country and epsg.io to find the best coordinate system for Europe (we will use EPSG:3035).
@@ -125,7 +128,7 @@ points_transformed <- prev %>%
   st_as_sf(x = ., coords = c("decimalLongitude", "decimalLatitude"), crs = 4326) %>%
   st_transform(., crs = 3035) %>%
   mutate(L1 = row_number())
-  
+
 points_original <- prev %>% 
   dplyr::select(decimalLongitude, decimalLatitude) %>%
   mutate(L1 = row_number())
@@ -135,8 +138,7 @@ joined <- left_join(points_original, points_transformed, by = "L1") %>%
 
 ## Intersect lat/lon coordinates with each raster to get the correct admin levels associated with our data
 out <- st_intersection(points_transformed, poly) %>%
-  left_join(., joined, by = c("L1", "geometry"), relationship = "many-to-many") %>%
-  st_transform(., crs = 4326)
+  left_join(., joined, by = c("L1", "geometry")) 
 
 ## Get admin levels in a dataframe format
 adminlvls <- data.frame(out) %>%
@@ -152,84 +154,70 @@ adminlvls <- adminlvls %>%
                ADM0 = GID_0,
                ADM1 = NAME_1,
                ADM2 = NAME_2,
-               transLat = Y,
-               transLon = X) %>%
-  dplyr::select(-c(GID_0, COUNTRY, NAME_1, NAME_2, Y, X))
+               Lat_3035 = Y,
+               Lon_3035 = X) %>%
+  dplyr::select(-c(GID_0, COUNTRY, NAME_1, NAME_2, Y, X)) %>%
+  relocate(c("Lat_3035", "Lon_3035"), .after = decimalLongitude) %>%
+  mutate(decimalLatitude = round(decimalLatitude, 6),
+         decimalLongitude = round(decimalLongitude, 6)) %>%
+  unique()
+
 ## Check for missing admin levels!! 
 # adminlvls %>%
-#   filter(is.na(ADM2)) only one location missing (ADM2 in GBR).
+#   filter(is.na(ADM2)) # only one location missing (ADM2 in GBR).
 
+## Check & correct any rounding errors in transformed points
+# test <- adminlvls
+# 
+# df1 <- test %>%
+#   dplyr::select(Lat_3035, Lon_3035) %>%
+#   st_transform(., crs = 4326) %>%
+#   mutate(transLat = round(transLat, 6),
+#          transLon = round(transLon, 6)) %>%
+#   unite(., LatLon, c("Lat_3035", "Lon_3035"), sep = ", ") 
+#
+# df2 <- test %>%
+#   mutate(decimalLatitude = round(decimalLatitude, 6),
+#          decimalLongitude = round(decimalLongitude, 6)) %>%
+#   dplyr::select(decimalLatitude, decimalLongitude) %>%
+#   unite(., LatLon, c("decimalLatitude", "decimalLongitude"), sep = ", ")
+# 
+# compare <- anti_join(df1, df2, by = "LatLon")
 
 ## Add back to main dataframe 
-test <- prev %>%
-  subset(., subset = -c("country", "ADM0", "ADM1", "ADM2")) #%>%
-  left_join(prev, adminlvls, by = c("decimalLatitude", "decimalLongitude"), keep = F, 
-                  relationship = "many-to-many")
-View(joined)
-#  subset(., select = -c(country, ADM0, ADM1, ADM2)) %>%
-test <-  left_join(prev, adminlvls, by = c("decimalLatitude", "decimalLongitude")) #%>%
-  relocate(c(country, ADM0, ADM1, ADM2, decimalLatitude, decimalLongitude), .before = yearCollected) 
-
-## The following was used to check for missing vals -- retaining just in case
-# missing <- colombia %>%
-#   dplyr::select(ADM0, ADM1, ADM2, Lat, Lon, EpiYear, EpiWeek, Disease, Incidence) %>%
-#   filter(is.na(Lat)) %>%
-#   dplyr::select(ADM1, ADM2) %>%
-#   unique()
+prev <- prev %>%
+  dplyr::select(!("country":"ADM2")) %>%
+  mutate(decimalLatitude = round(decimalLatitude, 6),
+         decimalLongitude = round(decimalLongitude, 6)) %>%
+  left_join(., adminlvls, by = c("decimalLatitude", "decimalLongitude"), relationship = "many-to-one",
+                  keep = F) %>%
+  relocate(c(country, ADM0, ADM1, ADM2, Lat_3035, Lon_3035), .before = decimalLatitude) 
 
 
-##########
+## Compared this method with sampling locations in QGIS and it is just as precise/accurate.
 
+# prev %>%
+#   group_by(BsalDetected) %>%
+#   summarise(n = n())
 
-
-
-
-
-## Export data frame to work with in QGIS
-#write.csv(prev, 'C:/Users/alexi/OneDrive/Documents/01_GradSchool/_Dissertation work/Chapter4/03_code/locations.csv',
-#          row.names = FALSE)
-
-## Read in attribute table with ADM data and case match ADM levels in prev
-a <- read.csv("locations_with_ADMs.csv", header = T, encoding = "UTF-8")
-
-a2 <- a %>%
-  dplyr::select(COUNTRY_2, GID_0, NAME_1, NAME_2, materialSampleID)
-colnames(a2) <- c("country", "ADM0", "ADM1", "ADM2", "materialSampleID")
-
-prev$ADM0 = a2$ADM0[base::match(paste(prev$country), 
-                                paste(a2$country))]
-prev$ADM1 = a2$ADM1[base::match(paste(prev$ADM0, prev$materialSampleID), 
-                                paste(a2$ADM0, a2$materialSampleID))]
-prev$ADM2 = a2$ADM2[base::match(paste(prev$ADM1, prev$materialSampleID), 
-                                paste(a2$ADM1, a2$materialSampleID))]
-prev$ADM1 <- toupper(prev$ADM1)
-prev$ADM2 <- toupper(prev$ADM2)
-
-prev %>%
-  group_by(BsalDetected) %>%
-  summarise(n = n())
-
-## Group sites by unique lat/long combos and assign site #s to them, for all countries excluding Spain
-temp <- prev%>%
+## Group sites by unique lat/long combos and assign site #s to them, for all countries
+siteNumber <- prev %>%
   dplyr::select(materialSampleID, decimalLatitude, decimalLongitude) %>%
   dplyr::group_by(decimalLatitude, decimalLongitude) %>%
   mutate(Site = cur_group_id()) %>% 
-  ungroup()
-temp <- temp %>%
-  dplyr::select(materialSampleID, Site) 
+  ungroup() 
 
-prev$Site <- NA
+prev$Site <- siteNumber$Site[base::match(paste(prev$materialSampleID), 
+                                      paste(siteNumber$materialSampleID))]
 
-prev$Site = temp$Site[base::match(paste(prev$materialSampleID), 
-                                      paste(temp$materialSampleID))]
-
-
+prev <- relocate(prev, Site, .after = "day")
 
 ## Add data to the susceptibility column in prev df
 ## Susceptibility codes (based on coding system from Bosch et al. 2021)
 ## 1 = resistant
 ## 2 = tolerant/susceptible
 ## 3 = lethal
+setwd(file.path(dir, csvpath))
 s <- read.csv("susceptibility.csv", header = T, encoding = "UTF-8")
 data.frame(colnames(s))
 names(s) <- c("order", "family", "genus", "species", "scientific", 
@@ -241,7 +229,7 @@ plyr::count(prev, "susceptibility")
 #sus <- prev %>% dplyr::filter(is.na(susceptibility))
 
 #### Calculate abundance, richness, and diversity ####
-prev <- unite(prev, c("yearCollected", "monthCollected", "dayCollected"), sep = "-", col = "date", remove = F)
+prev <- unite(prev, c("year", "month", "day"), sep = "-", col = "date", remove = F)
 
 ## calculate relative spp richness
 spr <- prev %>%
@@ -301,50 +289,64 @@ levels(prev$fatal) <- c(0,1) #0 = F, 1 = T
 ## Obtain unique lat/long/date combinations to extract weather data
 Sys.setenv(TZ = "UTC")
 weather <- prev %>%
-  dplyr::select(decimalLatitude, decimalLongitude, date, 
-                yearCollected, monthCollected, dayCollected) %>%
-  dplyr::mutate(date_t1 = NA, date_t2 = NA) %>%
-  relocate(c(date_t1, date_t2), .after = date) %>%
-  unite(decimalLatitude, decimalLongitude, sep = ", ", col = "LatLon", remove = F) %>%
-  relocate(LatLon, .after = decimalLongitude) %>%
-  dplyr::filter(!(dayCollected == "NA")) %>%
-  mutate(temp = NA, soilMoisture = NA) %>%
+  dplyr::select(Lat_3035, Lon_3035, year, month, day, date) %>%
+  unite(Lat_3035, Lon_3035, sep = ", ", col = "LatLon", remove = F) %>%
+  relocate(LatLon, .after = Lon_3035) %>%
+  dplyr::filter(!(day == "NA")) %>%
   group_by(LatLon, date) %>%
   unique() %>%
-  ungroup()
-
+  ungroup() %>%
+  dplyr::select(!(LatLon)) %>%
+  mutate(date = base::as.Date(date, format = "%Y-%m-%d"))
   
-weather <- unique(weather)
-weather$date <- base::as.Date(weather$date, format = "%Y-%m-%d")
+## get dates for 4 days prior to sample date
+for(i in 1:nrow(weather)){
+  weather[i,7] <- as.Date(weather$date[i], format = "%Y-%m-%d") - days(4)
+
+## get dates for 1 week prior to sample date
+  weather[i,8] <- as.Date(weather$date[i], format = "%Y-%m-%d") - days(7)
+
+## get dates for 10 days prior to sample date
+  weather[i,9] <- as.Date(weather$date[i], format = "%Y-%m-%d") - days(10)
+
+## get dates for 2 weeks prior to sample date
+  weather[i,10] <- as.Date(weather$date[i], format = "%Y-%m-%d") - days(14)
 
 ## get dates for 1 month prior to sample date
-for(i in 1:nrow(weather)){
-  weather[i,5] <- as.Date(weather$date[i], format = "%Y-%m-%d") - days(30)
-
-## get dates for 2 months prior to sample date
-  weather[i,6] <- as.Date(weather$date[i], format = "%Y-%m-%d") - days(60)
+  weather[i,11] <- as.Date(weather$date[i], format = "%Y-%m-%d") - days(30)
+  
 }
 
+weather <- weather %>%
+  rename(t4 = ...7,
+         t7 = ...8,
+         t10 = ...9,
+         t14 = ...10,
+         t30 = ...11)
 
-# Add dates t-1 and t-2 back into prev dataframe
+## Add date from timepoints back into prev
 prev <- prev %>%
   mutate(date = base::as.Date(date, "%Y-%m-%d")) %>%
-  left_join(weather[, c(1:2, 4:6)], by = c("decimalLatitude", "decimalLongitude", "date")) %>%
-  relocate(c("date_t1", "date_t2"), .after = date)
+  left_join(weather[, c(1:2, 6:11)], by = c("Lat_3035", "Lon_3035", "date")) %>%
+  relocate(c("t4", "t7", "t10", "t14", "t30"), .after = date) %>%
+  rename(t0 = date)
 
 
-weather2 <- weather %>%
-  group_by(decimalLatitude, decimalLongitude) %>%
-  pivot_longer(cols = c(date, date_t1, date_t2),
+weather <- weather %>%
+  rename(t0 = date) %>%
+  group_by(Lat_3035, Lon_3035) %>%
+  pivot_longer(cols = c(t0, t4, t7, t10, t14, t30),
                names_to = "timepoint",
                values_to = "date") %>%
   ungroup() %>%
-  dplyr::select(-c("LatLon", "yearCollected", "monthCollected", "dayCollected")) %>%
-  relocate(c("timepoint", "date"), .after = "decimalLongitude") %>%
-  unite(decimalLatitude, decimalLongitude, sep = ", ", col = "LatLon", remove = F)
+  relocate(c("timepoint", "date"), .after = "Lon_3035") %>%
+  mutate(year = lubridate::year(date),
+         month = lubridate::month(date),
+         day = lubridate::day(date)) %>%
+  dplyr::select(-("date"))
 
 ## Export to use in Python and PyQGIS to obtain weather data
-#write.csv(weather2, 'C:/Users/alexi/OneDrive/Documents/01_GradSchool/_Dissertation work/Chapter4/03_code/weather.csv', fileEncoding = "UTF-8")
+#write.csv(weather, 'weather.csv', row.names = F, fileEncoding = "UTF-8")
 
 
 ## Python 3.9.4 used to download .nc4 files from NASA's EarthData data repository for each date and location.
@@ -355,7 +357,7 @@ weather2 <- weather %>%
 gldas_daily <- read.csv("weather_merged.csv", header = T, encoding = "UTF-8")
 
 gldas_daily <- gldas_daily %>%
-  unite(c("yearCollected", "monthCollected", "dayCollected"), sep = "-", col = "date", remove = F) %>%
+  unite(c("year", "month", "day"), sep = "-", col = "date", remove = F) %>%
   rename(soilMoisture = "SOILMOIST_kgm.21",
          temp = "SURFTEMP_K1") %>%
   dplyr::select(decimalLatitude, decimalLongitude, timepoint, date, soilMoisture, temp) %>%
@@ -410,11 +412,11 @@ gldas_daily <- left_join(gldas_daily, temp_d, by = c("decimalLatitude", "decimal
 gldas_monthly <- read.csv("monthly_weather.csv", header = T, encoding = "UTF-8")
 
 gldas_monthly <- gldas_monthly %>%
-  mutate(monthCollected = as.numeric(dplyr::recode(monthCollected,
+  mutate(month = as.numeric(dplyr::recode(month,
                           "true" = "1")),
-         dayCollected = as.numeric(dplyr::recode(dayCollected,
+         day = as.numeric(dplyr::recode(day,
                                "true" = "1"))) %>%
-  unite(c("yearCollected", "monthCollected", "dayCollected"), sep = "-", col = "date", remove = F) %>%
+  unite(c("year", "month", "day"), sep = "-", col = "date", remove = F) %>%
   rename(soilMoisture = "SOILMOIST_kgm.21",
          temp = "SURFTEMP_K1",
          precip = "PRECIP_kgm.2s.11") 
@@ -614,7 +616,7 @@ rsp_tmin1 <- reshape(rsp_tmin1, varying = c("Jan", "Feb", "Mar", "Apr", "May",
                                             "Jun", "Jul", "Aug", "Sep", "Oct",
                                             "Nov", "Dec"),
                      v.names = "tmin",
-                     timevar = "monthCollected",
+                     timevar = "month",
                      times = month.abb,
                      direction = "long")
 rsp_tmin1$ADM1 <- toupper(rsp_tmin1$ADM1)
@@ -636,7 +638,7 @@ rsp_tmin2 <- reshape(rsp_tmin2, varying = c("Jan", "Feb", "Mar", "Apr", "May",
                                             "Jun", "Jul", "Aug", "Sep", "Oct",
                                             "Nov", "Dec"),
                      v.names = "tmin",
-                     timevar = "monthCollected",
+                     timevar = "month",
                      times = month.abb,
                      direction = "long")
 rsp_tmin2$ADM1 <- toupper(rsp_tmin2$ADM1)
@@ -658,7 +660,7 @@ rsp_tmin3 <- reshape(rsp_tmin3, varying = c("Jan", "Feb", "Mar", "Apr", "May",
                                             "Jun", "Jul", "Aug", "Sep", "Oct",
                                             "Nov", "Dec"),
                      v.names = "tmin",
-                     timevar = "monthCollected",
+                     timevar = "month",
                      times = month.abb,
                      direction = "long")
 rsp_tmin3$ADM1 <- toupper(rsp_tmin3$ADM1)
@@ -680,7 +682,7 @@ rsp_tmin4 <- reshape(rsp_tmin4, varying = c("Jan", "Feb", "Mar", "Apr", "May",
                                             "Jun", "Jul", "Aug", "Sep", "Oct",
                                             "Nov", "Dec"),
                      v.names = "tmin",
-                     timevar = "monthCollected",
+                     timevar = "month",
                      times = month.abb,
                      direction = "long")
 rsp_tmin4$ADM1 <- toupper(rsp_tmin4$ADM1)
@@ -702,7 +704,7 @@ rsp_tmin5 <- reshape(rsp_tmin5, varying = c("Jan", "Feb", "Mar", "Apr", "May",
                                             "Jun", "Jul", "Aug", "Sep", "Oct",
                                             "Nov", "Dec"),
                      v.names = "tmin",
-                     timevar = "monthCollected",
+                     timevar = "month",
                      times = month.abb,
                      direction = "long")
 rsp_tmin5$ADM1 <- toupper(rsp_tmin5$ADM1)
@@ -710,7 +712,7 @@ rsp_tmin5$ADM2 <- toupper(rsp_tmin5$ADM2)
 
 
 rsp_tmin <- rbind(rsp_tmin1, rsp_tmin2, rsp_tmin3, rsp_tmin4, rsp_tmin5)
-rsp_tmin$monthCollected <- match(rsp_tmin$monthCollected, month.abb)
+rsp_tmin$month <- match(rsp_tmin$month, month.abb)
 
 #### tmax ####
 ### CHE
@@ -729,7 +731,7 @@ rsp_tmax1 <- reshape(rsp_tmax1, varying = c("Jan", "Feb", "Mar", "Apr", "May",
                                             "Jun", "Jul", "Aug", "Sep", "Oct",
                                             "Nov", "Dec"),
                      v.names = "tmax",
-                     timevar = "monthCollected",
+                     timevar = "month",
                      times = month.abb,
                      direction = "long")
 rsp_tmax1$ADM1 <- toupper(rsp_tmax1$ADM1)
@@ -751,7 +753,7 @@ rsp_tmax2 <- reshape(rsp_tmax2, varying = c("Jan", "Feb", "Mar", "Apr", "May",
                                             "Jun", "Jul", "Aug", "Sep", "Oct",
                                             "Nov", "Dec"),
                      v.names = "tmax",
-                     timevar = "monthCollected",
+                     timevar = "month",
                      times = month.abb,
                      direction = "long")
 rsp_tmax2$ADM1 <- toupper(rsp_tmax2$ADM1)
@@ -773,7 +775,7 @@ rsp_tmax3 <- reshape(rsp_tmax3, varying = c("Jan", "Feb", "Mar", "Apr", "May",
                                             "Jun", "Jul", "Aug", "Sep", "Oct",
                                             "Nov", "Dec"),
                      v.names = "tmax",
-                     timevar = "monthCollected",
+                     timevar = "month",
                      times = month.abb,
                      direction = "long")
 rsp_tmax3$ADM1 <- toupper(rsp_tmax3$ADM1)
@@ -796,7 +798,7 @@ rsp_tmax4 <- reshape(rsp_tmax4, varying = c("Jan", "Feb", "Mar", "Apr", "May",
                                             "Jun", "Jul", "Aug", "Sep", "Oct",
                                             "Nov", "Dec"),
                      v.names = "tmax",
-                     timevar = "monthCollected",
+                     timevar = "month",
                      times = month.abb,
                      direction = "long")
 rsp_tmax4$ADM1 <- toupper(rsp_tmax4$ADM1)
@@ -818,7 +820,7 @@ rsp_tmax5 <- reshape(rsp_tmax5, varying = c("Jan", "Feb", "Mar", "Apr", "May",
                                             "Jun", "Jul", "Aug", "Sep", "Oct",
                                             "Nov", "Dec"),
                      v.names = "tmax",
-                     timevar = "monthCollected",
+                     timevar = "month",
                      times = month.abb,
                      direction = "long")
 rsp_tmax5$ADM1 <- toupper(rsp_tmax5$ADM1)
@@ -826,7 +828,7 @@ rsp_tmax5$ADM2 <- toupper(rsp_tmax5$ADM2)
 
 
 rsp_tmax <- rbind(rsp_tmax1, rsp_tmax2, rsp_tmax3, rsp_tmax4, rsp_tmax5)
-rsp_tmax$monthCollected <- match(rsp_tmax$monthCollected, month.abb)
+rsp_tmax$month <- match(rsp_tmax$month, month.abb)
 
 
 
@@ -847,7 +849,7 @@ rsp_tavg1 <- reshape(rsp_tavg1, varying = c("Jan", "Feb", "Mar", "Apr", "May",
                                             "Jun", "Jul", "Aug", "Sep", "Oct",
                                             "Nov", "Dec"),
                      v.names = "tavg",
-                     timevar = "monthCollected",
+                     timevar = "month",
                      times = month.abb,
                      direction = "long")
 rsp_tavg1$ADM1 <- toupper(rsp_tavg1$ADM1)
@@ -869,7 +871,7 @@ rsp_tavg2 <- reshape(rsp_tavg2, varying = c("Jan", "Feb", "Mar", "Apr", "May",
                                             "Jun", "Jul", "Aug", "Sep", "Oct",
                                             "Nov", "Dec"),
                      v.names = "tavg",
-                     timevar = "monthCollected",
+                     timevar = "month",
                      times = month.abb,
                      direction = "long")
 rsp_tavg2$ADM1 <- toupper(rsp_tavg2$ADM1)
@@ -891,7 +893,7 @@ rsp_tavg3 <- reshape(rsp_tavg3, varying = c("Jan", "Feb", "Mar", "Apr", "May",
                                             "Jun", "Jul", "Aug", "Sep", "Oct",
                                             "Nov", "Dec"),
                      v.names = "tavg",
-                     timevar = "monthCollected",
+                     timevar = "month",
                      times = month.abb,
                      direction = "long")
 rsp_tavg3$ADM1 <- toupper(rsp_tavg3$ADM1)
@@ -913,7 +915,7 @@ rsp_tavg4 <- reshape(rsp_tavg4, varying = c("Jan", "Feb", "Mar", "Apr", "May",
                                             "Jun", "Jul", "Aug", "Sep", "Oct",
                                             "Nov", "Dec"),
                      v.names = "tavg",
-                     timevar = "monthCollected",
+                     timevar = "month",
                      times = month.abb,
                      direction = "long")
 rsp_tavg4$ADM1 <- toupper(rsp_tavg4$ADM1)
@@ -935,7 +937,7 @@ rsp_tavg5 <- reshape(rsp_tavg5, varying = c("Jan", "Feb", "Mar", "Apr", "May",
                                             "Jun", "Jul", "Aug", "Sep", "Oct",
                                             "Nov", "Dec"),
                      v.names = "tavg",
-                     timevar = "monthCollected",
+                     timevar = "month",
                      times = month.abb,
                      direction = "long")
 rsp_tavg5$ADM1 <- toupper(rsp_tavg5$ADM1)
@@ -943,7 +945,7 @@ rsp_tavg5$ADM2 <- toupper(rsp_tavg5$ADM2)
 
 
 rsp_tavg <- rbind(rsp_tavg1, rsp_tavg2, rsp_tavg3, rsp_tavg4, rsp_tavg5)
-rsp_tavg$monthCollected <- match(rsp_tavg$monthCollected, month.abb)
+rsp_tavg$month <- match(rsp_tavg$month, month.abb)
 
 
 #### precip ####
@@ -963,7 +965,7 @@ rsp_prec1 <- reshape(rsp_prec1, varying = c("Jan", "Feb", "Mar", "Apr", "May",
                                             "Jun", "Jul", "Aug", "Sep", "Oct",
                                             "Nov", "Dec"),
                      v.names = "prec",
-                     timevar = "monthCollected",
+                     timevar = "month",
                      times = month.abb,
                      direction = "long")
 rsp_prec1$ADM1 <- toupper(rsp_prec1$ADM1)
@@ -985,7 +987,7 @@ rsp_prec2 <- reshape(rsp_prec2, varying = c("Jan", "Feb", "Mar", "Apr", "May",
                                             "Jun", "Jul", "Aug", "Sep", "Oct",
                                             "Nov", "Dec"),
                      v.names = "prec",
-                     timevar = "monthCollected",
+                     timevar = "month",
                      times = month.abb,
                      direction = "long")
 rsp_prec2$ADM1 <- toupper(rsp_prec2$ADM1)
@@ -1007,7 +1009,7 @@ rsp_prec3 <- reshape(rsp_prec3, varying = c("Jan", "Feb", "Mar", "Apr", "May",
                                             "Jun", "Jul", "Aug", "Sep", "Oct",
                                             "Nov", "Dec"),
                      v.names = "prec",
-                     timevar = "monthCollected",
+                     timevar = "month",
                      times = month.abb,
                      direction = "long")
 rsp_prec3$ADM1 <- toupper(rsp_prec3$ADM1)
@@ -1030,7 +1032,7 @@ rsp_prec4 <- reshape(rsp_prec4, varying = c("Jan", "Feb", "Mar", "Apr", "May",
                                             "Jun", "Jul", "Aug", "Sep", "Oct",
                                             "Nov", "Dec"),
                      v.names = "prec",
-                     timevar = "monthCollected",
+                     timevar = "month",
                      times = month.abb,
                      direction = "long")
 rsp_prec4$ADM1 <- toupper(rsp_prec4$ADM1)
@@ -1052,14 +1054,14 @@ rsp_prec5 <- reshape(rsp_prec5, varying = c("Jan", "Feb", "Mar", "Apr", "May",
                                             "Jun", "Jul", "Aug", "Sep", "Oct",
                                             "Nov", "Dec"),
                      v.names = "prec",
-                     timevar = "monthCollected",
+                     timevar = "month",
                      times = month.abb,
                      direction = "long")
 rsp_prec5$ADM1 <- toupper(rsp_prec5$ADM1)
 rsp_prec5$ADM2 <- toupper(rsp_prec5$ADM2)
 
 rsp_prec <- rbind(rsp_prec1, rsp_prec2, rsp_prec3, rsp_prec4, rsp_prec5)
-rsp_prec$monthCollected <- match(rsp_prec$monthCollected, month.abb)
+rsp_prec$month <- match(rsp_prec$month, month.abb)
 
 
 #### bio; these are annual trends, not monthly ####
@@ -1163,14 +1165,14 @@ rsp_bio[, c(16:18, 20:23)] = rsp_bio[, c(16:18, 20:23)]*0.1
 
 
 #### Merge extracted data to original dataframe ####
-prev$tmin = rsp_tmin$tmin[base::match(paste(prev$ADM2, prev$monthCollected), 
-                                      paste(rsp_tmin$ADM2, rsp_tmin$monthCollected))]
-prev$tmax = rsp_tmax$tmax[base::match(paste(prev$ADM2, prev$monthCollected), 
-                                      paste(rsp_tmax$ADM2, rsp_tmax$monthCollected))]
-prev$tavg = rsp_tavg$tavg[base::match(paste(prev$ADM2, prev$monthCollected), 
-                                      paste(rsp_tavg$ADM2, rsp_tavg$monthCollected))]
-prev$prec = rsp_prec$prec[base::match(paste(prev$ADM2, prev$monthCollected), 
-                                      paste(rsp_prec$ADM2, rsp_prec$monthCollected))]
+prev$tmin = rsp_tmin$tmin[base::match(paste(prev$ADM2, prev$month), 
+                                      paste(rsp_tmin$ADM2, rsp_tmin$month))]
+prev$tmax = rsp_tmax$tmax[base::match(paste(prev$ADM2, prev$month), 
+                                      paste(rsp_tmax$ADM2, rsp_tmax$month))]
+prev$tavg = rsp_tavg$tavg[base::match(paste(prev$ADM2, prev$month), 
+                                      paste(rsp_tavg$ADM2, rsp_tavg$month))]
+prev$prec = rsp_prec$prec[base::match(paste(prev$ADM2, prev$month), 
+                                      paste(rsp_prec$ADM2, rsp_prec$month))]
 prev$bio1 = rsp_bio$bio1[base::match(paste(prev$ADM2), paste(rsp_bio$ADM2))]
 prev$bio2 = rsp_bio$bio2[base::match(paste(prev$ADM2), paste(rsp_bio$ADM2))]
 prev$bio3 = rsp_bio$bio3[base::match(paste(prev$ADM2), paste(rsp_bio$ADM2))]
