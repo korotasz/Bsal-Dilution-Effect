@@ -2,7 +2,7 @@ require(renv)
 require(pacman)
 
 ## Activate project
-renv::activate()
+renv::activate() ## need to run renv::restore(packages = "renv")
 
 #### Packages ####
 pckgs <- c("tidyverse", # data wrangling/manipulation
@@ -120,48 +120,51 @@ poly <- gadm(country = c('BEL', 'DEU', 'CHE', 'ITA', 'GBR', 'ESP'), level = 2,
   st_cast(., "MULTIPOLYGON") %>%
   st_transform(., crs = 3035) # native crs for gadm = 4326
 
-points <- prev %>% 
+points_transformed <- prev %>% 
   dplyr::select(decimalLongitude, decimalLatitude) %>%
   st_as_sf(x = ., coords = c("decimalLongitude", "decimalLatitude"), crs = 4326) %>%
-  st_transform(., crs = 3035)
+  st_transform(., crs = 3035) %>%
+  mutate(L1 = row_number())
   
+points_original <- prev %>% 
+  dplyr::select(decimalLongitude, decimalLatitude) %>%
+  mutate(L1 = row_number())
+
+joined <- left_join(points_original, points_transformed, by = "L1") %>%
+  relocate(L1, .before = decimalLongitude)
 
 ## Intersect lat/lon coordinates with each raster to get the correct admin levels associated with our data
-out <- st_intersection(points, poly) %>%
+out <- st_intersection(points_transformed, poly) %>%
+  left_join(., joined, by = c("L1", "geometry"), relationship = "many-to-many") %>%
   st_transform(., crs = 4326)
 
 ## Get admin levels in a dataframe format
 adminlvls <- data.frame(out) %>%
-  mutate(L1 = row_number())
+  mutate(L1 = row_number()) 
 geometry <- data.frame(st_coordinates(st_cast(out$geometry, "POINT"))) %>%
   mutate(L1 = row_number())
 
 ## Join lat/lon data to identifiers (ADM levels) 
 adminlvls <- adminlvls %>%
   left_join(., geometry, by = "L1") %>% # X = LON, Y = LAT
-  dplyr::select(GID_0, COUNTRY, NAME_1, NAME_2, Y, X) %>%
+  dplyr::select(GID_0, COUNTRY, NAME_1, NAME_2, Y, X, decimalLatitude, decimalLongitude) %>%
   plyr::mutate(country = COUNTRY,
                ADM0 = GID_0,
                ADM1 = NAME_1,
                ADM2 = NAME_2,
-               decimalLatitude = Y,
-               decimalLongitude = X) %>%
+               transLat = Y,
+               transLon = X) %>%
   dplyr::select(-c(GID_0, COUNTRY, NAME_1, NAME_2, Y, X))
 ## Check for missing admin levels!! 
 # adminlvls %>%
 #   filter(is.na(ADM2)) only one location missing (ADM2 in GBR).
 
 
-#     f. Add back to main dataframe 
-df1 <- prev %>%
-  dplyr::select(decimalLatitude, decimalLongitude) %>%
-  arrange()
-  mutate(L1 = row_number()) 
-df2 <- adminlvls %>%
-  dplyr::select(decimalLatitude, decimalLongitude) %>%
-  mutate(L1 = row_number()) 
-
-joined <- left_join(df1, df2, by = "L1", keep = T)
+## Add back to main dataframe 
+test <- prev %>%
+  subset(., subset = -c("country", "ADM0", "ADM1", "ADM2")) #%>%
+  left_join(prev, adminlvls, by = c("decimalLatitude", "decimalLongitude"), keep = F, 
+                  relationship = "many-to-many")
 View(joined)
 #  subset(., select = -c(country, ADM0, ADM1, ADM2)) %>%
 test <-  left_join(prev, adminlvls, by = c("decimalLatitude", "decimalLongitude")) #%>%
