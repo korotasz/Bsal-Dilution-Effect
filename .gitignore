@@ -3,7 +3,7 @@ code/temp2.R
 .vscode/
 QGISFiles/
 Temp_dataAnalysis.Rmd
-WorldClim/gadm/
+WorldClim/
 bsal_analysis.csv
 dataAnalysis.Rmd
 dataCleaning_init.R
@@ -13,4 +13,4 @@ wc2.1_2.5m/
 figures/*
 csvFiles/nativeStatus.xlsx
 .Rproj.user
-csvFiles/shapefiles*
+csvFiles/shapefiles/
