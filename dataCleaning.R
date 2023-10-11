@@ -11,6 +11,7 @@ pckgs <- c("tidyverse", # data wrangling/manipulation
            "lubridate", # deals with dates
           "data.table", # 
               "raster", # raster manipulation/working with geospatial data
+               "terra", # supercedes raster package
              "geodata", # get admin levels for each country
             "maptools", # package to create maps
                "gstat", # spatio-temporal geostatistical modelling
@@ -123,6 +124,9 @@ poly <- gadm(country = c('BEL', 'DEU', 'CHE', 'ITA', 'GBR', 'ESP'), level = 2,
   st_as_sf(.) %>%
   st_cast(., "MULTIPOLYGON") %>%
   st_transform(., crs = 3035) # native crs for gadm = 4326
+
+# Write multipolygon to .shp file for later use with WorldClim
+#st_write(poly, "europe.shp")
 
 points_transformed <- prev %>% 
   dplyr::select(Lon, Lat) %>%
@@ -345,32 +349,18 @@ weather <- weather %>%
   dplyr::select(-("date")) %>%
   filter(year != '1905') # likely a museum specimen --  not useful for our analyses
 
-
-# weather_07_16 <- weather %>%
-#   filter(between(year, '2007', '2016'))
-# 
-# weather_2017 <- weather %>%
-#   filter(year == '2017')
-# 
-# weather_2018 <- weather %>%
-#   filter(year == '2018')
-# 
-# weather_2019 <- weather %>%
-#   filter(year == '2019')
-# 
-# weather_20_21 <- weather %>%
-#   filter(between(year, '2020', '2021'))
-
-
 ## Export to use in Python and PyQGIS to obtain weather data
 #write.csv(weather, 'weather.csv', row.names = F, fileEncoding = "UTF-8")
 
 
 ## Python 3.9.4 used to download .nc4 files from NASA's EarthData data repository for each date and location.
 
+#### CODE BELOW NEEDS EDITING (lines357-517)-----------------------------------------------------------------------------------------------------------------------
 ## Import DAILY temperature & soil moisture data from NASA's EarthData website (citation below)
-   ## Li, B., H. Beaudoing, and M. Rodell, NASA/GSFC/HSL (2020), GLDAS Catchment Land Surface Model L4 daily 0.25 x 0.25 degree GRACE-DA1 V2.2, 
-   ## Greenbelt, Maryland, USA, Goddard Earth Sciences Data and Information Services Center (GES DISC), Accessed: 2022-09-08.
+#  Li, B., H. Beaudoing, and M. Rodell, NASA/GSFC/HSL (2020), GLDAS Catchment Land Surface Model L4 daily 0.25 x 0.25 degree GRACE-DA1 V2.2, 
+#     Greenbelt, Maryland, USA, Goddard Earth Sciences Data and Information Services Center (GES DISC), Accessed: 2023-10-11. doi:10.5067/TXBMLX370XX8.
+#  Li, B., M. Rodell, S. Kumar, H. Beaudoing, A. Getirana, B. F. Zaitchik, et al. (2019) Global GRACE data assimilation for groundwater and drought 
+#     monitoring: Advances and challenges. Water Resources Research, 55, 7564-7586. doi:10.1029/2018wr024618.
 gldas_daily <- read.csv("weather_merged.csv", header = T, encoding = "UTF-8")
 
 gldas_daily <- gldas_daily %>%
@@ -420,7 +410,6 @@ gldas_daily <- gldas_daily %>%
 # Add temp data back into gldas_daily df in preparation to add it back to the main df.
 gldas_daily <- left_join(gldas_daily, temp_d, by = c("Lat", "Lon", "date", "date_t1", "date_t2", "row")) %>%
   subset(., select = -c(row))
-
 
 
 ## Import MONTHLY temperature, precip, & soil moisture data from NASA's EarthData website (citation below)
@@ -525,7 +514,7 @@ prev <- left_join(prev, gldas_daily, by = c("Lat", "Lon", "date", "date_t1", "da
 
 prev <- prev[, c(1:6, 38, 10:12, 7:9, 13:31, 39:44, 51, 45:50, 52, 32:37)]
 
-
+########
 
 # Combine BdDetected and BsalDetected into one "diseaseDetected" column
 prev <- prev %>%
@@ -560,6 +549,104 @@ temp <- prev %>%
   dplyr::select(ADM0, ADM1, ADM2)
 temp <- unique(temp)
 temp <- with(temp, temp[order(ADM0, ADM1, ADM2) , ])
+
+## Construct file path to store WorldClim data 
+# dir.create(file.path(dir, "/WorldClim")) # Will give warning if path already exists
+wclim_path <- path.expand("/WorldClim")
+setwd(file.path(dir, wclim_path))
+
+
+## 4. Obtain WorldClim data as SpatRasters and create SpatRaster collection
+unique_locations <- points_original %>%
+  dplyr::select(Lon, Lat) %>%
+  unique()
+
+for(i in 1:nrow(unique_locations)){
+  tmin <- geodata::worldclim_tile(var = 'tmin', lon = unique_locations$Lon[i],  lat = unique_locations$Lat[i], path = file.path(dir, wclim_path), res = 2.5, version = "2.1")
+  tmax <- geodata::worldclim_tile(var = 'tmax', lon = unique_locations$Lon[i],  lat = unique_locations$Lat[i], path = file.path(dir, wclim_path), res = 2.5, version = "2.1") 
+  tavg <- geodata::worldclim_tile(var = 'tavg', lon = unique_locations$Lon[i],  lat = unique_locations$Lat[i], path = file.path(dir, wclim_path), res = 2.5, version = "2.1") 
+  prec <- geodata::worldclim_tile(var = 'prec', lon = unique_locations$Lon[i],  lat = unique_locations$Lat[i],path = file.path(dir, wclim_path), res = 2.5, version = "2.1") 
+  bio <- geodata::worldclim_tile(var = 'bio', lon = unique_locations$Lon[i],  lat = unique_locations$Lat[i], path = file.path(dir, wclim_path), res = 2.5, version = "2.1")
+  
+  worldclim_combined <- terra::sprc(tmin, tmax, tavg, prec, bio)
+  
+  return(worldclim_combined)
+}
+
+
+ 
+
+
+# tmin <- as(tmin, "Raster") # convert SpatRaster to Rasterstack
+# tmax <- as(tmax, "Raster") # convert SpatRaster to Rasterstack
+# tavg <- as(tavg, "Raster") # convert SpatRaster to Rasterstack
+# prec <- as(prec, "Raster") # convert SpatRaster to Rasterstack
+# gain(prec) = 0.1 # convert to cm
+# bio <- as(bio, "Raster") # convert SpatRaster to Rasterstack
+
+
+## 5. Use ADM geometries to sample WorldClim rasters 
+#     a. tmin | temporal scale: monthly (30yr avg)
+tmin_COL <- crop(tmin, col_adm2) 
+tmin_mask <- mask(tmin_COL, col_adm2)
+tmin_extract <- as.data.frame(raster::extract(x = tmin_mask, y = col_adm2, fun = mean, df = T, sp = T))
+tmin_df <- tmin_extract %>% 
+  dplyr::select(ADM1_ES, ADM2_ES, wc2.1_2.5m_tmin_01, wc2.1_2.5m_tmin_02,
+                wc2.1_2.5m_tmin_03, wc2.1_2.5m_tmin_04, wc2.1_2.5m_tmin_05, 
+                wc2.1_2.5m_tmin_06, wc2.1_2.5m_tmin_07, wc2.1_2.5m_tmin_08, 
+                wc2.1_2.5m_tmin_09, wc2.1_2.5m_tmin_10, wc2.1_2.5m_tmin_11,
+                wc2.1_2.5m_tmin_12) %>%
+  rename("ADM1" = "ADM1_ES", "ADM2" = "ADM2_ES", "1" = "wc2.1_2.5m_tmin_01", "2" = "wc2.1_2.5m_tmin_02", 
+         "3" = "wc2.1_2.5m_tmin_03", "4" = "wc2.1_2.5m_tmin_04", "5" = "wc2.1_2.5m_tmin_05", "6" = "wc2.1_2.5m_tmin_06", 
+         "7" = "wc2.1_2.5m_tmin_07", "8" = "wc2.1_2.5m_tmin_08", "9" = "wc2.1_2.5m_tmin_09", "10" = "wc2.1_2.5m_tmin_10", 
+         "11" = "wc2.1_2.5m_tmin_11", "12" = "wc2.1_2.5m_tmin_12") 
+tmin_df <- reshape(tmin_df, varying = c("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"),
+                   v.names = "tmin",
+                   timevar = "EpiMonth",
+                   times = as.integer(1:12),
+                   direction = "long") %>%
+  dplyr::select(-c(id))
+
+
+
+#     b. tmax | temporal scale: monthly (30yr avg)
+tmax_COL <- crop(tmax, col_adm2) 
+tmax_mask <- mask(tmax_COL, col_adm2)
+tmax_extract <- as.data.frame(raster::extract(x = tmax_mask, y = col_adm2, fun = mean, sp = T))
+tmax_df <- tmax_extract %>% 
+  dplyr::select(ADM1_ES, ADM2_ES, wc2.1_2.5m_tmax_01, wc2.1_2.5m_tmax_02,
+                wc2.1_2.5m_tmax_03, wc2.1_2.5m_tmax_04, wc2.1_2.5m_tmax_05, 
+                wc2.1_2.5m_tmax_06, wc2.1_2.5m_tmax_07, wc2.1_2.5m_tmax_08, 
+                wc2.1_2.5m_tmax_09, wc2.1_2.5m_tmax_10, wc2.1_2.5m_tmax_11,
+                wc2.1_2.5m_tmax_12) %>%
+  rename("ADM1" = "ADM1_ES", "ADM2" = "ADM2_ES", "1" = "wc2.1_2.5m_tmax_01", "2" = "wc2.1_2.5m_tmax_02", 
+         "3" = "wc2.1_2.5m_tmax_03", "4" = "wc2.1_2.5m_tmax_04", "5" = "wc2.1_2.5m_tmax_05", "6" = "wc2.1_2.5m_tmax_06", 
+         "7" = "wc2.1_2.5m_tmax_07", "8" = "wc2.1_2.5m_tmax_08", "9" = "wc2.1_2.5m_tmax_09", "10" = "wc2.1_2.5m_tmax_10", 
+         "11" = "wc2.1_2.5m_tmax_11", "12" = "wc2.1_2.5m_tmax_12")
+tmax_df <-  reshape(tmax_df, varying = c("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"),
+                    v.names = "tmax",
+                    timevar = "EpiMonth",
+                    times = as.integer(1:12),
+                    direction = "long") %>%
+  dplyr::select(-c(id))
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 CHE <- temp %>% # Switzerland
   dplyr::group_by(ADM0) %>% 
