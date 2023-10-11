@@ -1,7 +1,7 @@
 require(renv)
 require(pacman)
 
-## Activate project
+## Activate project (only need to do once upon first use of script)
 #renv::activate() ## need to run renv::restore(packages = "renv")
 
 #### Packages ####
@@ -53,7 +53,6 @@ prev <- prev %>%
   rename(sex = sex_merged) %>%
   # Rename countries in the "countries" column based on lat/long coords
   mutate(country = dplyr::recode(country,
-#                                 Italy = "Switzerland",
                                  USA = "United States")) %>%
   # Change name of these columns
   rename(species = specificEpithet,
@@ -107,7 +106,9 @@ prev <- prev %>%
   dplyr::filter(!(country == "United States")) %>%
   rename(year = yearCollected,
          month = monthCollected,
-         day = dayCollected)
+         day = dayCollected,
+         Lat = decimalLatitude,
+         Lon = decimalLongitude)
 
 
 #### Obtaining climate data from geodata package -------------------------------
@@ -124,42 +125,45 @@ poly <- gadm(country = c('BEL', 'DEU', 'CHE', 'ITA', 'GBR', 'ESP'), level = 2,
   st_transform(., crs = 3035) # native crs for gadm = 4326
 
 points_transformed <- prev %>% 
-  dplyr::select(decimalLongitude, decimalLatitude) %>%
-  st_as_sf(x = ., coords = c("decimalLongitude", "decimalLatitude"), crs = 4326) %>%
+  dplyr::select(Lon, Lat) %>%
+  st_as_sf(x = ., coords = c("Lon", "Lat"), crs = 4326) %>%
   st_transform(., crs = 3035) %>%
   mutate(L1 = row_number())
 
 points_original <- prev %>% 
-  dplyr::select(decimalLongitude, decimalLatitude) %>%
+  dplyr::select(Lon, Lat) %>%
   mutate(L1 = row_number())
 
 joined <- left_join(points_original, points_transformed, by = "L1") %>%
-  relocate(L1, .before = decimalLongitude)
+  relocate(L1, .before = Lon)
 
 ## Intersect lat/lon coordinates with each raster to get the correct admin levels associated with our data
 out <- st_intersection(points_transformed, poly) %>%
-  left_join(., joined, by = c("L1", "geometry")) 
+  left_join(., joined, by = c("L1", "geometry")) %>%
+  st_transform(., crs = 4326)
 
 ## Get admin levels in a dataframe format
 adminlvls <- data.frame(out) %>%
-  mutate(L1 = row_number()) 
+  mutate(L1 = row_number(),
+         Lat = round(Lat, 6),
+         Lon = round(Lon, 6))
 geometry <- data.frame(st_coordinates(st_cast(out$geometry, "POINT"))) %>%
   mutate(L1 = row_number())
 
 ## Join lat/lon data to identifiers (ADM levels) 
 adminlvls <- adminlvls %>%
   left_join(., geometry, by = "L1") %>% # X = LON, Y = LAT
-  dplyr::select(GID_0, COUNTRY, NAME_1, NAME_2, Y, X, decimalLatitude, decimalLongitude) %>%
+  dplyr::select(GID_0, COUNTRY, NAME_1, NAME_2, Y, X) %>%
   plyr::mutate(country = COUNTRY,
                ADM0 = GID_0,
                ADM1 = NAME_1,
                ADM2 = NAME_2,
-               Lat_3035 = Y,
-               Lon_3035 = X) %>%
+               Lat = Y,
+               Lon = X) %>%
   dplyr::select(-c(GID_0, COUNTRY, NAME_1, NAME_2, Y, X)) %>%
-  relocate(c("Lat_3035", "Lon_3035"), .after = decimalLongitude) %>%
-  mutate(decimalLatitude = round(decimalLatitude, 6),
-         decimalLongitude = round(decimalLongitude, 6)) %>%
+  relocate(c("Lat", "Lon"), .after = ADM2) %>%
+  mutate(Lat = round(Lat, 6),
+         Lon = round(Lon, 6)) %>%
   unique()
 
 ## Check for missing admin levels!! 
@@ -170,40 +174,35 @@ adminlvls <- adminlvls %>%
 # test <- adminlvls
 # 
 # df1 <- test %>%
-#   dplyr::select(Lat_3035, Lon_3035) %>%
+#   dplyr::select(Lat, Lon) %>%
 #   st_transform(., crs = 4326) %>%
 #   mutate(transLat = round(transLat, 6),
 #          transLon = round(transLon, 6)) %>%
-#   unite(., LatLon, c("Lat_3035", "Lon_3035"), sep = ", ") 
+#   unite(., LatLon, c("Lat", "Lon"), sep = ", ") 
 #
 # df2 <- test %>%
-#   mutate(decimalLatitude = round(decimalLatitude, 6),
-#          decimalLongitude = round(decimalLongitude, 6)) %>%
-#   dplyr::select(decimalLatitude, decimalLongitude) %>%
-#   unite(., LatLon, c("decimalLatitude", "decimalLongitude"), sep = ", ")
+#   mutate(Lat = round(Lat, 6),
+#          Lon = round(Lon, 6)) %>%
+#   dplyr::select(Lat, Lon) %>%
+#   unite(., LatLon, c("Lat", "Lon"), sep = ", ")
 # 
 # compare <- anti_join(df1, df2, by = "LatLon")
 
 ## Add back to main dataframe 
 prev <- prev %>%
   dplyr::select(!("country":"ADM2")) %>%
-  mutate(decimalLatitude = round(decimalLatitude, 6),
-         decimalLongitude = round(decimalLongitude, 6)) %>%
-  left_join(., adminlvls, by = c("decimalLatitude", "decimalLongitude"), relationship = "many-to-one",
+  mutate(Lat = round(Lat, 6),
+         Lon = round(Lon, 6)) %>%
+  left_join(., adminlvls, by = c("Lat", "Lon"), relationship = "many-to-one",
                   keep = F) %>%
-  relocate(c(country, ADM0, ADM1, ADM2, Lat_3035, Lon_3035), .before = decimalLatitude) 
-
-
+  relocate(c(country, ADM0, ADM1, ADM2), .before = Lat) 
 ## Compared this method with sampling locations in QGIS and it is just as precise/accurate.
 
-# prev %>%
-#   group_by(BsalDetected) %>%
-#   summarise(n = n())
 
 ## Group sites by unique lat/long combos and assign site #s to them, for all countries
 siteNumber <- prev %>%
-  dplyr::select(materialSampleID, decimalLatitude, decimalLongitude) %>%
-  dplyr::group_by(decimalLatitude, decimalLongitude) %>%
+  dplyr::select(materialSampleID, Lat, Lon) %>%
+  dplyr::group_by(Lat, Lon) %>%
   mutate(Site = cur_group_id()) %>% 
   ungroup() 
 
@@ -254,7 +253,7 @@ names(spa)[names(spa) == 'individualCount'] <- 'sppAbun'
 ## Calculate abundance of total spp at a site during each sampling event
 SAb <- aggregate(sppAbun ~ Site + date, spa, sum)
 names(SAb)[names(SAb) == 'sppAbun'] <- 'siteAbun'
-t <- prev
+
 ## Add abundance and richness back into prev df
 prev <- prev %>%
   # species richness
@@ -289,9 +288,9 @@ levels(prev$fatal) <- c(0,1) #0 = F, 1 = T
 ## Obtain unique lat/long/date combinations to extract weather data
 Sys.setenv(TZ = "UTC")
 weather <- prev %>%
-  dplyr::select(Lat_3035, Lon_3035, year, month, day, date) %>%
-  unite(Lat_3035, Lon_3035, sep = ", ", col = "LatLon", remove = F) %>%
-  relocate(LatLon, .after = Lon_3035) %>%
+  dplyr::select(Lat, Lon, year, month, day, date) %>%
+  unite(Lat, Lon, sep = ", ", col = "LatLon", remove = F) %>%
+  relocate(LatLon, .after = Lon) %>%
   dplyr::filter(!(day == "NA")) %>%
   group_by(LatLon, date) %>%
   unique() %>%
@@ -327,23 +326,41 @@ weather <- weather %>%
 ## Add date from timepoints back into prev
 prev <- prev %>%
   mutate(date = base::as.Date(date, "%Y-%m-%d")) %>%
-  left_join(weather[, c(1:2, 6:11)], by = c("Lat_3035", "Lon_3035", "date")) %>%
+  left_join(weather[, c(1:2, 6:11)], by = c("Lat", "Lon", "date")) %>%
   relocate(c("t4", "t7", "t10", "t14", "t30"), .after = date) %>%
   rename(t0 = date)
 
 
 weather <- weather %>%
   rename(t0 = date) %>%
-  group_by(Lat_3035, Lon_3035) %>%
+  group_by(Lat, Lon) %>%
   pivot_longer(cols = c(t0, t4, t7, t10, t14, t30),
                names_to = "timepoint",
                values_to = "date") %>%
   ungroup() %>%
-  relocate(c("timepoint", "date"), .after = "Lon_3035") %>%
+  relocate(c("timepoint", "date"), .after = "Lon") %>%
   mutate(year = lubridate::year(date),
          month = lubridate::month(date),
          day = lubridate::day(date)) %>%
-  dplyr::select(-("date"))
+  dplyr::select(-("date")) %>%
+  filter(year != '1905') # likely a museum specimen --  not useful for our analyses
+
+
+# weather_07_16 <- weather %>%
+#   filter(between(year, '2007', '2016'))
+# 
+# weather_2017 <- weather %>%
+#   filter(year == '2017')
+# 
+# weather_2018 <- weather %>%
+#   filter(year == '2018')
+# 
+# weather_2019 <- weather %>%
+#   filter(year == '2019')
+# 
+# weather_20_21 <- weather %>%
+#   filter(between(year, '2020', '2021'))
+
 
 ## Export to use in Python and PyQGIS to obtain weather data
 #write.csv(weather, 'weather.csv', row.names = F, fileEncoding = "UTF-8")
@@ -360,23 +377,23 @@ gldas_daily <- gldas_daily %>%
   unite(c("year", "month", "day"), sep = "-", col = "date", remove = F) %>%
   rename(soilMoisture = "SOILMOIST_kgm.21",
          temp = "SURFTEMP_K1") %>%
-  dplyr::select(decimalLatitude, decimalLongitude, timepoint, date, soilMoisture, temp) %>%
-  unite(decimalLatitude, decimalLongitude, sep = ", ", col = "LatLon", remove = F) 
+  dplyr::select(Lat, Lon, timepoint, date, soilMoisture, temp) %>%
+  unite(Lat, Lon, sep = ", ", col = "LatLon", remove = F) 
 
 
 # Copy & separate temp from soilMoisture
 temp_d <- gldas_daily %>%
   # exclude rows with sM data, as well as any NAs in the temp data
-  dplyr::select(decimalLatitude, decimalLongitude, date, timepoint, temp) %>%
+  dplyr::select(Lat, Lon, date, timepoint, temp) %>%
   drop_na() %>%
-  group_by(decimalLatitude, decimalLongitude, timepoint) %>%
+  group_by(Lat, Lon, timepoint) %>%
   distinct_all() %>%
   # assign row # for matching purposes
   mutate(row = row_number(),
          date = as.Date(date, format = "%Y-%m-%d"),
          # Convert temp from K to C
          temp = as.numeric(temp - 273.15)) %>%
-  dplyr::group_by(decimalLatitude, decimalLongitude, timepoint) %>%
+  dplyr::group_by(Lat, Lon, timepoint) %>%
   pivot_wider(names_from = timepoint, values_from = c(date, temp)) %>%
   subset(., select = -c(temp_date_t2, temp_date_t1)) %>%
   rename(date_t2 = "date_date_t2",
@@ -386,13 +403,13 @@ temp_d <- gldas_daily %>%
 
 
 gldas_daily <- gldas_daily %>%
-  dplyr::select(decimalLatitude, decimalLongitude, date, timepoint, soilMoisture) %>%
+  dplyr::select(Lat, Lon, date, timepoint, soilMoisture) %>%
   drop_na() %>%
-  group_by(decimalLatitude, decimalLongitude, timepoint) %>%
+  group_by(Lat, Lon, timepoint) %>%
   distinct_all() %>%
   mutate(row = row_number(),
          date = as.Date(date, format = "%Y-%m-%d")) %>%
-  dplyr::group_by(decimalLatitude, decimalLongitude, timepoint) %>%
+  dplyr::group_by(Lat, Lon, timepoint) %>%
   pivot_wider(names_from = timepoint, values_from = c(date, soilMoisture)) %>%
   subset(., select = -c(soilMoisture_date_t2, soilMoisture_date_t1)) %>%
   rename(date_t2 = "date_date_t2",
@@ -401,7 +418,7 @@ gldas_daily <- gldas_daily %>%
          sMoist_d = "soilMoisture_date")
  
 # Add temp data back into gldas_daily df in preparation to add it back to the main df.
-gldas_daily <- left_join(gldas_daily, temp_d, by = c("decimalLatitude", "decimalLongitude", "date", "date_t1", "date_t2", "row")) %>%
+gldas_daily <- left_join(gldas_daily, temp_d, by = c("Lat", "Lon", "date", "date_t1", "date_t2", "row")) %>%
   subset(., select = -c(row))
 
 
@@ -442,17 +459,17 @@ for(i in 1:nrow(gldas_monthly)){
 
 # Copy separate temp from precip and soilMoisture
 temp_m <- gldas_monthly %>%
-  dplyr::select(decimalLatitude, decimalLongitude, date, timepoint, temp) %>%
+  dplyr::select(Lat, Lon, date, timepoint, temp) %>%
   # exclude rows with sM and precip data, as well as any NAs in the temp data
   drop_na() %>%
-  group_by(decimalLatitude, decimalLongitude, timepoint) %>%
+  group_by(Lat, Lon, timepoint) %>%
   distinct_all() %>%
   # assign row # for matching purposes
   mutate(row = row_number(),
          date = as.Date(date, format = "%Y-%m-%d"),
          # Convert temp from K to C
          temp = as.numeric(temp - 273.15)) %>%
-  dplyr::group_by(decimalLatitude, decimalLongitude, timepoint) %>%
+  dplyr::group_by(Lat, Lon, timepoint) %>%
   pivot_wider(names_from = timepoint, values_from = c(date, temp)) %>%
   rename(date_t2 = "date_date_t2",
          date_t1 = "date_date_t1",
@@ -462,13 +479,13 @@ temp_m <- gldas_monthly %>%
          temp_m = "temp_date")
 
 precip_m <- gldas_monthly %>%
-  dplyr::select(decimalLatitude, decimalLongitude, date, timepoint, precip) %>%
+  dplyr::select(Lat, Lon, date, timepoint, precip) %>%
   drop_na() %>%
-  group_by(decimalLatitude, decimalLongitude, timepoint) %>%
+  group_by(Lat, Lon, timepoint) %>%
   distinct_all() %>%
   mutate(row = row_number(),
          date = as.Date(date, format = "%Y-%m-%d")) %>%
-  dplyr::group_by(decimalLatitude, decimalLongitude, timepoint) %>%
+  dplyr::group_by(Lat, Lon, timepoint) %>%
   pivot_wider(names_from = timepoint, values_from = c(date, precip)) %>%
   rename(date_t2 = "date_date_t2",
          date_t1 = "date_date_t1",
@@ -478,13 +495,13 @@ precip_m <- gldas_monthly %>%
          precip_m = "precip_date")
 
 gldas_monthly <- gldas_monthly %>%
-  dplyr::select(decimalLatitude, decimalLongitude, date, timepoint, soilMoisture) %>%
+  dplyr::select(Lat, Lon, date, timepoint, soilMoisture) %>%
   drop_na() %>%
-  group_by(decimalLatitude, decimalLongitude, timepoint) %>%
+  group_by(Lat, Lon, timepoint) %>%
   distinct_all() %>%
   mutate(row = row_number(),
          date = as.Date(date, format = "%Y-%m-%d")) %>%
-  dplyr::group_by(decimalLatitude, decimalLongitude, timepoint) %>%
+  dplyr::group_by(Lat, Lon, timepoint) %>%
   pivot_wider(names_from = timepoint, values_from = c(date, soilMoisture)) %>%
   rename(date_t2 = "date_date_t2",
          date_t1 = "date_date_t1",
@@ -495,15 +512,15 @@ gldas_monthly <- gldas_monthly %>%
 
 
 # Add temp and precip data back into gldas_monthly df in preparation to add it back to the main df.
-gldas_monthly <- left_join(gldas_monthly, precip_m, by = c("decimalLatitude", "decimalLongitude", "date", "date_t1", "date_t2", "row"))
-gldas_monthly <- left_join(gldas_monthly, temp_m, by = c("decimalLatitude", "decimalLongitude", "date", "date_t1", "date_t2", "row")) %>%
+gldas_monthly <- left_join(gldas_monthly, precip_m, by = c("Lat", "Lon", "date", "date_t1", "date_t2", "row"))
+gldas_monthly <- left_join(gldas_monthly, temp_m, by = c("Lat", "Lon", "date", "date_t1", "date_t2", "row")) %>%
   subset(., select = -c(row))
   
 
 
 ## Add weather data to main dataframe
-prev <- left_join(prev, gldas_monthly, by = c("decimalLatitude", "decimalLongitude", "date", "date_t1", "date_t2"))
-prev <- left_join(prev, gldas_daily, by = c("decimalLatitude", "decimalLongitude", "date", "date_t1", "date_t2"))
+prev <- left_join(prev, gldas_monthly, by = c("Lat", "Lon", "date", "date_t1", "date_t2"))
+prev <- left_join(prev, gldas_daily, by = c("Lat", "Lon", "date", "date_t1", "date_t2"))
 
 
 prev <- prev[, c(1:6, 38, 10:12, 7:9, 13:31, 39:44, 51, 45:50, 52, 32:37)]
@@ -1254,7 +1271,7 @@ dcbind <- Bsalpos_FS %>%
   # slice(1) %>%
   ungroup() %>%
   relocate(c(nPos_FS, nNeg_FS, nDead_FS, nAlive_FS, nFatalUnk_FS, nPos_all, nNeg_all, nDead_all, nAlive_all, nFatalUnk_all), .after = susceptibility) %>%
-  dplyr::select(country, decimalLatitude, decimalLongitude, Site, prev_above_0, date, date_t1, date_t2, scientific, susceptibility, 
+  dplyr::select(country, Lat, Lon, Site, prev_above_0, date, date_t1, date_t2, scientific, susceptibility, 
                 nPos_FS, nNeg_FS, nDead_FS, nAlive_FS, nFatalUnk_FS, nPos_all, nNeg_all, nDead_all, nAlive_all, nFatalUnk_all,
                 richness, sppAbun, siteAbun, sMoist_m_t2, sMoist_m_t1, sMoist_m, sMoist_d, precip_m_t2, precip_m_t1, precip_m, temp_m_t2, temp_m_t1, temp_m, temp_d,
                 tmin, tmax, tavg, prec, bio1, bio2, bio3, bio4, bio5, bio6, bio7, bio8, bio9, bio10, bio11, bio12, bio13, bio14, bio15, bio16, bio17, bio18, bio19, 
