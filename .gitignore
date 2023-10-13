@@ -3,7 +3,7 @@ code/temp2.R
 .vscode/
 QGISFiles/
 Temp_dataAnalysis.Rmd
-WorldClim/
+csvFiles/shapefiles/WorldClim/
 bsal_analysis.csv
 dataAnalysis.Rmd
 dataCleaning_init.R
@@ -14,3 +14,4 @@ figures/*
 csvFiles/nativeStatus.xlsx
 .Rproj.user
 csvFiles/shapefiles/
+weatherProcessing_monthly.R
