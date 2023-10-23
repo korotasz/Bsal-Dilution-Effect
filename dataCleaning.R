@@ -132,19 +132,33 @@ points_transformed <- prev %>%
   dplyr::select(Lon, Lat) %>%
   st_as_sf(x = ., coords = c("Lon", "Lat"), crs = 4326) %>%
   st_transform(., crs = 3035) %>%
-  mutate(L1 = row_number())
+  mutate(L1 = row_number(),
+         Lon = sf::st_coordinates(.)[,1],
+         Lat = sf::st_coordinates(.)[,2])
+
+st_write(points_transformed, "locations_transformed.shp", append = F)
 
 points_original <- prev %>% 
   dplyr::select(Lon, Lat) %>%
-  mutate(L1 = row_number())
+  st_as_sf(x = ., coords = c("Lon", "Lat"), crs = 4326) %>%
+  mutate(L1 = row_number(),
+         Lon = sf::st_coordinates(.)[,1],
+         Lat = sf::st_coordinates(.)[,2]) 
 
-joined <- left_join(points_original, points_transformed, by = "L1") %>%
-  relocate(L1, .before = Lon)
+st_write(points_original, "locations.shp", append = F)
+
+#joined <- st_join(points_original, points_transformed, by = "L1") %>%
+#  relocate(L1, .before = Lon)
 
 ## Intersect lat/lon coordinates with each raster to get the correct admin levels associated with our data
 out <- st_intersection(points_transformed, poly) %>%
-  left_join(., joined, by = c("L1", "geometry")) %>%
-  st_transform(., crs = 4326)
+  mutate(Lon_3035 = sf::st_coordinates(.)[,1],
+         Lat_3035 = sf::st_coordinates(.)[,2]) %>%
+  st_transform(., crs = 4326) %>%
+  mutate(Lon = sf::st_coordinates(.)[,1],
+         Lat = sf::st_coordinates(.)[,2])
+
+st_write(out, "intersected_pts.shp", append = F)
 
 ## Get admin levels in a dataframe format
 adminlvls <- data.frame(out) %>%
