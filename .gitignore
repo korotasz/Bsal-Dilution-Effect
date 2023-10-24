@@ -2,6 +2,7 @@
 .vscode/
 figures/*
 csvFiles/.Rhistory
+.Rproj.user/
 
 dataAnalysis.Rmd
 weatherProcessing_monthly.R
