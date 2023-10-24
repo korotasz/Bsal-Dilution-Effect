@@ -126,7 +126,7 @@ poly <- gadm(country = c('BEL', 'DEU', 'CHE', 'ITA', 'GBR', 'ESP'), level = 2,
   st_transform(., crs = 3035) # native crs for gadm = 4326
 
 # Write multipolygon to .shp file for later use with WorldClim
-#st_write(poly, "europe.shp")
+#st_write(poly, "europe_3035.shp")
 
 points_transformed <- prev %>% 
   dplyr::select(Lon, Lat) %>%
@@ -136,7 +136,7 @@ points_transformed <- prev %>%
          Lon = sf::st_coordinates(.)[,1],
          Lat = sf::st_coordinates(.)[,2])
 
-st_write(points_transformed, "locations_transformed.shp", append = F)
+#st_write(points_transformed, "locations_3035.shp", append = F)
 
 points_original <- prev %>% 
   dplyr::select(Lon, Lat) %>%
@@ -145,10 +145,7 @@ points_original <- prev %>%
          Lon = sf::st_coordinates(.)[,1],
          Lat = sf::st_coordinates(.)[,2]) 
 
-st_write(points_original, "locations.shp", append = F)
-
-#joined <- st_join(points_original, points_transformed, by = "L1") %>%
-#  relocate(L1, .before = Lon)
+#st_write(points_original, "locations_4326.shp", append = F)
 
 ## Intersect lat/lon coordinates with each raster to get the correct admin levels associated with our data
 out <- st_intersection(points_transformed, poly) %>%
@@ -157,56 +154,78 @@ out <- st_intersection(points_transformed, poly) %>%
   st_transform(., crs = 4326) %>%
   mutate(Lon = sf::st_coordinates(.)[,1],
          Lat = sf::st_coordinates(.)[,2])
-
-st_write(out, "intersected_pts.shp", append = F)
+  
+#st_write(out, "intersected_R.shp", append = F)
 
 ## Get admin levels in a dataframe format
 adminlvls <- data.frame(out) %>%
-  mutate(L1 = row_number(),
-         Lat = round(Lat, 6),
-         Lon = round(Lon, 6))
-geometry <- data.frame(st_coordinates(st_cast(out$geometry, "POINT"))) %>%
-  mutate(L1 = row_number())
-
-## Join lat/lon data to identifiers (ADM levels) 
-adminlvls <- adminlvls %>%
-  left_join(., geometry, by = "L1") %>% # X = LON, Y = LAT
-  dplyr::select(GID_0, COUNTRY, NAME_1, NAME_2, Y, X) %>%
-  plyr::mutate(country = COUNTRY,
-               ADM0 = GID_0,
-               ADM1 = NAME_1,
-               ADM2 = NAME_2,
-               Lat = Y,
-               Lon = X) %>%
-  dplyr::select(-c(GID_0, COUNTRY, NAME_1, NAME_2, Y, X)) %>%
-  relocate(c("Lat", "Lon"), .after = ADM2) %>%
+  dplyr::select(Lon, Lat, GID_0, COUNTRY, NAME_1, NAME_2) %>%
   mutate(Lat = round(Lat, 6),
          Lon = round(Lon, 6)) %>%
-  unique()
+  rename(ADM0 = GID_0,
+         ADM1 = NAME_1,
+         ADM2 = NAME_2,
+         country = COUNTRY) %>%
+  unique(.)
+
 
 ## Check for missing admin levels!! 
 # adminlvls %>%
 #   filter(is.na(ADM2)) # only one location missing (ADM2 in GBR).
-
-## Check & correct any rounding errors in transformed points
-# test <- adminlvls
-# 
-# df1 <- test %>%
+  
+## Check transformed lat/lon against reported lat/lon in main data frame -----------------
+# lat/lon reported with original data
+# pts <- prev %>% 
 #   dplyr::select(Lat, Lon) %>%
-#   st_transform(., crs = 4326) %>%
-#   mutate(transLat = round(transLat, 6),
-#          transLon = round(transLon, 6)) %>%
-#   unite(., LatLon, c("Lat", "Lon"), sep = ", ") 
-#
-# df2 <- test %>%
 #   mutate(Lat = round(Lat, 6),
 #          Lon = round(Lon, 6)) %>%
-#   dplyr::select(Lat, Lon) %>%
+#   unite(., LatLon, c("Lat", "Lon"), sep = ", ")
+#   
+# # transformed points from 3035 to 4326
+# pts_3035 <- out %>% 
+#   st_transform(., crs = 4326) %>%
+#   data.frame(st_coordinates(st_cast(out$geometry, "POINT"))) %>% 
+#   dplyr::select(X, Y, NAME_1, NAME_2) %>%
+#   rename(Lat = Y,
+#          Lon = X,
+#          ADM1 = NAME_1,
+#          ADM2 = NAME_2) %>%
+#   mutate(Lat = round(Lat, 6),
+#          Lon = round(Lon, 6)) %>%
 #   unite(., LatLon, c("Lat", "Lon"), sep = ", ")
 # 
-# compare <- anti_join(df1, df2, by = "LatLon")
+# # original lat/lon from reported data that has been turned into an sf object & back into a df
+# pts_4326 <- points_original %>%
+#   data.frame(st_coordinates(st_cast(out$geometry, "POINT"))) %>% 
+#   dplyr::select(X, Y, NAME_1, NAME_2) %>%
+#   rename(Lat = Y,
+#          Lon = X,
+#          ADM1 = NAME_1,
+#          ADM2 = NAME_2) %>%
+#   unite(., LatLon, c("Lat", "Lon"), sep = ", ")
+# 
+# 
+# anti_join(pts_4326, pts, by = "LatLon") # lat/lon overlap 100%; data agree with each other
+# anti_join(pts, pts_3035, by = "LatLon") # lat/lon overlap 100%; data agree with each other
+# anti_join(pts_4326, pts_3035, by = c("LatLon", "ADM1", "ADM2")) # ADMs are the same, no matter the projection; will want to compare to OG 'locations_with_ADMs' csv
+# 
+# setwd(file.path(dir, csvpath))
+# 
+# og_locs <- read.csv("locations_with_ADMs.csv", header = T, encoding = "UTF-8")
+# 
+# og_adms <- og_locs %>%
+#   dplyr::select(decimalLatitude, decimalLongitude, NAME_1, NAME_2) %>%
+#   rename(Lat = decimalLatitude,
+#          Lon = decimalLongitude,
+#          ADM1 = NAME_1,
+#          ADM2 = NAME_2) %>%
+#   mutate(Lat = round(Lat, 6),
+#          Lon = round(Lon, 6)) %>%
+#   unite(., LatLon, c("Lat", "Lon"), sep = ", ")
+# 
+# anti_join(pts_4326, og_adms, by = c("LatLon", "ADM1", "ADM2"))
 
-## Add back to main dataframe 
+## Add back to main dataframe --------------------------------------------------
 prev <- prev %>%
   dplyr::select(!("country":"ADM2")) %>%
   mutate(Lat = round(Lat, 6),
@@ -320,39 +339,55 @@ weather <- prev %>%
 for(i in 1:nrow(weather)){
   weather[i,7] <- as.Date(weather$date[i], format = "%Y-%m-%d") - days(4)
 
-## get dates for 1 week prior to sample date
-  weather[i,8] <- as.Date(weather$date[i], format = "%Y-%m-%d") - days(7)
-
-## get dates for 10 days prior to sample date
-  weather[i,9] <- as.Date(weather$date[i], format = "%Y-%m-%d") - days(10)
-
-## get dates for 2 weeks prior to sample date
-  weather[i,10] <- as.Date(weather$date[i], format = "%Y-%m-%d") - days(14)
-
-## get dates for 1 month prior to sample date
-  weather[i,11] <- as.Date(weather$date[i], format = "%Y-%m-%d") - days(30)
+## get dates for 1 week prior to sample date (for avg temp/soil moisture)
+  weather[i,8] <- as.Date(weather$date[i], format = "%Y-%m-%d") - days(8)
+  weather[i,9] <- as.Date(weather$date[i], format = "%Y-%m-%d") - days(9)
+  weather[i,10] <- as.Date(weather$date[i], format = "%Y-%m-%d") - days(10)
+  weather[i,11] <- as.Date(weather$date[i], format = "%Y-%m-%d") - days(11)
+  weather[i,12] <- as.Date(weather$date[i], format = "%Y-%m-%d") - days(12)
+  weather[i,13] <- as.Date(weather$date[i], format = "%Y-%m-%d") - days(13)
+  weather[i,14] <- as.Date(weather$date[i], format = "%Y-%m-%d") - days(14)
   
+## get dates for 2 weeks prior to sample date (for avg temp/soil moisture)
+  weather[i,15] <- as.Date(weather$date[i], format = "%Y-%m-%d") - days(15)
+  weather[i,16] <- as.Date(weather$date[i], format = "%Y-%m-%d") - days(16)
+  weather[i,17] <- as.Date(weather$date[i], format = "%Y-%m-%d") - days(17)
+  weather[i,18] <- as.Date(weather$date[i], format = "%Y-%m-%d") - days(18)
+  weather[i,19] <- as.Date(weather$date[i], format = "%Y-%m-%d") - days(19)
+  weather[i,20] <- as.Date(weather$date[i], format = "%Y-%m-%d") - days(20)
+  weather[i,21] <- as.Date(weather$date[i], format = "%Y-%m-%d") - days(21)
+
+  ## get dates for 3 weeks prior to sample date (for avg temp/soil moisture)
+  weather[i,22] <- as.Date(weather$date[i], format = "%Y-%m-%d") - days(22)
+  weather[i,23] <- as.Date(weather$date[i], format = "%Y-%m-%d") - days(23)
+  weather[i,24] <- as.Date(weather$date[i], format = "%Y-%m-%d") - days(24)
+  weather[i,25] <- as.Date(weather$date[i], format = "%Y-%m-%d") - days(25)
+  weather[i,26] <- as.Date(weather$date[i], format = "%Y-%m-%d") - days(26)
+  weather[i,27] <- as.Date(weather$date[i], format = "%Y-%m-%d") - days(27)
+  weather[i,28] <- as.Date(weather$date[i], format = "%Y-%m-%d") - days(28)  
+    
 }
 
 weather <- weather %>%
   rename(t4 = ...7,
-         t7 = ...8,
-         t10 = ...9,
-         t14 = ...10,
-         t30 = ...11)
+         t8 = ...8, t9 = ...9, t10 = ...10, t11 = ...11, t12 = ...12, t13 = ...13, t14 = ...14,
+         t15 = ...15, t16 = ...16, t17 = ...17, t18 = ...18, t19 = ...19, t20 = ...20, t21 = ...21,
+         t22 = ...22, t23 = ...23, t24 = ...24, t25 = ...25, t26 = ...26, t27 = ...27, t28 = ...28)
 
 ## Add date from timepoints back into prev
-prev <- prev %>%
-  mutate(date = base::as.Date(date, "%Y-%m-%d")) %>%
-  left_join(weather[, c(1:2, 6:11)], by = c("Lat", "Lon", "date")) %>%
-  relocate(c("t4", "t7", "t10", "t14", "t30"), .after = date) %>%
-  rename(t0 = date)
+# prev <- prev %>%
+#   mutate(date = base::as.Date(date, "%Y-%m-%d")) %>%
+#   left_join(weather[, c(1:2, 6:11)], by = c("Lat", "Lon", "date")) %>%
+#   relocate(c("4d", "1wk", "2wks", "3wks"), .after = date) %>%
+#   rename(t0 = date)
 
 
 weather <- weather %>%
   rename(t0 = date) %>%
   group_by(Lat, Lon) %>%
-  pivot_longer(cols = c(t0, t4, t7, t10, t14, t30),
+  pivot_longer(cols = c(t0, t4, t8, t9, t10, t11, t12, t13, t14, 
+                        t15, t16, t17, t18, t19, t20, t21,
+                        t22, t23, t24, t25, t26, t27, t28),
                names_to = "timepoint",
                values_to = "date") %>%
   ungroup() %>%
@@ -364,7 +399,7 @@ weather <- weather %>%
   filter(year != '1905') # likely a museum specimen --  not useful for our analyses
 
 ## Export to use in Python and PyQGIS to obtain weather data
-#write.csv(weather, 'weather.csv', row.names = F, fileEncoding = "UTF-8")
+write.csv(weather, 'weather.csv', row.names = F, fileEncoding = "UTF-8")
 
 
 ## Python v3.12.0 used to download .nc4 files from NASA's EarthData data repository for each date and location.

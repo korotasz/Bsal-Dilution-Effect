@@ -15,3 +15,6 @@ csvFiles/nativeStatus.xlsx
 .Rproj.user
 csvFiles/shapefiles/
 weatherProcessing_monthly.R
+csvFiles/weather.csv
+csvFiles/intersected_3035.qmd
+csvFiles/intersected_4326.qmd
