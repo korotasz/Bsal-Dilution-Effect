@@ -9,6 +9,8 @@ pckgs <- c("tidyverse", # data wrangling/manipulation
             "reshape2", # data wrangling/manipulation
                "rgdal", # geospatial analyses
            "lubridate", # deals with dates
+                 "zoo", # deals with time series data/ordered obs
+               "stats", # ts(); tsp()
           "data.table", # 
               "raster", # raster manipulation/working with geospatial data
                "terra", # supercedes raster package
@@ -16,7 +18,7 @@ pckgs <- c("tidyverse", # data wrangling/manipulation
             "maptools", # package to create maps
                "gstat", # spatio-temporal geostatistical modelling
                   "sp", # working with geospatial data
-                  "sf", # workin with geospatial data
+                  "sf", # working with geospatial data
                   "fs"  # construct relative paths to files/directories
 )
 
@@ -117,45 +119,32 @@ prev <- prev %>%
 #dir.create(file.path(dir, shppath)) # Will give warning if path already exists
 setwd(file.path(dir, shppath))
 
-## 1. Use 'raster' pckg to get shapefiles for each country and epsg.io to find the best coordinate system for Europe (we will use EPSG:3035).
-#        Using a CRS for the country/region we are looking at will yield more accurate results.
-poly <- gadm(country = c('BEL', 'DEU', 'CHE', 'ITA', 'GBR', 'ESP'), level = 2, 
+## 1. Use 'raster' pckg to get shapefiles for each country. We are using EPSG:4326, as these are lat/lon data
+#     that are presented in decimal degrees. Reprojecting to another coordinate system is not necessary, and 
+#     may even introduce an additional source of error.
+polygon <- gadm(country = c('BEL', 'DEU', 'CHE', 'ITA', 'GBR', 'ESP'), level = 2, 
              path = file.path(dir, shppath), version = "latest", resolution = 1) %>%
-  st_as_sf(.) %>%
-  st_cast(., "MULTIPOLYGON") %>%
-  st_transform(., crs = 3035) # native crs for gadm = 4326
+  sf::st_as_sf(., crs = 4326) %>%
+  st_cast(., "MULTIPOLYGON") 
 
-# Write multipolygon to .shp file for later use with WorldClim
-#st_write(poly, "europe_3035.shp")
+## Write multipolygon to .shp file for later use with WorldClim
+# st_write(polygon, "europe.shp", append = F)
 
-points_transformed <- prev %>% 
-  dplyr::select(Lon, Lat) %>%
-  st_as_sf(x = ., coords = c("Lon", "Lat"), crs = 4326) %>%
-  st_transform(., crs = 3035) %>%
-  mutate(L1 = row_number(),
-         Lon = sf::st_coordinates(.)[,1],
-         Lat = sf::st_coordinates(.)[,2])
-
-#st_write(points_transformed, "locations_3035.shp", append = F)
-
-points_original <- prev %>% 
+points <- prev %>% 
   dplyr::select(Lon, Lat) %>%
   st_as_sf(x = ., coords = c("Lon", "Lat"), crs = 4326) %>%
   mutate(L1 = row_number(),
          Lon = sf::st_coordinates(.)[,1],
          Lat = sf::st_coordinates(.)[,2]) 
 
-#st_write(points_original, "locations_4326.shp", append = F)
+# st_write(points, "locations.shp", append = F)
 
 ## Intersect lat/lon coordinates with each raster to get the correct admin levels associated with our data
-out <- st_intersection(points_transformed, poly) %>%
-  mutate(Lon_3035 = sf::st_coordinates(.)[,1],
-         Lat_3035 = sf::st_coordinates(.)[,2]) %>%
-  st_transform(., crs = 4326) %>%
+out <- st_intersection(points, polygon) %>%
   mutate(Lon = sf::st_coordinates(.)[,1],
          Lat = sf::st_coordinates(.)[,2])
   
-#st_write(out, "intersected_R.shp", append = F)
+# st_write(out, "adm_info.shp", append = F)
 
 ## Get admin levels in a dataframe format
 adminlvls <- data.frame(out) %>%
@@ -173,57 +162,6 @@ adminlvls <- data.frame(out) %>%
 # adminlvls %>%
 #   filter(is.na(ADM2)) # only one location missing (ADM2 in GBR).
   
-## Check transformed lat/lon against reported lat/lon in main data frame -----------------
-# lat/lon reported with original data
-# pts <- prev %>% 
-#   dplyr::select(Lat, Lon) %>%
-#   mutate(Lat = round(Lat, 6),
-#          Lon = round(Lon, 6)) %>%
-#   unite(., LatLon, c("Lat", "Lon"), sep = ", ")
-#   
-# # transformed points from 3035 to 4326
-# pts_3035 <- out %>% 
-#   st_transform(., crs = 4326) %>%
-#   data.frame(st_coordinates(st_cast(out$geometry, "POINT"))) %>% 
-#   dplyr::select(X, Y, NAME_1, NAME_2) %>%
-#   rename(Lat = Y,
-#          Lon = X,
-#          ADM1 = NAME_1,
-#          ADM2 = NAME_2) %>%
-#   mutate(Lat = round(Lat, 6),
-#          Lon = round(Lon, 6)) %>%
-#   unite(., LatLon, c("Lat", "Lon"), sep = ", ")
-# 
-# # original lat/lon from reported data that has been turned into an sf object & back into a df
-# pts_4326 <- points_original %>%
-#   data.frame(st_coordinates(st_cast(out$geometry, "POINT"))) %>% 
-#   dplyr::select(X, Y, NAME_1, NAME_2) %>%
-#   rename(Lat = Y,
-#          Lon = X,
-#          ADM1 = NAME_1,
-#          ADM2 = NAME_2) %>%
-#   unite(., LatLon, c("Lat", "Lon"), sep = ", ")
-# 
-# 
-# anti_join(pts_4326, pts, by = "LatLon") # lat/lon overlap 100%; data agree with each other
-# anti_join(pts, pts_3035, by = "LatLon") # lat/lon overlap 100%; data agree with each other
-# anti_join(pts_4326, pts_3035, by = c("LatLon", "ADM1", "ADM2")) # ADMs are the same, no matter the projection; will want to compare to OG 'locations_with_ADMs' csv
-# 
-# setwd(file.path(dir, csvpath))
-# 
-# og_locs <- read.csv("locations_with_ADMs.csv", header = T, encoding = "UTF-8")
-# 
-# og_adms <- og_locs %>%
-#   dplyr::select(decimalLatitude, decimalLongitude, NAME_1, NAME_2) %>%
-#   rename(Lat = decimalLatitude,
-#          Lon = decimalLongitude,
-#          ADM1 = NAME_1,
-#          ADM2 = NAME_2) %>%
-#   mutate(Lat = round(Lat, 6),
-#          Lon = round(Lon, 6)) %>%
-#   unite(., LatLon, c("Lat", "Lon"), sep = ", ")
-# 
-# anti_join(pts_4326, og_adms, by = c("LatLon", "ADM1", "ADM2"))
 
 ## Add back to main dataframe --------------------------------------------------
 prev <- prev %>%
@@ -357,7 +295,7 @@ for(i in 1:nrow(weather)){
   weather[i,20] <- as.Date(weather$date[i], format = "%Y-%m-%d") - days(20)
   weather[i,21] <- as.Date(weather$date[i], format = "%Y-%m-%d") - days(21)
 
-  ## get dates for 3 weeks prior to sample date (for avg temp/soil moisture)
+## get dates for 3 weeks prior to sample date (for avg temp/soil moisture)
   weather[i,22] <- as.Date(weather$date[i], format = "%Y-%m-%d") - days(22)
   weather[i,23] <- as.Date(weather$date[i], format = "%Y-%m-%d") - days(23)
   weather[i,24] <- as.Date(weather$date[i], format = "%Y-%m-%d") - days(24)
@@ -375,11 +313,15 @@ weather <- weather %>%
          t22 = ...22, t23 = ...23, t24 = ...24, t25 = ...25, t26 = ...26, t27 = ...27, t28 = ...28)
 
 ## Add date from timepoints back into prev
-# prev <- prev %>%
-#   mutate(date = base::as.Date(date, "%Y-%m-%d")) %>%
-#   left_join(weather[, c(1:2, 6:11)], by = c("Lat", "Lon", "date")) %>%
-#   relocate(c("4d", "1wk", "2wks", "3wks"), .after = date) %>%
-#   rename(t0 = date)
+data.frame(colnames(weather))
+test <- prev
+test <- prev %>%
+  mutate(date = base::as.Date(date, "%Y-%m-%d")) %>%
+  left_join(weather[, c(1:2, 6:28)], by = c("Lat", "Lon", "date")) %>%
+  relocate(c(t4, t8, t9, t10, t11, t12, t13, t14, 
+             t15, t16, t17, t18, t19, t20, t21,
+             t22, t23, t24, t25, t26, t27, t28), .after = date) #%>%
+  rename(t0 = date)
 
 
 weather <- weather %>%
@@ -399,7 +341,7 @@ weather <- weather %>%
   filter(year != '1905') # likely a museum specimen --  not useful for our analyses
 
 ## Export to use in Python and PyQGIS to obtain weather data
-write.csv(weather, 'weather.csv', row.names = F, fileEncoding = "UTF-8")
+# write.csv(weather, 'weather.csv', row.names = F, fileEncoding = "UTF-8")
 
 
 ## Python v3.12.0 used to download .nc4 files from NASA's EarthData data repository for each date and location.
@@ -410,38 +352,43 @@ write.csv(weather, 'weather.csv', row.names = F, fileEncoding = "UTF-8")
 #     Greenbelt, Maryland, USA, Goddard Earth Sciences Data and Information Services Center (GES DISC), Accessed: 2023-10-11. doi:10.5067/TXBMLX370XX8.
 #  Li, B., M. Rodell, S. Kumar, H. Beaudoing, A. Getirana, B. F. Zaitchik, et al. (2019) Global GRACE data assimilation for groundwater and drought 
 #     monitoring: Advances and challenges. Water Resources Research, 55, 7564-7586. doi:10.1029/2018wr024618.
-gldas_daily <- read.csv("weather_3035.csv", header = T, encoding = "UTF-8")
+gldas_daily <- read.csv("weather_all.csv", header = T, encoding = "UTF-8")
 
 gldas_daily <- gldas_daily %>%
+  mutate(day = as.integer(case_match(day, "true" ~ "1", .default = day)),
+         month = as.integer(case_match(month, "true" ~ "1", .default = month))) %>%
   unite(c("year", "month", "day"), sep = "-", col = "date", remove = F) %>%
+  mutate(date = as.Date(date, format = "%Y-%m-%d")) %>%
   rename(soilMoisture = "SOILMOIST_kgm.21",
          temp = "SURFTEMP_K1") %>%
-  dplyr::select(Lat, Lon, timepoint, date, soilMoisture, temp) %>%
-  unite(Lat, Lon, sep = ", ", col = "LatLon", remove = F) 
+  filter(timepoint != 't30' & timepoint != 't7') # artifact from older 'datasetFetcher' python code when obtaining weather .nc4 files -- do not need here
+  
 
 
 # Copy & separate temp from soilMoisture
 temp_d <- gldas_daily %>%
   # exclude rows with sM data, as well as any NAs in the temp data
-  dplyr::select(Lat, Lon, date, timepoint, temp) %>%
-  drop_na() %>%
+  dplyr::select(Lat, Lon, timepoint, date, temp) %>%
+  drop_na(.) %>%
   # expedite processing by only subsetting unique combinations of lat/lon/date
   group_by(Lat, Lon, timepoint) %>%
   distinct_all() %>%
-  # assign row # for matching purposes
-  mutate(row = row_number(),
-         date = as.Date(date, format = "%Y-%m-%d"),
+  mutate(week = cut.Date(date, breaks = "1 week"),
+    # assign row # for matching purposes
+    #row = row_number(),
          # Convert temp from K to C
          temp = as.numeric(temp - 273.15)) %>%
-  dplyr::group_by(Lat, Lon, timepoint) %>%
+  arrange(date)
+  
+  group_by(Lat, Lon, timepoint) %>%
   pivot_wider(names_from = timepoint, values_from = c(date, temp)) %>%
-  rename(t30 = date_t30,
-         t14 = date_t14,
-         t10 = date_t10,
-         t7 = date_t7,
-         t4 = date_t4,
-         t0 = date_t0)
+  rename(t28 = date_t28, t27 = date_t27, t26 = date_t26, t25 = date_t25, t24 = date_t24, t23 = date_t23, t22 = date_t22,
+         t21 = date_t21, t20 = date_t20, t19 = date_t19, t18 = date_t18, t17 = date_t17, t16 = date_t16, t15 = date_t15,
+         t14 = date_t14, t13 = date_t13, t12 = date_t12, t11 = date_t11, t10 = date_t10, t9 = date_t9, t8 = date_t8, 
+         t4 = date_t4, t0 = date_t0)
 
+
+  
 ## Process soil moisture data from the main weather dataframe
 gldas_daily <- gldas_daily %>%
   dplyr::select(Lat, Lon, date, timepoint, soilMoisture) %>%
@@ -450,18 +397,18 @@ gldas_daily <- gldas_daily %>%
   distinct_all() %>%
   mutate(row = row_number(),
          date = as.Date(date, format = "%Y-%m-%d")) %>%
-  dplyr::group_by(Lat, Lon, timepoint) %>%
+  group_by(Lat, Lon, timepoint) %>%
   pivot_wider(names_from = timepoint, values_from = c(date, soilMoisture)) %>%
-  rename(t30 = date_t30,
-         t14 = date_t14,
-         t10 = date_t10,
-         t7 = date_t7,
-         t4 = date_t4,
-         t0 = date_t0)
+  rename(t28 = date_t28, t27 = date_t27, t26 = date_t26, t25 = date_t25, t24 = date_t24, t23 = date_t23, t22 = date_t22,
+         t21 = date_t21, t20 = date_t20, t19 = date_t19, t18 = date_t18, t17 = date_t17, t16 = date_t16, t15 = date_t15,
+         t14 = date_t14, t13 = date_t13, t12 = date_t12, t_11 = date_t11, t10 = date_t10, t9 = date_t9, t8 = date_t8, 
+         t4 = date_t4, t0 = date_t0)
  
 # Add temp data back into gldas_daily df in preparation to add it back to the main df.
-gldas_daily <- left_join(gldas_daily, temp_d, by = c("Lat", "Lon", "t0", "t4", "t7", "t10", "t14", "t30", "row")) %>%
-  subset(., select = -c(row))
+gldas_daily <- left_join(gldas_daily, temp_d, by = c("Lat", "Lon", "row", "t0", "t4", "t8", "t9", "t10", "t11", "t12", "t13", "t14", 
+                                                     "t15", "t16", "t17", "t18", "t19", "t20", "t21",
+                                                     "t22", "t23", "t24", "t25", "t26", "t27", "t28")) %>%
+   dplyr::select(!(LatLon)) %>%
 
 
 ## Add weather data to main dataframe
