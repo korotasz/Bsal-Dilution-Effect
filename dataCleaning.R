@@ -34,26 +34,26 @@ setwd(file.path(dir, csvpath))
 assign_week <- function(df, timepoint, out_col){
   for(i in 1:nrow(df)){
     if(df[[timepoint]][i] == "t8" || df[[timepoint]][i] == "t9" || df[[timepoint]][i] == "t10" || df[[timepoint]][i] == "t11" || df[[timepoint]][i] == "t12" || df[[timepoint]][i] == "t13" || df[[timepoint]][i] =="t14"){
-      df[[out_col]][i] <- 1
+      df[[out_col]][i] <- "wk1"
     }
     else if(df[[timepoint]][i] == "t15" || df[[timepoint]][i] == "t16" || df[[timepoint]][i] == "t17" || df[[timepoint]][i] == "t18" || df[[timepoint]][i] == "t19" || df[[timepoint]][i] == "t20" || df[[timepoint]][i] == "t21"){
-      df[[out_col]][i] <- 2
+      df[[out_col]][i] <- "wk2"
     }
     else if(df[[timepoint]][i] == "t22" || df[[timepoint]][i] == "t23" || df[[timepoint]][i] == "t24" || df[[timepoint]][i] == "t25" || df[[timepoint]][i] == "t26" || df[[timepoint]][i] == "t27" || df[[timepoint]][i] == "t28"){
-      df[[out_col]][i] <- 3
+      df[[out_col]][i] <- "wk3"
     }
     else if(df[[timepoint]][i] == "t4"){
-      df[[out_col]][i] <- NA
+      df[[out_col]][i] <- "t4"
     }
     else if(df[[timepoint]][i] == "t0"){
-      df[[out_col]][i] <- NA
+      df[[out_col]][i] <- "t0"
     }
   }
   # Return result
   return(df)
 }
 
-assign_start_date <- function(df, timepoint, date, out_col){
+assign_end_date <- function(df, timepoint, date, out_col){
   for(i in 1:nrow(df)){
     if(df[[timepoint]][i] == "t0" || df[[timepoint]][i] == "t4" || df[[timepoint]][i] == "t8" || df[[timepoint]][i] == "t15" || df[[timepoint]][i] == "t22"){
       df[[out_col]][i] <- paste(df[[date]][i])
@@ -62,56 +62,14 @@ assign_start_date <- function(df, timepoint, date, out_col){
   return(df) 
 }
 
-assign_end_date <- function(df, timepoint, date, out_col){
+assign_start_date <- function(df, timepoint, date, out_col){
   for(i in 1:nrow(df)){
-    if(df[[timepoint]][i] == "t14" || df[[timepoint]][i] == "t21" || df[[timepoint]][i] == "t28"){
+    if(df[[timepoint]][i] == "t0" || df[[timepoint]][i] == "t4" || df[[timepoint]][i] == "t14" || df[[timepoint]][i] == "t21" || df[[timepoint]][i] == "t28"){
       df[[out_col]][i] <- paste(df[[date]][i])
     }
   }
   return(df) 
 }
-
-clean_weekly_data <- function(df, week, time_col) {
-
-  df <- wkly_temp
-  week <- "1"
-  time_col <- "time"
-  for(i in 1:nrow(df)){
-    tmp_end_df <- df %>%
-      drop_na() %>%
-      filter(df[[week]][i] == week & df[[time_col]][i] == "end") %>%
-      mutate(row = row_number()) %>%
-      dplyr::select(-c(df[[timepoint]])) %>%
-      group_by(df[[Lat]], df[[Lon]], df[[week]]) %>%
-      pivot_wider(id_cols = c(df[[row]], df[[Lat]], df[[Lon]]), names_from = c(df[[week]][i], df[[time_col]][i]), names_prefix = "wk", names_sep = "_", values_from = c(df[[date]][i], df[[avg_temp]][i]))
-    
-      tmp_end_df
-      
-      
-    
-    tmp_start_df <- df %>%
-      drop_na() %>%
-      filter(df[[week]][i] == week & df[[time_col]][i] == "start") %>%
-      mutate(row = row_number()) %>%
-      dplyr::select(-c(df[[timepoint]])) %>%
-      group_by(df[[Lat]], df[[Lon]], df[[week]]) %>%
-      pivot_wider(id_cols = c(df[[row]], df[[Lat]], df[[Lon]]), names_from = c(df[[week]][i], df[[time_col]][i]), names_prefix = "wk", names_sep = "_", values_from = c(df[[date]][i], df[[avg_temp]][i]))
-      
-      tmp_start_df
-      
-      }
-
-  }
-  
-  tmp_end_df <- data.frame(tmp_end_df)
-  
-  joined_df <- left_join(out1, out2, by = setNames(nm = c("row", "Lat", "Lon")))
-  
-  return(joined_df)
-  
-}
-
-week1_temp <- clean_weekly_data(wkly_temp, week = 1, time_col = "time")
 
 
 ## -----------------------------------------------------------------------------
@@ -392,24 +350,10 @@ for(i in 1:nrow(weather)){
 }
 
 weather <- weather %>%
-  rename(t4 = ...7,
+  rename(t0 = date, t4 = ...7,
          t8 = ...8, t9 = ...9, t10 = ...10, t11 = ...11, t12 = ...12, t13 = ...13, t14 = ...14,
          t15 = ...15, t16 = ...16, t17 = ...17, t18 = ...18, t19 = ...19, t20 = ...20, t21 = ...21,
-         t22 = ...22, t23 = ...23, t24 = ...24, t25 = ...25, t26 = ...26, t27 = ...27, t28 = ...28)
-
-## Add date from timepoints back into prev
-data.frame(colnames(weather))
-
-prev <- prev %>%
-  mutate(date = base::as.Date(date, "%Y-%m-%d")) %>%
-  left_join(weather[, c(1:2, 6:28)], by = c("Lat", "Lon", "date")) %>%
-  relocate(c(t4, t8, t9, t10, t11, t12, t13, t14, 
-             t15, t16, t17, t18, t19, t20, t21,
-             t22, t23, t24, t25, t26, t27, t28), .after = date) #%>% rename(t0 = date)
-
-
-weather <- weather %>%
-  rename(t0 = date) %>%
+         t22 = ...22, t23 = ...23, t24 = ...24, t25 = ...25, t26 = ...26, t27 = ...27, t28 = ...28) %>%
   group_by(Lat, Lon) %>%
   pivot_longer(cols = c(t0, t4, t8, t9, t10, t11, t12, t13, t14, 
                         t15, t16, t17, t18, t19, t20, t21,
@@ -425,13 +369,14 @@ weather <- weather %>%
   filter(year != '1905') # likely a museum specimen --  not useful for our analyses
 
 ## Export to use in Python and PyQGIS to obtain weather data
+setwd(file.path(dir, csvpath))
 # write.csv(weather, 'weather.csv', row.names = F, fileEncoding = "UTF-8")
 
 
 ## Python v3.12.0 used to download .nc4 files from NASA's EarthData data repository for each date and location.
 ## PyQGIS Python v3.9.5 used to process data in QGIS v3.28.3-Firenze.
 
-## Import DAILY temperature & soil moisture data from NASA's EarthData website (citation below)
+## Import DAILY temperature & soil moisture data from NASA's EarthData website (citation below) ----
 #  Li, B., H. Beaudoing, and M. Rodell, NASA/GSFC/HSL (2020), GLDAS Catchment Land Surface Model L4 daily 0.25 x 0.25 degree GRACE-DA1 V2.2, 
 #     Greenbelt, Maryland, USA, Goddard Earth Sciences Data and Information Services Center (GES DISC), Accessed: 2023-10-11. doi:10.5067/TXBMLX370XX8.
 #  Li, B., M. Rodell, S. Kumar, H. Beaudoing, A. Getirana, B. F. Zaitchik, et al. (2019) Global GRACE data assimilation for groundwater and drought 
@@ -439,149 +384,80 @@ weather <- weather %>%
 gldas_daily <- read.csv("weather_all.csv", header = T, encoding = "UTF-8")
 
 gldas_daily <- gldas_daily %>%
-  mutate(day = as.integer(case_match(day, "true" ~ "1", .default = day)),
+  filter(timepoint != 't30' & timepoint != 't7') %>% # artifact from older 'datasetFetcher.py' script when obtaining weather .nc4 files -- do not need here
+  mutate(row = row_number(),
+         day = as.integer(case_match(day, "true" ~ "1", .default = day)),
          month = as.integer(case_match(month, "true" ~ "1", .default = month))) %>%
+  relocate(row, .before = Lat) %>%
   unite(c("year", "month", "day"), sep = "-", col = "date", remove = F) %>%
   mutate(date = as.Date(date, format = "%Y-%m-%d"),
+         start_date = NA,
          week = NA,
          Lat = round(Lat, 6),
          Lon = round(Lon, 6)) %>%
   rename(soilMoisture = "SOILMOIST_kgm.21",
          temp = "SURFTEMP_K1") %>%
-  filter(timepoint != 't30' & timepoint != 't7') %>% # artifact from older 'datasetFetcher.py' script when obtaining weather .nc4 files -- do not need here
-  assign_week(.,"timepoint", "week")
+  assign_week(.,"timepoint", "week") 
 
 
-week_start <- gldas_daily %>%
-  dplyr::select(Lat, Lon, timepoint, week, date) %>%
-  mutate(start_date = NA) %>%
+## Separate and process temperature data ---------------------------------------
+temperature <- gldas_daily %>%
+  dplyr::select(-c(soilMoisture, year, month, day)) %>%
+  drop_na(temp) %>%
+  # Assign start date for each week
+  assign_start_date(., "timepoint", "date", "start_date") %>% 
+  mutate(temp = as.numeric(temp - 273.15)) %>% # Convert temp from K to C
+  unite(., col = "LatLon", c(Lat, Lon), sep = ", ") 
+
+## Calculate mean temperature for each week
+avg_temp <- temperature %>%
+  filter(!(week == "t0" |week == "t4")) %>%
+  aggregate(temp ~ LatLon+week, ., mean) %>%
+  rename(avg_temp = temp)
+
+## Add mean temperatures back into temperature df
+temperature <- temperature %>%
+  drop_na(start_date) %>%
+  left_join(., avg_temp, by = c("LatLon", "week")) %>%
+  # for t0 and t4, we just need to copy the temp for that day -- no need to avg.
+  mutate(avg_temp = ifelse(week == "t0" | week == "t4", temp, avg_temp))  %>%
+  dplyr::select(-c(temp, timepoint, date, row)) %>%
+  distinct_at(., .vars = c("LatLon", "week"), .keep_all = T) %>%
+  pivot_wider(names_from = week, values_from = c(start_date, avg_temp))
+
+
+## Separate and process soil moisture data -------------------------------------
+soilMoisture <- gldas_daily %>%
+  dplyr::select(-c(temp, year, month, day)) %>%
+  drop_na(soilMoisture) %>%
   assign_start_date(., "timepoint", "date", "start_date") %>%
-  drop_na(.) %>% 
-  dplyr::select(-(date)) %>%
-  rename(date = start_date) %>%
-  mutate(time = ifelse(timepoint == "t0" | timepoint == "t4", "day", "start"))
+  unite(., col = "LatLon", c(Lat, Lon), sep = ", ") 
 
-week_end <- gldas_daily %>%
-  dplyr::select(Lat, Lon, timepoint, week, date) %>%
-  mutate(end_date = NA) %>%
-  assign_end_date(., "timepoint", "date", "end_date") %>%
-  drop_na(.) %>%
-  dplyr::select(-(date)) %>%
-  rename(date = end_date) %>%
-  mutate(time = "end")
+avg_soilMoist <- soilMoisture %>%
+  filter(!(week == "t0" |week == "t4")) %>%
+  aggregate(soilMoisture ~ LatLon+week, ., mean) %>%
+  rename(avg_soilM = soilMoisture)
 
-dates <- rbind(week_start, week_end) %>%
-  mutate(date = as.Date(date)) %>%
-  distinct_all(.)
-
-## Copy & separate temp data from soil moisture data;
-## further subset temp data by week == 1 || 2 || 3  vs week == "t0" || "t4"
-wkly_temp <- gldas_daily %>%
-  # exclude rows with sM data, as well as any NAs in the temp data
-  dplyr::select(Lat, Lon, week, timepoint, date, temp) %>%
-  drop_na(.) %>%
-  # subset unique combinations of lat/lon/wk
-  unite(., col = "LatLon", c(Lat, Lon), sep = ", ") %>%
-  group_by(LatLon, week) %>%
-  distinct_all() %>%
-  mutate(temp = as.numeric(temp - 273.15), # Convert temp from K to C
-         avg_temp = mean(temp)) %>%
-  separate(., "LatLon", c("Lat", "Lon"), sep = ", ") %>%
-  mutate(Lat = as.numeric(Lat),
-         Lon = as.numeric(Lon)) %>%
-  ungroup(.) %>%
-  dplyr::select(-c(temp)) %>%
-  filter(date %in% dates$date & timepoint %in% dates$timepoint) %>%
-  full_join(., dates, by = c("Lat", "Lon", "timepoint", "week", "date")) %>%
-  filter(timepoint != "t0" | timepoint != "t4")
-   
-
-wk2_temp <- wkly_temp %>%
-  filter(week == 2) %>%
-  mutate(row = row_number()) %>%
-  dplyr::select(-c(timepoint)) %>%
-  group_by(Lat, Lon, week) %>%
-  pivot_wider(id_cols = c(row, Lat, Lon), names_from = c(week, time), names_prefix = "wk", names_sep = "_", values_from = c(date, avg_temp))
-wk3_temp <- wkly_temp %>%
-  filter(week == 3) %>%
-  mutate(row = row_number()) %>%
-  dplyr::select(-c(timepoint)) %>%
-  group_by(Lat, Lon, week) %>%
-  pivot_wider(id_cols = c(row, Lat, Lon), names_from = week, names_prefix = "wk", names_sep = "_", values_from = c(date, avg_temp))
+soilMoisture <- soilMoisture %>%
+  drop_na(start_date) %>%
+  left_join(., avg_soilMoist, by = c("LatLon", "week")) %>%
+  mutate(avg_soilM = ifelse(week == "t0" | week == "t4", soilMoisture, avg_soilM))  %>%
+  dplyr::select(-c(soilMoisture, timepoint, date, row)) %>%
+  distinct_at(., .vars = c("LatLon", "week"), .keep_all = T) %>%
+  pivot_wider(names_from = week, values_from = c(start_date, avg_soilM))
   
 
-daily_temp <- gldas_daily %>%
-  # exclude rows with sM data, as well as any NAs in the temp data
-  dplyr::select(Lat, Lon, week, timepoint, date, temp) %>%
-  filter(week == "t0" | week == 't4') %>%
-  drop_na(.) %>%
-  # subset unique combinations of lat/lon/wk
-  unite(., col = "LatLon", c(Lat, Lon), sep = ", ") %>%
-  group_by(LatLon, week, date) %>%
-  distinct_all() %>%
-  mutate(temp = as.numeric(temp - 273.15), # Convert temp from K to C
-         avg_temp = temp) %>%
-  separate(., "LatLon", c("Lat", "Lon"), sep = ", ") %>%
-  mutate(Lat = as.numeric(Lat),
-         Lon = as.numeric(Lon),
-         time = "day",
-         row = row_number()) %>%
-  ungroup(.) %>%
-  dplyr::select(-c(temp)) %>%
-  filter(date %in% dates$date & timepoint %in% dates$timepoint) %>%
-  distinct_all()
-
-temperature <- rbind(wkly_temp, daily_temp) %>%
-  dplyr::select(-c(timepoint)) %>%
-  group_by(Lat, Lon, week) %>%
-  pivot_wider(id_cols = row, names_from = week, values_from = c(date, avg_temp)) %>%
-  dplyr::select(-c(row)) %>%
-  distinct_all()
-    
+## Combine weekly soil moisture/temp data frames -------------------------------
+weatherData <- left_join(temperature, soilMoisture, by = c("LatLon", "start_date_wk3", "start_date_wk2",
+                                                 "start_date_wk1", "start_date_t4", "start_date_t0")) %>%
+  # these column names can be shortened
+  rename(wk3_start = start_date_wk3, wk2_start = start_date_wk2, wk1_start = start_date_wk1, t4 = start_date_t4, t0 = start_date_t0,
+         wk3_avgT = avg_temp_wk3, wk2_avgT = avg_temp_wk2, wk1_avgT = avg_temp_wk1, t4_avgT = avg_temp_t4, t0_avgT = avg_temp_t0,
+         wk3_avgSM = avg_soilM_wk3, wk2_avgSM = avg_soilM_wk2, wk1_avgSM = avg_soilM_wk1, t4_avgSM = avg_soilM_t4, t0_avgSM = avg_soilM_t0) %>%
+  separate(., LatLon, into = c("Lat", "Lon"), sep = ", ")
   
 
-
-
-
-
-
-
-test_temp <- temp_df %>%
-  dplyr::select(-c(timepoint, date, temp)) %>%
-  distinct_all() %>%
-  pivot_wider(., id_cols = c(Lat, Lon), 
-              names_from = week, 
-              values_from = c(start_date, end_date, avg_temp)) 
-
-
-
-
-
-## Process soil moisture data from the gldas_wkly dataframe
-sm <-gldas_daily %>%
-  dplyr::select(-(temp)) %>%
-  drop_na(.) %>%
-  # subset unique combinations of lat/lon/wk
-  group_by(Lat, Lon, week) %>%
-  distinct_all() %>%
-  mutate(avg_sm = mean(soilMoisture)) %>%
-  arrange(week)  %>%
-  pivot_wider(names_from = week, names_prefix = "wk", values_from = c(date, avg_sm)) #%>%
-  # rename(t28 = date_t28, t27 = date_t27, t26 = date_t26, t25 = date_t25, t24 = date_t24, t23 = date_t23, t22 = date_t22,
-  #        t21 = date_t21, t20 = date_t20, t19 = date_t19, t18 = date_t18, t17 = date_t17, t16 = date_t16, t15 = date_t15,
-  #        t14 = date_t14, t13 = date_t13, t12 = date_t12, t_11 = date_t11, t10 = date_t10, t9 = date_t9, t8 = date_t8, 
-  #        t4 = date_t4, t0 = date_t0)
- 
-## Combine weekly soil moisture/temp data frames
-test <- left_join(gldas_daily, temp_wkly, by = c("Lat", "Lon", "week", "date"))
-  
-
-# Add wkly_avgs data back into gldas_daily df in preparation to add it back to the main df.
-
-
-
-
-## Add weather data to main dataframe
+## Add weather data to main dataframe ------------------------------------------
 prev <- left_join(prev, gldas_daily, by = c("Lat", "Lon", "t0", "t4", "t7", "t10", "t14", "t30")) %>% 
   relocate(c(richness, sppAbun, siteAbun), .after = Site) %>%
   relocate(c(soilMoisture_t30, soilMoisture_t14, soilMoisture_t10, soilMoisture_t7, soilMoisture_t4, soilMoisture_t0,
