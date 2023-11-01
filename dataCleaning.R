@@ -53,15 +53,6 @@ assign_week <- function(df, timepoint, out_col){
   return(df)
 }
 
-assign_end_date <- function(df, timepoint, date, out_col){
-  for(i in 1:nrow(df)){
-    if(df[[timepoint]][i] == "t0" || df[[timepoint]][i] == "t4" || df[[timepoint]][i] == "t8" || df[[timepoint]][i] == "t15" || df[[timepoint]][i] == "t22"){
-      df[[out_col]][i] <- paste(df[[date]][i])
-    }
-  }
-  return(df) 
-}
-
 assign_start_date <- function(df, timepoint, date, out_col){
   for(i in 1:nrow(df)){
     if(df[[timepoint]][i] == "t0" || df[[timepoint]][i] == "t4" || df[[timepoint]][i] == "t14" || df[[timepoint]][i] == "t21" || df[[timepoint]][i] == "t28"){
@@ -70,7 +61,6 @@ assign_start_date <- function(df, timepoint, date, out_col){
   }
   return(df) 
 }
-
 
 ## -----------------------------------------------------------------------------
 
@@ -165,7 +155,7 @@ setwd(file.path(dir, shppath))
 ## 1. Use 'raster' pckg to get shapefiles for each country. We are using EPSG:4326, as these are lat/lon data
 #     that are presented in decimal degrees. Reprojecting to another coordinate system is not necessary, and 
 #     may even introduce an additional source of error.
-polygon <- gadm(country = c('BEL', 'DEU', 'CHE', 'ITA', 'GBR', 'ESP'), level = 2, 
+polygon <- gadm(country = c('BEL', 'DEU', 'CHE', 'GBR', 'ESP'), level = 2, 
              path = file.path(dir, shppath), version = "latest", resolution = 1) %>%
   sf::st_as_sf(., crs = 4326) %>%
   st_cast(., "MULTIPOLYGON") 
@@ -215,7 +205,7 @@ prev <- prev %>%
                   keep = F) %>%
   relocate(c(country, ADM0, ADM1, ADM2), .before = Lat) 
 ## Compared this method with sampling locations in QGIS and it is just as precise/accurate.
-
+# rm(out, points, polygon)
 
 ## Group sites by unique lat/long combos and assign site #s to them, for all countries
 siteNumber <- prev %>%
@@ -302,6 +292,7 @@ levels(prev$BsalDetected) <- c(0,1) #0 = F, 1 = T
 prev$fatal <- as.factor(prev$fatal)
 levels(prev$fatal) <- c(0,1) #0 = F, 1 = T
 
+rm(s, SAb, siteNumber, spa, spr)
 
 ## Obtain unique lat/long/date combinations to extract weather data
 Sys.setenv(TZ = "UTC")
@@ -349,6 +340,22 @@ for(i in 1:nrow(weather)){
     
 }
 
+
+## First, get dates of the start of each week & add back into main df
+start_dates <- weather %>%
+  rename(t4 = ...7,
+         t8 = ...8, t9 = ...9, t10 = ...10, t11 = ...11, t12 = ...12, t13 = ...13, wk1_start = ...14,
+         t15 = ...15, t16 = ...16, t17 = ...17, t18 = ...18, t19 = ...19, t20 = ...20, wk2_start = ...21,
+         t22 = ...22, t23 = ...23, t24 = ...24, t25 = ...25, t26 = ...26, t27 = ...27, wk3_start = ...28) %>%
+  dplyr::select(c(Lat, Lon, wk3_start, wk2_start, wk1_start, t4, date)) %>%
+  arrange(Lat, Lon, date)
+
+prev <- prev %>%
+  mutate(date = base::as.Date(date, format = "%Y-%m-%d"),) %>%
+  left_join(., start_dates, by = c("Lat", "Lon", "date")) %>%
+  relocate(c(wk3_start, wk2_start, wk1_start, t4), .before = date)
+
+## Then finish editing weather df before exporting as .csv
 weather <- weather %>%
   rename(t0 = date, t4 = ...7,
          t8 = ...8, t9 = ...9, t10 = ...10, t11 = ...11, t12 = ...12, t13 = ...13, t14 = ...14,
@@ -368,10 +375,12 @@ weather <- weather %>%
   dplyr::select(-("date")) %>%
   filter(year != '1905') # likely a museum specimen --  not useful for our analyses
 
+
+
 ## Export to use in Python and PyQGIS to obtain weather data
 setwd(file.path(dir, csvpath))
 # write.csv(weather, 'weather.csv', row.names = F, fileEncoding = "UTF-8")
-
+rm(weather)
 
 ## Python v3.12.0 used to download .nc4 files from NASA's EarthData data repository for each date and location.
 ## PyQGIS Python v3.9.5 used to process data in QGIS v3.28.3-Firenze.
@@ -402,66 +411,94 @@ gldas_daily <- gldas_daily %>%
 
 ## Separate and process temperature data ---------------------------------------
 temperature <- gldas_daily %>%
-  dplyr::select(-c(soilMoisture, year, month, day)) %>%
+  dplyr::select(-c(row, soilMoisture, year, month, day)) %>%
   drop_na(temp) %>%
   # Assign start date for each week
   assign_start_date(., "timepoint", "date", "start_date") %>% 
   mutate(temp = as.numeric(temp - 273.15)) %>% # Convert temp from K to C
-  unite(., col = "LatLon", c(Lat, Lon), sep = ", ") 
+  unique()
+
+daily_temp <- temperature %>%
+  filter((week == "t0" |week == "t4")) %>%
+  arrange(Lat, Lon, week) %>%
+  # for t0 and t4, we just need to copy the temp for that day -- no need to avg.
+  mutate(avg_temp = temp)
 
 ## Calculate mean temperature for each week
 avg_temp <- temperature %>%
   filter(!(week == "t0" |week == "t4")) %>%
-  aggregate(temp ~ LatLon+week, ., mean) %>%
-  rename(avg_temp = temp)
+  distinct_at(., .vars = c("Lat", "Lon", "timepoint", "date"), .keep_all = T) %>%
+  arrange(Lat, Lon, week) %>%
+  group_by(Lat, Lon, week) %>%
+  mutate(avg_temp = mean(temp)) %>%
+  rbind(daily_temp) %>%
+  drop_na() %>%
+  mutate(id = row_number()) 
+
 
 ## Add mean temperatures back into temperature df
 temperature <- temperature %>%
   drop_na(start_date) %>%
-  left_join(., avg_temp, by = c("LatLon", "week")) %>%
-  # for t0 and t4, we just need to copy the temp for that day -- no need to avg.
-  mutate(avg_temp = ifelse(week == "t0" | week == "t4", temp, avg_temp))  %>%
-  dplyr::select(-c(temp, timepoint, date, row)) %>%
-  distinct_at(., .vars = c("LatLon", "week"), .keep_all = T) %>%
-  pivot_wider(names_from = week, values_from = c(start_date, avg_temp))
+  left_join(., avg_temp, by = c("Lat", "Lon", "timepoint", "temp", "date", "start_date", "week")) %>%
+  dplyr::select(-c(temp, start_date, timepoint)) %>%
+  pivot_wider(names_from = week, values_from = c(date, avg_temp))
 
 
 ## Separate and process soil moisture data -------------------------------------
 soilMoisture <- gldas_daily %>%
-  dplyr::select(-c(temp, year, month, day)) %>%
+  dplyr::select(-c(row, temp, year, month, day)) %>%
   drop_na(soilMoisture) %>%
-  assign_start_date(., "timepoint", "date", "start_date") %>%
-  unite(., col = "LatLon", c(Lat, Lon), sep = ", ") 
+  # Assign start date for each week
+  assign_start_date(., "timepoint", "date", "start_date") %>% 
+  unique()
+
+daily_SM <- soilMoisture %>%
+  filter((week == "t0" |week == "t4")) %>%
+  arrange(Lat, Lon, week) %>%
+  # for t0 and t4, we just need to copy the temp for that day -- no need to avg.
+  mutate(avg_SM = soilMoisture)
 
 avg_soilMoist <- soilMoisture %>%
   filter(!(week == "t0" |week == "t4")) %>%
-  aggregate(soilMoisture ~ LatLon+week, ., mean) %>%
-  rename(avg_soilM = soilMoisture)
+  distinct_at(., .vars = c("Lat", "Lon", "timepoint", "date"), .keep_all = T) %>%
+  arrange(Lat, Lon, week) %>%
+  group_by(Lat, Lon, week) %>%
+  mutate(avg_SM = mean(soilMoisture)) %>%
+  rbind(daily_SM) %>%
+  drop_na() %>%
+  mutate(id = row_number()) 
 
 soilMoisture <- soilMoisture %>%
   drop_na(start_date) %>%
-  left_join(., avg_soilMoist, by = c("LatLon", "week")) %>%
-  mutate(avg_soilM = ifelse(week == "t0" | week == "t4", soilMoisture, avg_soilM))  %>%
-  dplyr::select(-c(soilMoisture, timepoint, date, row)) %>%
-  distinct_at(., .vars = c("LatLon", "week"), .keep_all = T) %>%
-  pivot_wider(names_from = week, values_from = c(start_date, avg_soilM))
-  
+  left_join(., avg_soilMoist, by = c("Lat", "Lon", "timepoint", "soilMoisture", "date", "start_date", "week")) %>%
+  dplyr::select(-c(soilMoisture, start_date, timepoint)) %>%
+  pivot_wider(names_from = week, values_from = c(date, avg_SM))
+
 
 ## Combine weekly soil moisture/temp data frames -------------------------------
-weatherData <- left_join(temperature, soilMoisture, by = c("LatLon", "start_date_wk3", "start_date_wk2",
-                                                 "start_date_wk1", "start_date_t4", "start_date_t0")) %>%
+weatherData <- left_join(temperature, soilMoisture, by = c("id", "Lat", "Lon", "date_wk3", "date_wk2",
+                                                 "date_wk1", "date_t4", "date_t0")) %>%
+  dplyr::select(-(id)) %>%
   # these column names can be shortened
-  rename(wk3_start = start_date_wk3, wk2_start = start_date_wk2, wk1_start = start_date_wk1, t4 = start_date_t4, t0 = start_date_t0,
-         wk3_avgT = avg_temp_wk3, wk2_avgT = avg_temp_wk2, wk1_avgT = avg_temp_wk1, t4_avgT = avg_temp_t4, t0_avgT = avg_temp_t0,
-         wk3_avgSM = avg_soilM_wk3, wk2_avgSM = avg_soilM_wk2, wk1_avgSM = avg_soilM_wk1, t4_avgSM = avg_soilM_t4, t0_avgSM = avg_soilM_t0) %>%
-  separate(., LatLon, into = c("Lat", "Lon"), sep = ", ")
-  
+  rename(wk3_start = date_wk3, wk2_start = date_wk2, wk1_start = date_wk1, t4 = date_t4, date = date_t0,
+         wk3_avgTemp = avg_temp_wk3, wk2_avgTemp = avg_temp_wk2, wk1_avgTemp = avg_temp_wk1, temp_t4 = avg_temp_t4, temp_t0 = avg_temp_t0,
+         wk3_avgSM = avg_SM_wk3, wk2_avgSM = avg_SM_wk2, wk1_avgSM = avg_SM_wk1, soilM_t4 = avg_SM_t4, soilM_t0 = avg_SM_t0) %>%
+  mutate(date = base::as.Date(date, format = "%Y-%m-%d"),
+         t4 = base::as.Date(t4, format = "%Y-%m-%d"),
+         wk1_start = base::as.Date(wk1_start, format = "%Y-%m-%d"),
+         wk2_start = base::as.Date(wk2_start, format = "%Y-%m-%d"),
+         wk3_start = base::as.Date(wk3_start, format = "%Y-%m-%d"))
+
+
 
 ## Add weather data to main dataframe ------------------------------------------
-prev <- left_join(prev, gldas_daily, by = c("Lat", "Lon", "t0", "t4", "t7", "t10", "t14", "t30")) %>% 
+prev <- prev %>%
+  left_join(., weatherData, by = c("Lat", "Lon", "date", "t4", "wk1_start", "wk2_start", "wk3_start")) %>% 
   relocate(c(richness, sppAbun, siteAbun), .after = Site) %>%
-  relocate(c(soilMoisture_t30, soilMoisture_t14, soilMoisture_t10, soilMoisture_t7, soilMoisture_t4, soilMoisture_t0,
-             temp_t30, temp_t14, temp_t10, temp_t7, temp_t4, temp_t0), .after = sampleRemarks) 
+  relocate(c(wk3_start, wk2_start, wk1_start, t4, date), .after = day) %>%
+  relocate(c(wk3_avgTemp, wk2_avgTemp, wk1_avgTemp, temp_t4, temp_t0, wk3_avgSM, wk2_avgSM, wk1_avgSM, soilM_t4, soilM_t0), .after = sampleRemarks) 
+
+rm(avg_soilMoist, daily_SM, avg_temp, daily_temp, gldas_daily, soilMoisture, temperature)
 
 
 # Combine BdDetected and BsalDetected into one "diseaseDetected" column
@@ -492,139 +529,103 @@ levels(prev$diseaseDetected) <- c(0,1) #0 = F, 1 = T
 
 ## Climate data from geodata package
 ## Construct file path to store WorldClim data 
-#dir.create(file.path(dir, shppath, "/WorldClim")) # Will give warning if path already exists
+# dir.create(file.path(dir, shppath, "/WorldClim")) # Will give warning if path already exists
 wclim_path <- path.expand("csvFiles/shapefiles/WorldClim")
 setwd(file.path(dir, wclim_path))
 
-## Obtain unique locations
-unique_locations <- adminlvls %>%
-  dplyr::select(Lon, Lat) %>%
-  unique() %>%
-  mutate(Lat = round(Lat, 6),
-         Lon = round(Lon, 6))
+## Create bounding box for Europe extent to crop WorldClim rasters
+euro_ext <- c(-15, 45, 35, 72)
 
+## add id column to adminlvls df
 latlon_id <- adminlvls %>%
-  mutate(id = row_number())
+  mutate(id = row_number()) %>%
+  relocate(id, .before = Lon)
 
 
-## Obtain WorldClim data as SpatRasters and create SpatRaster collection and sample using the unique_locations
+## Obtain WorldClim data as SpatRasters and extract data using lat/lon from adminlvls df
+## WorldClim resolution of 2.5 arc minutes is approximately equivalent to 0.0417 degrees (finer scale than needed, but that's ok)
 #     a. tmin | temporal scale: monthly (30yr avg)
-tmin_BEL <- geodata::worldclim_country(var = 'tmin', country = "BEL", path = file.path(dir, wclim_path), res = 0.5, version = "2.1") 
-tmin_CHE <- geodata::worldclim_country(var = 'tmin', country = "CHE", path = file.path(dir, wclim_path), res = 0.5, version = "2.1")
-tmin_DEU <- geodata::worldclim_country(var = 'tmin', country = "DEU", path = file.path(dir, wclim_path), res = 0.5, version = "2.1")
-tmin_ESP <- geodata::worldclim_country(var = 'tmin', country = "ESP", path = file.path(dir, wclim_path), res = 0.5, version = "2.1")
-tmin_GBR <- geodata::worldclim_country(var = 'tmin', country = "GBR", path = file.path(dir, wclim_path), res = 0.5, version = "2.1")
+tmin <- geodata::worldclim_global(var = 'tmin', path = file.path(dir, wclim_path), res = 2.5, version = "2.1") 
 
-rast_list<- list(tmin_BEL, tmin_CHE, tmin_DEU, tmin_ESP, tmin_GBR)
-tmin_sprc <- terra::sprc(rast_list) 
-tmin_mosaic <- terra::mosaic(tmin_sprc, fun = "mean")
-names(tmin_mosaic) <- c("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12")
-tmin_extract <- terra::extract(tmin_mosaic, unique_locations, xy = T, bind = T) 
+tmin_cropped <- terra::crop(tmin, euro_ext)
+names(tmin_cropped) <- c("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12")
+tmin_extract <- terra::extract(tmin_cropped, adminlvls[,1:2], ID = F) 
 tmin_df <- as.data.frame(tmin_extract) %>%
   reshape(., varying = c("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"),
           v.names = "tmin",
           timevar = "month",
           times = as.integer(seq_len(12)),
-          direction = "long") 
+          direction = "long") %>%
+  left_join(., latlon_id, by = "id", keep = F) %>%
+  relocate(c(id, ADM0, country, ADM1, ADM2, Lon, Lat), .before = month)
 
-tmin_id <- left_join(tmin_df, latlon_id, by = "id", keep = F) %>%
-  dplyr::select(-c("x", "y")) %>%
-  dplyr::select(-c("id"))
 
- rm(tmin_BEL, tmin_CHE, tmin_DEU, tmin_ESP, tmin_GBR, tmin_extract, tmin_mosaic, tmin_sprc, rast_list)
+ rm(tmin, tmin_extract)
 
 
 #     b. tmax | temporal scale: monthly (30yr avg)
-tmax_BEL <- geodata::worldclim_country(var = 'tmax', country = "BEL", path = file.path(dir, wclim_path), res = 0.5, version = "2.1") 
-tmax_CHE <- geodata::worldclim_country(var = 'tmax', country = "CHE", path = file.path(dir, wclim_path), res = 0.5, version = "2.1")
-tmax_DEU <- geodata::worldclim_country(var = 'tmax', country = "DEU", path = file.path(dir, wclim_path), res = 0.5, version = "2.1")
-tmax_ESP <- geodata::worldclim_country(var = 'tmax', country = "ESP", path = file.path(dir, wclim_path), res = 0.5, version = "2.1")
-tmax_GBR <- geodata::worldclim_country(var = 'tmax', country = "GBR", path = file.path(dir, wclim_path), res = 0.5, version = "2.1")
+tmax <- geodata::worldclim_global(var = 'tmax', path = file.path(dir, wclim_path), res = 2.5, version = "2.1")
 
-rast_list<- list(tmax_BEL, tmax_CHE, tmax_DEU, tmax_ESP, tmax_GBR)
-tmax_sprc <- terra::sprc(rast_list) 
-tmax_mosaic <- terra::mosaic(tmax_sprc, fun = "mean")
-names(tmax_mosaic) <- c("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12")
-tmax_extract <- terra::extract(tmax_mosaic, unique_locations, xy = T, method = "simple", bind = T) 
+tmax_cropped <- terra::crop(tmax, euro_ext)
+names(tmax_cropped) <- c("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12")
+tmax_extract <- terra::extract(tmax_cropped, adminlvls[,1:2], ID = F) 
 tmax_df <- as.data.frame(tmax_extract) %>%
   reshape(., varying = c("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"),
           v.names = "tmax",
           timevar = "month",
           times = as.integer(seq_len(12)),
-          direction = "long")  
+          direction = "long") %>%
+  left_join(., latlon_id, by = "id", keep = F) %>%
+  relocate(c(id, ADM0, country, ADM1, ADM2, Lon, Lat), .before = month)
 
-tmax_id <- left_join(tmax_df, latlon_id, by = "id", keep = F) %>%
-  dplyr::select(-c("x", "y")) %>%
-  dplyr::select(-c("id"))
 
-rm(tmax_BEL, tmax_CHE, tmax_DEU, tmax_ESP, tmax_GBR, tmax_extract, tmax_mosaic, tmax_sprc, rast_list)
+rm(tmax, tmax_extract)
 
 
 #     c. tavg | temporal scale: monthly (30yr avg)
-tavg_BEL <- geodata::worldclim_country(var = 'tavg', country = "BEL", path = file.path(dir, wclim_path), res = 0.5, version = "2.1") 
-tavg_CHE <- geodata::worldclim_country(var = 'tavg', country = "CHE", path = file.path(dir, wclim_path), res = 0.5, version = "2.1")
-tavg_DEU <- geodata::worldclim_country(var = 'tavg', country = "DEU", path = file.path(dir, wclim_path), res = 0.5, version = "2.1")
-tavg_ESP <- geodata::worldclim_country(var = 'tavg', country = "ESP", path = file.path(dir, wclim_path), res = 0.5, version = "2.1")
-tavg_GBR <- geodata::worldclim_country(var = 'tavg', country = "GBR", path = file.path(dir, wclim_path), res = 0.5, version = "2.1")
+tavg <- geodata::worldclim_global(var = 'tavg', path = file.path(dir, wclim_path), res = 2.5, version = "2.1")
 
-rast_list<- list(tavg_BEL, tavg_CHE, tavg_DEU, tavg_ESP, tavg_GBR)
-tavg_sprc <- terra::sprc(rast_list) 
-tavg_mosaic <- terra::mosaic(tavg_sprc, fun = "mean")
-names(tavg_mosaic) <- c("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12")
-tavg_extract <- terra::extract(tavg_mosaic, unique_locations, xy = T, method = "simple", bind = T) 
+tavg_cropped <- terra::crop(tavg, euro_ext)
+names(tavg_cropped) <- c("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12")
+tavg_extract <- terra::extract(tavg_cropped, adminlvls[,1:2], ID = F) 
 tavg_df <- as.data.frame(tavg_extract) %>%
   reshape(., varying = c("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"),
           v.names = "tavg",
           timevar = "month",
           times = as.integer(seq_len(12)),
-          direction = "long") 
+          direction = "long") %>%
+  left_join(., latlon_id, by = "id", keep = F) %>%
+  relocate(c(id, ADM0, country, ADM1, ADM2, Lon, Lat), .before = month)
 
-tavg_id <- left_join(tavg_df, latlon_id, by = "id", keep = F) %>%
-  dplyr::select(-c("x", "y")) %>%
-  dplyr::select(-c("id"))
 
-rm(tavg_BEL, tavg_CHE, tavg_DEU, tavg_ESP, tavg_GBR, tavg_extract, tavg_mosaic, tavg_sprc, rast_list)
+rm(tavg, tavg_extract)
 
 #     d. prec | temporal scale: monthly (30yr avg)
-prec_BEL <- geodata::worldclim_country(var = 'prec', country = "BEL", path = file.path(dir, wclim_path), res = 0.5, version = "2.1") 
-prec_CHE <- geodata::worldclim_country(var = 'prec', country = "CHE", path = file.path(dir, wclim_path), res = 0.5, version = "2.1")
-prec_DEU <- geodata::worldclim_country(var = 'prec', country = "DEU", path = file.path(dir, wclim_path), res = 0.5, version = "2.1")
-prec_ESP <- geodata::worldclim_country(var = 'prec', country = "ESP", path = file.path(dir, wclim_path), res = 0.5, version = "2.1")
-prec_GBR <- geodata::worldclim_country(var = 'prec', country = "GBR", path = file.path(dir, wclim_path), res = 0.5, version = "2.1")
+prec <- geodata::worldclim_global(var = 'prec', path = file.path(dir, wclim_path), res = 2.5, version = "2.1")
 
-rast_list<- list(prec_BEL, prec_CHE, prec_DEU, prec_ESP, prec_GBR)
-prec_sprc <- terra::sprc(rast_list) 
-prec_mosaic <- terra::mosaic(prec_sprc, fun = "mean")
-names(prec_mosaic) <- c("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12")
-prec_extract <- terra::extract(prec_mosaic, unique_locations, xy = T, method = "simple", bind = T) 
+prec_cropped <- terra::crop(prec, euro_ext)
+names(prec_cropped) <- c("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12")
+prec_extract <- terra::extract(prec_cropped, adminlvls[,1:2], ID = F) 
 prec_df <- as.data.frame(prec_extract) %>%
   reshape(., varying = c("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"),
           v.names = "prec",
           timevar = "month",
           times = as.integer(seq_len(12)),
           direction = "long") %>%
-  mutate(prec = (prec * 0.1))
+  left_join(., latlon_id, by = "id", keep = F) %>%
+  relocate(c(id, ADM0, country, ADM1, ADM2, Lon, Lat), .before = month) %>%
+  mutate(prec = (prec * 0.1)) # convert mm to cm
 
-prec_id <- left_join(prec_df, latlon_id, by = "id", keep = F) %>%
-  dplyr::select(-c("x", "y")) %>%
-  dplyr::select(-c("id"))
 
-rm(prec_BEL, prec_CHE, prec_DEU, prec_ESP, prec_GBR, prec_extract, prec_mosaic, prec_sprc, rast_list)
-
+rm(prec, prec_extract)
 
 #     e. bio | temporal scale: annual (30yr avg)
-bio_BEL <- geodata::worldclim_country(var = 'bio', country = "BEL", path = file.path(dir, wclim_path), res = 0.5, version = "2.1") 
-bio_CHE <- geodata::worldclim_country(var = 'bio', country = "CHE", path = file.path(dir, wclim_path), res = 0.5, version = "2.1")
-bio_DEU <- geodata::worldclim_country(var = 'bio', country = "DEU", path = file.path(dir, wclim_path), res = 0.5, version = "2.1")
-bio_ESP <- geodata::worldclim_country(var = 'bio', country = "ESP", path = file.path(dir, wclim_path), res = 0.5, version = "2.1")
-bio_GBR <- geodata::worldclim_country(var = 'bio', country = "GBR", path = file.path(dir, wclim_path), res = 0.5, version = "2.1")
+bio <- geodata::worldclim_global(var = 'bio', path = file.path(dir, wclim_path), res = 2.5, version = "2.1")
 
-rast_list<- list(bio_BEL, bio_CHE, bio_DEU, bio_ESP, bio_GBR)
-bio_sprc <- terra::sprc(rast_list) 
-bio_mosaic <- terra::mosaic(bio_sprc, fun = "mean")
-names(bio_mosaic) <- c("bio1", "bio2", "bio3", "bio4", "bio5", "bio6", "bio7", "bio8", "bio9", "bio10", "bio11", "bio12",
-                       "bio13", "bio14", "bio15", "bio16", "bio17", "bio18", "bio19")
-bio_extract <- terra::extract(bio_mosaic, unique_locations, xy = T, method = "simple", bind = T) 
+bio_cropped <- terra::crop(bio, euro_ext)
+names(bio_cropped) <- c("bio1", "bio2", "bio3", "bio4", "bio5", "bio6", "bio7", "bio8", "bio9", "bio10", "bio11", "bio12",
+                        "bio13", "bio14", "bio15", "bio16", "bio17", "bio18", "bio19")
+bio_extract <- terra::extract(bio_cropped, adminlvls[,1:2], ID = F) 
 bio_df <- as.data.frame(bio_extract) %>%
   mutate(bio12 = (0.1*bio12), # All bioclim precip vals are in mm. Convert to cm.
          bio13 = (0.1*bio13),
@@ -634,35 +635,41 @@ bio_df <- as.data.frame(bio_extract) %>%
          bio17 = (0.1*bio17),
          bio18 = (0.1*bio18),
          bio19 = (0.1*bio19),
-         id = row_number()) 
+         id = row_number()) %>%
+  left_join(., latlon_id, by = "id", keep = F) %>%
+  relocate(c(id, ADM0, country, ADM1, ADM2, Lon, Lat), .before = bio1)
 
-bio_id <- left_join(bio_df, latlon_id, by = "id", keep = F) %>%
-  dplyr::select(-c("x", "y")) %>%
-  dplyr::select(-c("id"))
 
-rm(bio_BEL, bio_CHE, bio_DEU, bio_ESP, bio_GBR, bio_extract, bio_mosaic, bio_sprc, rast_list)
+rm(bio, bio_extract)
+
 
 ## 6. Merge WorldClim data with main data frame
+wclim <- tmin_df %>%
+  left_join(., tavg_df, by = c("id", "Lat", "Lon", "month", "country", "ADM0", "ADM1", "ADM2"), keep = F) %>%
+  left_join(., tmax_df, by = c("id", "Lat", "Lon", "month", "country", "ADM0", "ADM1", "ADM2"), keep = F) %>%
+  left_join(., prec_df, by = c("id", "Lat", "Lon", "month", "country", "ADM0", "ADM1", "ADM2"), keep = F) %>%
+  left_join(., bio_df, by = c("id", "Lat", "Lon", "country", "ADM0", "ADM1", "ADM2")) %>%
+  dplyr::select(-(id))
+
+rm(tmin_cropped, tmin_df, tavg_cropped, tavg_df, tmax_cropped, tmax_df, bio_cropped, bio_df, latlon_id, prec_cropped, prec_df)
+
 prev <- prev %>%
-  left_join(., tmin_id, by = c("Lat", "Lon", "month", "country", "ADM0", "ADM1", "ADM2"), keep = F) %>%
-  left_join(., tavg_id, by = c("Lat", "Lon", "month", "country", "ADM0", "ADM1", "ADM2"), keep = F) %>%
-  left_join(., tmax_id, by = c("Lat", "Lon", "month", "country", "ADM0", "ADM1", "ADM2"), keep = F) %>%
-  left_join(., prec_id, by = c("Lat", "Lon", "month", "country", "ADM0", "ADM1", "ADM2"), keep = F) %>%
-  left_join(., bio_id, by = c("Lat", "Lon", "country", "ADM0", "ADM1", "ADM2")) %>%
-  relocate(c(tmin, tavg, tmax, prec, bio1:bio19), .after = temp_t0)
+  left_join(., wclim, by = c("Lat", "Lon", "month", "country", "ADM0", "ADM1", "ADM2"), keep = F) %>%
+  relocate(c(tmin, tavg, tmax, prec, bio1:bio19), .after = soilM_t0)
+
+
+prev$genus <- gsub("[[:space:]]", "", prev$genus) # get rid of weird spaces in this column
 
 
 #### cbind model df ####
-prev$genus <- gsub("[[:space:]]", "", prev$genus) # get rid of weird spaces in this column
-
 # Classify which sites are Bsal positive beginning at the date of the first positive Bsal observation
 # A site may initially be Bsal negative and may later test positive, thus it is possible to have a site classified as both negative and positive
 Bsalpos_FS <- prev %>%
-  tidyr::drop_na(., any_of(c("BsalDetected", "t0"))) %>%
+  tidyr::drop_na(., any_of(c("BsalDetected", "date"))) %>%
   subset(scientific != "Calotriton asper" & # Only one observation with NA vals for date 
          scientific != "Lissotriton boscai" & 
          scientific != "Hyla meridionalis") %>%
-  group_by(Site, t0) %>%
+  group_by(Site, date) %>%
   mutate(scientific = gsub(pattern = "Pelophylax perezi", replacement = "Pelophylax sp.", scientific),
          cumulative_prev = ave(BsalDetected == 1, FUN = cumsum),
          prev_above_0 = NA) %>%
@@ -671,11 +678,11 @@ Bsalpos_FS <- prev %>%
 
 # Populate all rows with 1 or 0 based on Bsal presence at a given Site
 for(i in 1:nrow(Bsalpos_FS)){
-  if(Bsalpos_FS[i, 83] != 0){
-    Bsalpos_FS[i, 84] = 1 # true; at least one animal at that site tested positive for Bsal at the time of the observation
+  if(Bsalpos_FS[i, 80] != 0){
+    Bsalpos_FS[i, 81] = 1 # true; at least one animal at that site tested positive for Bsal at the time of the observation
   }
   else {
-    Bsalpos_FS[i, 84] <- 0 # false; Site either is Bsal negative, or Bsal had not been detected at the time of the observation
+    Bsalpos_FS[i, 81] <- 0 # false; Site either is Bsal negative, or Bsal had not been detected at the time of the observation
   }
 }
 
@@ -687,13 +694,12 @@ prev <- Bsalpos_FS %>%
   dplyr::select(-cumulative_prev) %>%
   rename(tmin_wc = tmin, tmax_wc = tmax, tavg_wc = tavg, prec_wc = prec, bio1_wc = bio1, bio2_wc = bio2, bio3_wc = bio3, bio4_wc = bio4, bio5_wc = bio5, bio6_wc = bio6,
          bio7_wc = bio7, bio8_wc = bio8, bio9_wc = bio9, bio10_wc = bio10, bio11_wc = bio11, bio12_wc = bio12, bio13_wc = bio13, bio14_wc = bio14, bio15_wc = bio15, bio16_wc = bio16,
-         bio17_wc = bio17, bio18_wc = bio18, bio19_wc = bio19, sMoist_t30 = soilMoisture_t30, sMoist_t14 = soilMoisture_t14, sMoist_t10 = soilMoisture_t10,
-         sMoist_t7 = soilMoisture_t7, sMoist_t4 = soilMoisture_t4, sMoist_t0 = soilMoisture_t0, date = t0) 
+         bio17_wc = bio17, bio18_wc = bio18, bio19_wc = bio19) 
 
 
 dcbind <- Bsalpos_FS %>%
   relocate(c(cumulative_prev, prev_above_0), .after = Site) %>%
-  group_by(Site, t0, scientific) %>%
+  group_by(Site, date, scientific) %>%
   mutate(nPos_FS = sum(BsalDetected != 0 & scientific == "Salamandra salamandra"),
          nNeg_FS = sum(BsalDetected == 0 & scientific == "Salamandra salamandra"),
          nDead_FS = sum(fatal != 0 & scientific == "Salamandra salamandra", na.rm = T),
@@ -705,15 +711,14 @@ dcbind <- Bsalpos_FS %>%
          nAlive_all = sum(fatal == 0, na.rm = T),
          nFatalUnk_all = sum(is.na(fatal)),
          prev_above_0 = as.factor(prev_above_0)) %>%
-  # slice(1) %>%
+  slice(1L) %>%
   ungroup() %>%
   relocate(c(nPos_FS, nNeg_FS, nDead_FS, nAlive_FS, nFatalUnk_FS, nPos_all, nNeg_all, nDead_all, nAlive_all, nFatalUnk_all), .after = susceptibility) %>%
-  dplyr::select(country, Lat, Lon, Site, prev_above_0, t0:t30, genus, scientific:nFatalUnk_all,richness, sppAbun, siteAbun, 
-                soilMoisture_t30:bio19, diagnosticLab, principalInvestigator, Sample_bcid, collectorList) %>%
+  dplyr::select(country, Lat, Lon, Site, prev_above_0, wk3_start:date, genus, scientific:nFatalUnk_all,richness, sppAbun, siteAbun, 
+                wk3_avgTemp:bio19, diagnosticLab, principalInvestigator, Sample_bcid, collectorList) %>%
   rename(tmin_wc = tmin, tmax_wc = tmax, tavg_wc = tavg, prec_wc = prec, bio1_wc = bio1, bio2_wc = bio2, bio3_wc = bio3, bio4_wc = bio4, bio5_wc = bio5, bio6_wc = bio6,
          bio7_wc = bio7, bio8_wc = bio8, bio9_wc = bio9, bio10_wc = bio10, bio11_wc = bio11, bio12_wc = bio12, bio13_wc = bio13, bio14_wc = bio14, bio15_wc = bio15, bio16_wc = bio16,
-         bio17_wc = bio17, bio18_wc = bio18, bio19_wc = bio19, sMoist_t30 = soilMoisture_t30, sMoist_t14 = soilMoisture_t14, sMoist_t10 = soilMoisture_t10,
-         sMoist_t7 = soilMoisture_t7, sMoist_t4 = soilMoisture_t4, sMoist_t0 = soilMoisture_t0, date = t0) 
+         bio17_wc = bio17, bio18_wc = bio18, bio19_wc = bio19) 
 
 
 dcbind <- with(dcbind, dcbind[order(Site, scientific), ])
@@ -722,7 +727,7 @@ dcbind <- with(dcbind, dcbind[order(Site, scientific), ])
 ## Double check everything matches
 dcbind %>% dplyr::select(scientific, nPos_all, nNeg_all) %>%
   group_by(scientific) %>%
-  summarise(nPos = sum(nPos_all != 0), nNeg = sum(nNeg_all != 0),
+  summarise(nPos = sum(nPos_all), nNeg = sum(nNeg_all),
             n = sum(nPos_all, nNeg_all))
 
 prev %>% dplyr::select(scientific, individualCount, BsalDetected) %>%
