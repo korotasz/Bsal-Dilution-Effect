@@ -115,8 +115,6 @@ ak_theme <- theme_ipsum() +
 d <- read.csv("bsalData_clean.csv", header = T, encoding = "UTF-8")
 dcbind <- read.csv("bsalData_cbind.csv", header = T, encoding = "UTF-8")
 
-
-
 # log transform vars
 d <- d %>%
   mutate(logsppAbun = log(sppAbun),
@@ -133,27 +131,15 @@ dcbind <- dcbind %>%
          susceptibility = as.factor(susceptibility)) %>%
   relocate(c(logsppAbun, logsiteAbun), .after = sppAbun) 
 
-## Data prep for cbind models
-# Scale relevant vars
-dcbindScaled <- dcbind %>%
-  mutate_at(c("temp_d", "temp_m", "temp_m_t1", "temp_m_t2",
-              "sMoist_d", "sMoist_m", "sMoist_m_t1", "sMoist_m_t2",
-              "precip_m", "precip_m_t1", "precip_m_t2",
-              "bio1_wc", "bio12_wc", "tavg_wc", "prec_wc"), 
-            ~(scale(., center = T, scale = T %>% as.numeric)))
-
 
 ## Vector of cleaner labels for model output table
 nicelabs <- c(`(Intercept)` = "Intercept",
               richness = "Richness",
               logsiteAbun = "log(Site abundance)",
               "richness:logsiteAbun" = "Richness:log(Site abundance)",
-              temp_d = "Temp (t0)", temp_m_t1 = "Temp (t-30)", temp_m_t2 = "Temp (t-60)",
-              sMoist_d = "Soil moisture (t0)", sMoist_m_t1 = "Soil moisture (t-30)",
-              sMoist_m_t2 = "Soil moisture (t-60)",
-              "temp_d:sMoist_d" = "Temp (t0):Soil moisture (t0)",
-              "temp_m_t1:sMoist_m_t1" = "Temp (t-30):Soil moisture (t-30)",
-              "temp_m_t2:sMoist_m_t2" = "Temp (t-60):Soil moisture (t-60)")
+              temp_t0 = "Temperature", 
+              soilM_t0 = "Soil moisture",
+              "temp_d:sMoist_d" = "Temp:Soil moisture")
 
 
 ## Function to populate dummy columns with uniform labels in ggpredict dataframe
@@ -175,7 +161,7 @@ nicelabs <- c(`(Intercept)` = "Intercept",
 ## Figure 1. Data distribution map
 # Summarise number of observations from each country
 obs <- d %>%
-  dplyr::select(country, ADM0, decimalLatitude, decimalLongitude, diseaseTested,
+  dplyr::select(country, ADM0, Lat, Lon, diseaseTested,
                 BsalDetected, BdDetected, individualCount) %>%
   plyr::mutate(BsalDetected = as.factor(dplyr::recode(BsalDetected,
                                                       "1" = "Bsal positive", 
@@ -183,7 +169,7 @@ obs <- d %>%
   arrange(BsalDetected)
 
 # plotting individual points on map
-obs_transformed <- st_as_sf(obs, coords = c("decimalLongitude", "decimalLatitude"), crs = 4326) %>%
+obs_transformed <- st_as_sf(obs, coords = c("Lat", "Lon"), crs = 4326) %>%
   st_transform(., crs = 3035)
 
 # summarise data
@@ -491,7 +477,7 @@ prev <- d %>%
 bsal_ci <- binconf(prev$ncas_Bsal, prev$npop, method = "exact", return.df = T)
 
 sampSize <- d %>%
-  dplyr::select(country, ADM0, decimalLatitude, decimalLongitude, diseaseTested,
+  dplyr::select(country, ADM0, Lat, Lon, diseaseTested,
                 BsalDetected, BdDetected, individualCount) %>%
   plyr::mutate(BsalDetected = as.factor(dplyr::recode(BsalDetected,
                                                       "1" = "Bsal positive", 
@@ -772,11 +758,35 @@ ggsave("fig2_combined.pdf", fig2combined, device = cairo_pdf, path = file.path(d
 
 
 #### 3. Cbind models testing the Dilution Effect Hypothesis ####################
-# Drop rows with NA vals in weather data
-dcbindScaled <- dcbind %>% 
+## Old dcbind
+old_dcbind <- read.csv("C:/Users/Alexis/Desktop/DEH_RmdFiles/bsalData_cbind.csv",  header = T, encoding = "UTF-8")
+
+old_dcbind <- old_dcbind %>%
+  mutate(logsppAbun = log(sppAbun),
+         logsiteAbun = log(siteAbun),
+         scientific = as.factor(scientific),
+         susceptibility = as.factor(susceptibility)) %>%
+  relocate(c(logsppAbun, logsiteAbun), .after = sppAbun)
+
+## Data prep for cbind models
+# Scale relevant vars
+old_dcbindScaled <- old_dcbind %>%
+  mutate_at(c("temp_d", "sMoist_d",
+              "bio1_wc", "bio12_wc", "tavg_wc", "prec_wc"),
+            ~(scale(., center = T, scale = T %>% as.numeric))) %>%
   tidyr::drop_na(., any_of(c(21:36))) %>%
   filter(country == "Germany" | country == "Spain")
 
+## Data prep for cbind models
+# Drop rows with NA vals in weather data & scale relevant vars
+dcbindScaled <- dcbind %>%
+  mutate_at(c("temp_d", "sMoist_d",
+              "bio1_wc", "bio12_wc", "tavg_wc", "prec_wc"), 
+            ~(scale(., center = T, scale = T %>% as.numeric))) %>% 
+  tidyr::drop_na(., any_of(c(22:40))) %>%
+  filter(country == "Germany" | country == "Spain")
+
+diff <- anti_join(old_dcbindScaled, dcbindScaled)
 ##      3a. Cbind model including all salamander spp. --------------------------
 m_all <- glmmTMB(cbind(nPos_all, nNeg_all) ~ richness*logsiteAbun +
                     temp_d*sMoist_d + (1|scientific),
@@ -786,6 +796,16 @@ m_all <- glmmTMB(cbind(nPos_all, nNeg_all) ~ richness*logsiteAbun +
 
 summary(m_all)
 Anova(m_all)
+
+
+m_all_old <- glmmTMB(cbind(nPos_all, nNeg_all) ~ richness*logsiteAbun +
+                   temp_d*sMoist_d + (1|scientific),
+                 data = old_dcbindScaled, family = "binomial", na.action = "na.fail",
+                 control = glmmTMBControl(optimizer = optim,
+                                          optArgs = list(method = "BFGS")))
+
+summary(m_all_old)
+Anova(m_all_old)
 
 # m_all2 <- glmmTMB(cbind(nPos_all, nNeg_all) ~ richness*logsiteAbun +
 #                    temp_d*sMoist_d + (1|scientific) + (1|principalInvestigator),

@@ -348,12 +348,13 @@ start_dates <- weather %>%
          t15 = ...15, t16 = ...16, t17 = ...17, t18 = ...18, t19 = ...19, t20 = ...20, wk2_start = ...21,
          t22 = ...22, t23 = ...23, t24 = ...24, t25 = ...25, t26 = ...26, t27 = ...27, wk3_start = ...28) %>%
   dplyr::select(c(Lat, Lon, wk3_start, wk2_start, wk1_start, t4, date)) %>%
-  arrange(Lat, Lon, date)
+  arrange(Lat, Lon, date) 
 
 prev <- prev %>%
   mutate(date = base::as.Date(date, format = "%Y-%m-%d"),) %>%
   left_join(., start_dates, by = c("Lat", "Lon", "date")) %>%
-  relocate(c(wk3_start, wk2_start, wk1_start, t4), .before = date)
+  relocate(c(wk3_start, wk2_start, wk1_start, t4), .before = date) %>%
+  subset(., select = -c(wk3_start, wk2_start)) # we really don't need these two dates, however I am keeping them in 'start_dates' in case they need to be referenced later
 
 ## Then finish editing weather df before exporting as .csv
 weather <- weather %>%
@@ -481,8 +482,8 @@ weatherData <- left_join(temperature, soilMoisture, by = c("id", "Lat", "Lon", "
   dplyr::select(-(id)) %>%
   # these column names can be shortened
   rename(wk3_start = date_wk3, wk2_start = date_wk2, wk1_start = date_wk1, t4 = date_t4, date = date_t0,
-         wk3_avgTemp = avg_temp_wk3, wk2_avgTemp = avg_temp_wk2, wk1_avgTemp = avg_temp_wk1, temp_t4 = avg_temp_t4, temp_t0 = avg_temp_t0,
-         wk3_avgSM = avg_SM_wk3, wk2_avgSM = avg_SM_wk2, wk1_avgSM = avg_SM_wk1, soilM_t4 = avg_SM_t4, soilM_t0 = avg_SM_t0) %>%
+         temp_wk3 = avg_temp_wk3, temp_wk2 = avg_temp_wk2, temp_wk1 = avg_temp_wk1, temp_d4 = avg_temp_t4, temp_d = avg_temp_t0,
+         sMoist_wk3 = avg_SM_wk3, sMoist_wk2 = avg_SM_wk2, sMoist_wk1 = avg_SM_wk1, sMoist_d4 = avg_SM_t4, sMoist_d = avg_SM_t0) %>%
   mutate(date = base::as.Date(date, format = "%Y-%m-%d"),
          t4 = base::as.Date(t4, format = "%Y-%m-%d"),
          wk1_start = base::as.Date(wk1_start, format = "%Y-%m-%d"),
@@ -490,15 +491,126 @@ weatherData <- left_join(temperature, soilMoisture, by = c("id", "Lat", "Lon", "
          wk3_start = base::as.Date(wk3_start, format = "%Y-%m-%d"))
 
 
+## Import MONTHLY temperature, precip, & soil moisture data from NASA's EarthData website (citation below)
+## Beaudoing, H. and M. Rodell, NASA/GSFC/HSL (2020), GLDAS Noah Land Surface Model L4 monthly 0.25 x 0.25 degree V2.1,
+## Greenbelt, Maryland, USA,Goddard Earth Sciences Data and Information Services Center (GES DISC), Accessed: [Data Access Date], 10.5067/SXAVCZFAQLNO
+gldas_monthly <- read.csv("monthly_weather.csv", header = T, encoding = "UTF-8")
+
+gldas_monthly <- gldas_monthly %>%
+  mutate(monthCollected = as.numeric(dplyr::recode(monthCollected,
+                                                   "true" = "1")),
+         dayCollected = as.numeric(dplyr::recode(dayCollected,
+                                                 "true" = "1"))) %>%
+  unite(c("yearCollected", "monthCollected", "dayCollected"), sep = "-", col = "date", remove = F) %>%
+  rename(soilMoisture = "SOILMOIST_kgm.21",
+         temp = "SURFTEMP_K1",
+         precip = "PRECIP_kgm.2s.11") 
+
+# Convert precipitation rate kg/m^2/s to mm/month
+for(i in 1:nrow(gldas_monthly)){
+  if(gldas_monthly[i, 8] == 31){
+    gldas_monthly[i, 9] <- gldas_monthly[i, 9] * (31*24*60*60)}
+  
+  else if(gldas_monthly[i, 8] == 30){
+    gldas_monthly[i, 9] <- gldas_monthly[i, 9] * (30*24*60*60)}
+  
+  else if(gldas_monthly[i, 8] == 28){
+    gldas_monthly[i, 9] <- gldas_monthly[i, 9] * (28*24*60*60)}
+  
+  else if(gldas_monthly[i, 8] == 29){
+    gldas_monthly[i, 9] <- gldas_monthly[i, 9] * (29*24*60*60)}
+  
+  else if(is.na(gldas_monthly[i, 8]) == TRUE){
+    gldas_monthly[i, 9] <- NA}
+}
+
+
+# Copy separate temp from precip and soilMoisture
+temp_m <- gldas_monthly %>%
+  dplyr::select(decimalLatitude, decimalLongitude, date, timepoint, temp) %>%
+  # exclude rows with sM and precip data, as well as any NAs in the temp data
+  drop_na() %>%
+  group_by(decimalLatitude, decimalLongitude, timepoint) %>%
+  distinct_all() %>%
+  # assign row # for matching purposes
+  mutate(row = row_number(),
+         date = as.Date(date, format = "%Y-%m-%d"),
+         # Convert temp from K to C
+         temp = as.numeric(temp - 273.15)) %>%
+  dplyr::group_by(decimalLatitude, decimalLongitude, timepoint) %>%
+  pivot_wider(names_from = timepoint, values_from = c(date, temp)) %>%
+  rename(date_m2 = "date_date_t2",
+         date_m1 = "date_date_t1",
+         date = "date_date",
+         temp_m2 = "temp_date_t2",
+         temp_m1 = "temp_date_t1",
+         temp_m = "temp_date")
+
+precip_m <- gldas_monthly %>%
+  dplyr::select(decimalLatitude, decimalLongitude, date, timepoint, precip) %>%
+  drop_na() %>%
+  group_by(decimalLatitude, decimalLongitude, timepoint) %>%
+  distinct_all() %>%
+  mutate(row = row_number(),
+         date = as.Date(date, format = "%Y-%m-%d")) %>%
+  dplyr::group_by(decimalLatitude, decimalLongitude, timepoint) %>%
+  pivot_wider(names_from = timepoint, values_from = c(date, precip)) %>%
+  rename(date_m2 = "date_date_t2",
+         date_m1 = "date_date_t1",
+         date = "date_date",
+         precip_m2 = "precip_date_t2",
+         precip_m1 = "precip_date_t1",
+         precip_m = "precip_date") %>%
+  # convert mm to cm to match precip climate data
+  mutate(precip_m2 = precip_m2*0.1,
+         precip_m1 = precip_m1*0.1, 
+         precip_m = precip_m*0.1) 
+
+sMoist_m <- gldas_monthly %>%
+  dplyr::select(decimalLatitude, decimalLongitude, date, timepoint, soilMoisture) %>%
+  drop_na() %>%
+  group_by(decimalLatitude, decimalLongitude, timepoint) %>%
+  distinct_all() %>%
+  mutate(row = row_number(),
+         date = as.Date(date, format = "%Y-%m-%d")) %>%
+  dplyr::group_by(decimalLatitude, decimalLongitude, timepoint) %>%
+  pivot_wider(names_from = timepoint, values_from = c(date, soilMoisture)) %>%
+  rename(date_m2 = "date_date_t2",
+         date_m1 = "date_date_t1",
+         date = "date_date",
+         sMoist_m2 = "soilMoisture_date_t2",
+         sMoist_m1 = "soilMoisture_date_t1",
+         sMoist_m = "soilMoisture_date")
+
+
+# Add temp and precip data back into gldas_monthly df in preparation to add it back to the main df.
+monthlyWeather <- sMoist_m %>%
+  left_join(., precip_m, by = c("decimalLatitude", "decimalLongitude", "date", "date_m1", "date_m2", "row")) %>%
+  left_join(., temp_m, by = c("decimalLatitude", "decimalLongitude", "date", "date_m1", "date_m2", "row")) %>%
+  subset(., select = -c(row, date_m1, date_m2, sMoist_m2, temp_m2, precip_m2)) %>%
+  rename(Lat = decimalLatitude,
+         Lon = decimalLongitude) %>%
+  mutate(Lat = round(Lat, 6),
+         Lon = round(Lon, 6))
+
+
+weatherData <- weatherData %>%
+  left_join(., monthlyWeather, by = c("Lat", "Lon", "date")) %>%
+  subset(., select = -c(wk3_start, wk2_start)) %>%
+  relocate(c(temp_m1, temp_m), .before = temp_wk3) %>%
+  relocate(c(sMoist_m1, sMoist_m), .before = sMoist_wk3)
+
 
 ## Add weather data to main dataframe ------------------------------------------
 prev <- prev %>%
-  left_join(., weatherData, by = c("Lat", "Lon", "date", "t4", "wk1_start", "wk2_start", "wk3_start")) %>% 
+  left_join(., weatherData, by = c("Lat", "Lon", "date", "t4", "wk1_start")) %>% 
   relocate(c(richness, sppAbun, siteAbun), .after = Site) %>%
-  relocate(c(wk3_start, wk2_start, wk1_start, t4, date), .after = day) %>%
-  relocate(c(wk3_avgTemp, wk2_avgTemp, wk1_avgTemp, temp_t4, temp_t0, wk3_avgSM, wk2_avgSM, wk1_avgSM, soilM_t4, soilM_t0), .after = sampleRemarks) 
+  relocate(c(wk1_start, t4, date), .after = day) %>%
+  relocate(c(temp_m1, temp_m, temp_wk3, temp_wk2, temp_wk1, temp_d4, temp_d, 
+             sMoist_m1, sMoist_m, sMoist_wk3, sMoist_wk2, sMoist_wk1, sMoist_d4, sMoist_d,
+             precip_m1, precip_m), .after = sampleRemarks) 
 
-rm(avg_soilMoist, daily_SM, avg_temp, daily_temp, gldas_daily, soilMoisture, temperature)
+rm(temp_m, precip_m, sMoist_m, avg_soilMoist, daily_SM, avg_temp, daily_temp, gldas_daily, soilMoisture, temperature)
 
 
 # Combine BdDetected and BsalDetected into one "diseaseDetected" column
@@ -655,7 +767,7 @@ rm(tmin_cropped, tmin_df, tavg_cropped, tavg_df, tmax_cropped, tmax_df, bio_crop
 
 prev <- prev %>%
   left_join(., wclim, by = c("Lat", "Lon", "month", "country", "ADM0", "ADM1", "ADM2"), keep = F) %>%
-  relocate(c(tmin, tavg, tmax, prec, bio1:bio19), .after = soilM_t0)
+  relocate(c(tmin, tavg, tmax, prec, bio1:bio19), .after = sMoist_d)
 
 
 prev$genus <- gsub("[[:space:]]", "", prev$genus) # get rid of weird spaces in this column
@@ -665,7 +777,7 @@ prev$genus <- gsub("[[:space:]]", "", prev$genus) # get rid of weird spaces in t
 # Classify which sites are Bsal positive beginning at the date of the first positive Bsal observation
 # A site may initially be Bsal negative and may later test positive, thus it is possible to have a site classified as both negative and positive
 Bsalpos_FS <- prev %>%
-  tidyr::drop_na(., any_of(c("BsalDetected", "date"))) %>%
+  tidyr::drop_na(., any_of(c("BsalDetected", "date", "temp_d", "sMoist_d"))) %>%
   subset(scientific != "Calotriton asper" & # Only one observation with NA vals for date 
          scientific != "Lissotriton boscai" & 
          scientific != "Hyla meridionalis") %>%
@@ -678,23 +790,29 @@ Bsalpos_FS <- prev %>%
 
 # Populate all rows with 1 or 0 based on Bsal presence at a given Site
 for(i in 1:nrow(Bsalpos_FS)){
-  if(Bsalpos_FS[i, 80] != 0){
-    Bsalpos_FS[i, 81] = 1 # true; at least one animal at that site tested positive for Bsal at the time of the observation
+  if(Bsalpos_FS[i, 84] != 0){
+    Bsalpos_FS[i, 85] = 1 # true; at least one animal at that site tested positive for Bsal at the time of the observation
   }
   else {
-    Bsalpos_FS[i, 81] <- 0 # false; Site either is Bsal negative, or Bsal had not been detected at the time of the observation
+    Bsalpos_FS[i, 85] <- 0 # false; Site either is Bsal negative, or Bsal had not been detected at the time of the observation
   }
 }
 
-
+## Double checking #s
+# nBsalPos <- aggregate(individualCount ~ BsalDetected+scientific, data = Bsalpos_FS, sum) %>%
+#   pivot_wider(names_from = BsalDetected, values_from = individualCount)
+# View(nBsalPos)
 
 # Return data frame containing only observations from sites that have tested positive for Bsal (starting at the date the sites initially tested positive) 
 prev <- Bsalpos_FS %>%
   relocate(c(cumulative_prev, prev_above_0), .after = Site) %>%
+  relocate(c(precip_m1, precip_m), .before = tmin) %>%
   dplyr::select(-cumulative_prev) %>%
   rename(tmin_wc = tmin, tmax_wc = tmax, tavg_wc = tavg, prec_wc = prec, bio1_wc = bio1, bio2_wc = bio2, bio3_wc = bio3, bio4_wc = bio4, bio5_wc = bio5, bio6_wc = bio6,
          bio7_wc = bio7, bio8_wc = bio8, bio9_wc = bio9, bio10_wc = bio10, bio11_wc = bio11, bio12_wc = bio12, bio13_wc = bio13, bio14_wc = bio14, bio15_wc = bio15, bio16_wc = bio16,
          bio17_wc = bio17, bio18_wc = bio18, bio19_wc = bio19) 
+
+
 
 
 dcbind <- Bsalpos_FS %>%
@@ -711,11 +829,12 @@ dcbind <- Bsalpos_FS %>%
          nAlive_all = sum(fatal == 0, na.rm = T),
          nFatalUnk_all = sum(is.na(fatal)),
          prev_above_0 = as.factor(prev_above_0)) %>%
-  slice(1L) %>%
+  slice(1) %>%
   ungroup() %>%
   relocate(c(nPos_FS, nNeg_FS, nDead_FS, nAlive_FS, nFatalUnk_FS, nPos_all, nNeg_all, nDead_all, nAlive_all, nFatalUnk_all), .after = susceptibility) %>%
-  dplyr::select(country, Lat, Lon, Site, prev_above_0, wk3_start:date, genus, scientific:nFatalUnk_all,richness, sppAbun, siteAbun, 
-                wk3_avgTemp:bio19, diagnosticLab, principalInvestigator, Sample_bcid, collectorList) %>%
+  relocate(c(precip_m1, precip_m), .before = tmin) %>%
+  dplyr::select(country, Lat, Lon, Site, prev_above_0, wk1_start:date, genus, scientific:nFatalUnk_all,richness, sppAbun, siteAbun, 
+                temp_m1:bio19, diagnosticLab, principalInvestigator, Sample_bcid, collectorList) %>%
   rename(tmin_wc = tmin, tmax_wc = tmax, tavg_wc = tavg, prec_wc = prec, bio1_wc = bio1, bio2_wc = bio2, bio3_wc = bio3, bio4_wc = bio4, bio5_wc = bio5, bio6_wc = bio6,
          bio7_wc = bio7, bio8_wc = bio8, bio9_wc = bio9, bio10_wc = bio10, bio11_wc = bio11, bio12_wc = bio12, bio13_wc = bio13, bio14_wc = bio14, bio15_wc = bio15, bio16_wc = bio16,
          bio17_wc = bio17, bio18_wc = bio18, bio19_wc = bio19) 
