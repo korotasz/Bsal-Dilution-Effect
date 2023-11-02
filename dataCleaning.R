@@ -1,68 +1,27 @@
-require(renv)
 require(pacman)
-
-## Activate project (only need to do once upon first use of script)
-#renv::activate() ## need to run renv::restore(packages = "renv")
-
 #### Packages ####
-pckgs <- c("tidyverse", # data wrangling/manipulation
-            "reshape2", # data wrangling/manipulation
-          "data.table", # data wrangling/manipulation (particularly weather data)
-               "rgdal", # geospatial analyses
+pckgs <- c("renv", # create environment lock for R to ensure code reproducibility
+           "tidyverse", # data wrangling/manipulation
+           "reshape2", # data wrangling/manipulation
+           "rgdal", # geospatial analyses
            "lubridate", # deals with dates
-               "stats", # aggregate()
-              "raster", # raster manipulation/working with geospatial data
-               "terra", # supercedes raster package
-             "geodata", # get admin levels for each country
-            "maptools", # package to create maps
-               "gstat", # spatio-temporal geostatistical modelling
-                  "sp", # working with geospatial data
-                  "sf", # working with geospatial data
-                  "fs"  # construct relative paths to files/directories
+           "data.table", # 
+           "raster", # raster manipulation/working with geospatial data
+           "ncdf4", # download and work with EarthData satellite data
+           "maptools", # package to create maps
+           "gstat", # spatio-temporal geostatistical modelling
+           "sp", # working with geospatial data
+           "sf", # workin with geospatial data
+           "fs"  # construct relative paths to files/directories
 )
 
 ## Load packages
 pacman::p_load(pckgs, character.only = T)
 
-## Create file paths for each wd
+
 dir <- dirname(rstudioapi::getActiveDocumentContext()$path)
 csvpath <- (path.expand("/csvFiles"))
-shppath <- (path.expand("/csvFiles/shapefiles"))
 setwd(file.path(dir, csvpath))
-
-## Functions -------------------------------------------------------------------
-assign_week <- function(df, timepoint, out_col){
-  for(i in 1:nrow(df)){
-    if(df[[timepoint]][i] == "t8" || df[[timepoint]][i] == "t9" || df[[timepoint]][i] == "t10" || df[[timepoint]][i] == "t11" || df[[timepoint]][i] == "t12" || df[[timepoint]][i] == "t13" || df[[timepoint]][i] =="t14"){
-      df[[out_col]][i] <- "wk1"
-    }
-    else if(df[[timepoint]][i] == "t15" || df[[timepoint]][i] == "t16" || df[[timepoint]][i] == "t17" || df[[timepoint]][i] == "t18" || df[[timepoint]][i] == "t19" || df[[timepoint]][i] == "t20" || df[[timepoint]][i] == "t21"){
-      df[[out_col]][i] <- "wk2"
-    }
-    else if(df[[timepoint]][i] == "t22" || df[[timepoint]][i] == "t23" || df[[timepoint]][i] == "t24" || df[[timepoint]][i] == "t25" || df[[timepoint]][i] == "t26" || df[[timepoint]][i] == "t27" || df[[timepoint]][i] == "t28"){
-      df[[out_col]][i] <- "wk3"
-    }
-    else if(df[[timepoint]][i] == "t4"){
-      df[[out_col]][i] <- "t4"
-    }
-    else if(df[[timepoint]][i] == "t0"){
-      df[[out_col]][i] <- "t0"
-    }
-  }
-  # Return result
-  return(df)
-}
-
-assign_start_date <- function(df, timepoint, date, out_col){
-  for(i in 1:nrow(df)){
-    if(df[[timepoint]][i] == "t0" || df[[timepoint]][i] == "t4" || df[[timepoint]][i] == "t14" || df[[timepoint]][i] == "t21" || df[[timepoint]][i] == "t28"){
-      df[[out_col]][i] <- paste(df[[date]][i])
-    }
-  }
-  return(df) 
-}
-
-## -----------------------------------------------------------------------------
 
 euram <- read.csv("euram.csv", header = T, encoding = "UTF-8")
 germany <- read.csv("germany.csv", header = T, encoding = "UTF-8")
@@ -89,7 +48,8 @@ prev <- prev %>%
   rename(sex = sex_merged) %>%
   # Rename countries in the "countries" column based on lat/long coords
   mutate(country = dplyr::recode(country,
-                                 USA = "United States")) %>%
+                                 USA = "United States",
+                                 Italy = "Switzerland")) %>%
   # Change name of these columns
   rename(species = specificEpithet,
          sampleRemarks = eventRemarks,
@@ -103,28 +63,28 @@ prev <- prev %>%
 
 ## Delete irrelevant columns
 data.frame(colnames(prev)) # returns indexed data frame 
-prev <- prev[-c(3, 22, 24:28, 33, 35, 37:41)]
+prev <- prev[-c(3, 22, 24:28, 33, 35, 37:42)]
 
 ## Rearrange dataframe
 data.frame(colnames(prev)) 
-prev <- prev[, c(2, 31:33, 4:5, 3, 19:20, 6, 8:10, 34:35, 24:26, 
-                 13:18, 27, 7, 11:12, 21:22, 1, 23, 28:30)]
+prev <- prev[, c(2, 30:32, 4:5, 3, 19:20, 6, 8:10, 33:34, 24:26, 
+                 13:18, 27, 7, 11:12, 21:22, 1, 23, 28:29)]
 
 
 ## Remove columns from Spain
 data.frame(colnames(spain)) 
-spain <- spain[, -c(8:9, 32:54)]
+spain <- spain[, -c(8:9, 32:54, 56)]
 
 
 ## Rearrange columns in Spain df
 spain <- spain[, c(2:10, 1, 11:13, 15, 14, 28:29, 26, 18, 
-                   20:24, 27, 16:17, 19, 25, 30:33)]
+                   20:24, 27, 16:17, 19, 25, 30:32)]
 spain <- spain %>%
   replace(., . == "", NA) %>%
   rename(specimenFate = specimenDisposition) %>%
   mutate(sampleRemarks = NA, principalInvestigator = "An Martel") %>%
   relocate(c("sampleRemarks", "principalInvestigator"), .after = "diagnosticLab")
-  
+
 ## Join Spain to main df
 prev <- rbind(prev, spain)
 
@@ -139,92 +99,53 @@ prev <- prev %>%
   dplyr::filter(!(materialSampleID=="")) %>%
   # drop rows that include sampling from Peru or the US (imported with euram df)
   dplyr::filter(!(country == "Peru")) %>%
-  dplyr::filter(!(country == "United States")) %>%
-  rename(year = yearCollected,
-         month = monthCollected,
-         day = dayCollected,
-         Lat = decimalLatitude,
-         Lon = decimalLongitude)
+  dplyr::filter(!(country == "United States"))
 
+## Export data frame to work with in QGIS
+#write.csv(prev, 'C:/Users/alexi/OneDrive/Documents/01_GradSchool/_Dissertation work/Chapter4/03_code/locations.csv',
+#          row.names = FALSE)
 
-#### Obtaining climate data from geodata package -------------------------------
-# Construct file path to store Euro country shapefiles
-#dir.create(file.path(dir, shppath)) # Will give warning if path already exists
-setwd(file.path(dir, shppath))
+## Read in attribute table with ADM data and case match ADM levels in prev
+a <- read.csv("locations_with_ADMs.csv", header = T, encoding = "UTF-8")
 
-## 1. Use 'raster' pckg to get shapefiles for each country. We are using EPSG:4326, as these are lat/lon data
-#     that are presented in decimal degrees. Reprojecting to another coordinate system is not necessary, and 
-#     may even introduce an additional source of error.
-polygon <- gadm(country = c('BEL', 'DEU', 'CHE', 'GBR', 'ESP'), level = 2, 
-             path = file.path(dir, shppath), version = "latest", resolution = 1) %>%
-  sf::st_as_sf(., crs = 4326) %>%
-  st_cast(., "MULTIPOLYGON") 
+a2 <- a %>%
+  dplyr::select(COUNTRY_2, GID_0, NAME_1, NAME_2, materialSampleID)
+colnames(a2) <- c("country", "ADM0", "ADM1", "ADM2", "materialSampleID")
 
-## Write multipolygon to .shp file for later use with WorldClim
-# st_write(polygon, "europe.shp", append = F)
+prev$ADM0 = a2$ADM0[base::match(paste(prev$country), 
+                                paste(a2$country))]
+prev$ADM1 = a2$ADM1[base::match(paste(prev$ADM0, prev$materialSampleID), 
+                                paste(a2$ADM0, a2$materialSampleID))]
+prev$ADM2 = a2$ADM2[base::match(paste(prev$ADM1, prev$materialSampleID), 
+                                paste(a2$ADM1, a2$materialSampleID))]
+prev$ADM1 <- toupper(prev$ADM1)
+prev$ADM2 <- toupper(prev$ADM2)
 
-points <- prev %>% 
-  dplyr::select(Lon, Lat) %>%
-  st_as_sf(x = ., coords = c("Lon", "Lat"), crs = 4326) %>%
-  mutate(L1 = row_number(),
-         Lon = sf::st_coordinates(.)[,1],
-         Lat = sf::st_coordinates(.)[,2]) 
+prev %>%
+  group_by(BsalDetected) %>%
+  summarise(n = n())
 
-# st_write(points, "locations.shp", append = F)
-
-## Intersect lat/lon coordinates with each raster to get the correct admin levels associated with our data
-out <- st_intersection(points, polygon) %>%
-  mutate(Lon = sf::st_coordinates(.)[,1],
-         Lat = sf::st_coordinates(.)[,2])
-  
-# st_write(out, "adm_info.shp", append = F)
-
-## Get admin levels in a dataframe format
-adminlvls <- data.frame(out) %>%
-  dplyr::select(Lon, Lat, GID_0, COUNTRY, NAME_1, NAME_2) %>%
-  mutate(Lat = round(Lat, 6),
-         Lon = round(Lon, 6)) %>%
-  rename(ADM0 = GID_0,
-         ADM1 = NAME_1,
-         ADM2 = NAME_2,
-         country = COUNTRY) %>%
-  unique(.)
-
-
-## Check for missing admin levels!! 
-# adminlvls %>%
-#   filter(is.na(ADM2)) # only one location missing (ADM2 in GBR).
-  
-
-## Add back to main dataframe --------------------------------------------------
-prev <- prev %>%
-  dplyr::select(!("country":"ADM2")) %>%
-  mutate(Lat = round(Lat, 6),
-         Lon = round(Lon, 6)) %>%
-  left_join(., adminlvls, by = c("Lat", "Lon"), relationship = "many-to-one",
-                  keep = F) %>%
-  relocate(c(country, ADM0, ADM1, ADM2), .before = Lat) 
-## Compared this method with sampling locations in QGIS and it is just as precise/accurate.
-# rm(out, points, polygon)
-
-## Group sites by unique lat/long combos and assign site #s to them, for all countries
-siteNumber <- prev %>%
-  dplyr::select(materialSampleID, Lat, Lon) %>%
-  dplyr::group_by(Lat, Lon) %>%
+## Group sites by unique lat/long combos and assign site #s to them, for all countries excluding Spain
+temp <- prev%>%
+  dplyr::select(materialSampleID, decimalLatitude, decimalLongitude) %>%
+  dplyr::group_by(decimalLatitude, decimalLongitude) %>%
   mutate(Site = cur_group_id()) %>% 
-  ungroup() 
+  ungroup()
+temp <- temp %>%
+  dplyr::select(materialSampleID, Site) 
 
-prev$Site <- siteNumber$Site[base::match(paste(prev$materialSampleID), 
-                                      paste(siteNumber$materialSampleID))]
+prev$Site <- NA
 
-prev <- relocate(prev, Site, .after = "day")
+prev$Site = temp$Site[base::match(paste(prev$materialSampleID), 
+                                  paste(temp$materialSampleID))]
+
+
 
 ## Add data to the susceptibility column in prev df
 ## Susceptibility codes (based on coding system from Bosch et al. 2021)
 ## 1 = resistant
 ## 2 = tolerant/susceptible
 ## 3 = lethal
-setwd(file.path(dir, csvpath))
 s <- read.csv("susceptibility.csv", header = T, encoding = "UTF-8")
 data.frame(colnames(s))
 names(s) <- c("order", "family", "genus", "species", "scientific", 
@@ -236,7 +157,7 @@ plyr::count(prev, "susceptibility")
 #sus <- prev %>% dplyr::filter(is.na(susceptibility))
 
 #### Calculate abundance, richness, and diversity ####
-prev <- unite(prev, c("year", "month", "day"), sep = "-", col = "date", remove = F)
+prev <- unite(prev, c("yearCollected", "monthCollected", "dayCollected"), sep = "-", col = "date", remove = F)
 
 ## calculate relative spp richness
 spr <- prev %>%
@@ -261,7 +182,7 @@ names(spa)[names(spa) == 'individualCount'] <- 'sppAbun'
 ## Calculate abundance of total spp at a site during each sampling event
 SAb <- aggregate(sppAbun ~ Site + date, spa, sum)
 names(SAb)[names(SAb) == 'sppAbun'] <- 'siteAbun'
-
+t <- prev
 ## Add abundance and richness back into prev df
 prev <- prev %>%
   # species richness
@@ -292,203 +213,111 @@ levels(prev$BsalDetected) <- c(0,1) #0 = F, 1 = T
 prev$fatal <- as.factor(prev$fatal)
 levels(prev$fatal) <- c(0,1) #0 = F, 1 = T
 
-rm(s, SAb, siteNumber, spa, spr)
 
 ## Obtain unique lat/long/date combinations to extract weather data
 Sys.setenv(TZ = "UTC")
 weather <- prev %>%
-  dplyr::select(Lat, Lon, year, month, day, date) %>%
-  unite(Lat, Lon, sep = ", ", col = "LatLon", remove = F) %>%
-  relocate(LatLon, .after = Lon) %>%
-  dplyr::filter(!(day == "NA")) %>%
+  dplyr::select(decimalLatitude, decimalLongitude, date, 
+                yearCollected, monthCollected, dayCollected) %>%
+  dplyr::mutate(date_t1 = NA, date_t2 = NA) %>%
+  relocate(c(date_t1, date_t2), .after = date) %>%
+  unite(decimalLatitude, decimalLongitude, sep = ", ", col = "LatLon", remove = F) %>%
+  relocate(LatLon, .after = decimalLongitude) %>%
+  dplyr::filter(!(dayCollected == "NA")) %>%
+  mutate(temp = NA, soilMoisture = NA) %>%
   group_by(LatLon, date) %>%
   unique() %>%
-  ungroup() %>%
-  dplyr::select(!(LatLon)) %>%
-  mutate(date = base::as.Date(date, format = "%Y-%m-%d"))
-  
-## get dates for 4 days prior to sample date
+  ungroup()
+
+
+weather <- unique(weather)
+weather$date <- base::as.Date(weather$date, format = "%Y-%m-%d")
+
+## get dates for 1 month prior to sample date
 for(i in 1:nrow(weather)){
-  weather[i,7] <- as.Date(weather$date[i], format = "%Y-%m-%d") - days(4)
-
-## get dates for 1 week prior to sample date (for avg temp/soil moisture)
-  weather[i,8] <- as.Date(weather$date[i], format = "%Y-%m-%d") - days(8)
-  weather[i,9] <- as.Date(weather$date[i], format = "%Y-%m-%d") - days(9)
-  weather[i,10] <- as.Date(weather$date[i], format = "%Y-%m-%d") - days(10)
-  weather[i,11] <- as.Date(weather$date[i], format = "%Y-%m-%d") - days(11)
-  weather[i,12] <- as.Date(weather$date[i], format = "%Y-%m-%d") - days(12)
-  weather[i,13] <- as.Date(weather$date[i], format = "%Y-%m-%d") - days(13)
-  weather[i,14] <- as.Date(weather$date[i], format = "%Y-%m-%d") - days(14)
+  weather[i,5] <- as.Date(weather$date[i], format = "%Y-%m-%d") - days(30)
   
-## get dates for 2 weeks prior to sample date (for avg temp/soil moisture)
-  weather[i,15] <- as.Date(weather$date[i], format = "%Y-%m-%d") - days(15)
-  weather[i,16] <- as.Date(weather$date[i], format = "%Y-%m-%d") - days(16)
-  weather[i,17] <- as.Date(weather$date[i], format = "%Y-%m-%d") - days(17)
-  weather[i,18] <- as.Date(weather$date[i], format = "%Y-%m-%d") - days(18)
-  weather[i,19] <- as.Date(weather$date[i], format = "%Y-%m-%d") - days(19)
-  weather[i,20] <- as.Date(weather$date[i], format = "%Y-%m-%d") - days(20)
-  weather[i,21] <- as.Date(weather$date[i], format = "%Y-%m-%d") - days(21)
-
-## get dates for 3 weeks prior to sample date (for avg temp/soil moisture)
-  weather[i,22] <- as.Date(weather$date[i], format = "%Y-%m-%d") - days(22)
-  weather[i,23] <- as.Date(weather$date[i], format = "%Y-%m-%d") - days(23)
-  weather[i,24] <- as.Date(weather$date[i], format = "%Y-%m-%d") - days(24)
-  weather[i,25] <- as.Date(weather$date[i], format = "%Y-%m-%d") - days(25)
-  weather[i,26] <- as.Date(weather$date[i], format = "%Y-%m-%d") - days(26)
-  weather[i,27] <- as.Date(weather$date[i], format = "%Y-%m-%d") - days(27)
-  weather[i,28] <- as.Date(weather$date[i], format = "%Y-%m-%d") - days(28)  
-    
+  ## get dates for 2 months prior to sample date
+  weather[i,6] <- as.Date(weather$date[i], format = "%Y-%m-%d") - days(60)
 }
 
 
-## First, get dates of the start of each week & add back into main df
-start_dates <- weather %>%
-  rename(t4 = ...7,
-         t8 = ...8, t9 = ...9, t10 = ...10, t11 = ...11, t12 = ...12, t13 = ...13, wk1_start = ...14,
-         t15 = ...15, t16 = ...16, t17 = ...17, t18 = ...18, t19 = ...19, t20 = ...20, wk2_start = ...21,
-         t22 = ...22, t23 = ...23, t24 = ...24, t25 = ...25, t26 = ...26, t27 = ...27, wk3_start = ...28) %>%
-  dplyr::select(c(Lat, Lon, wk3_start, wk2_start, wk1_start, t4, date)) %>%
-  arrange(Lat, Lon, date) 
-
+# Add dates t-1 and t-2 back into prev dataframe
 prev <- prev %>%
-  mutate(date = base::as.Date(date, format = "%Y-%m-%d"),) %>%
-  left_join(., start_dates, by = c("Lat", "Lon", "date")) %>%
-  relocate(c(wk3_start, wk2_start, wk1_start, t4), .before = date) %>%
-  subset(., select = -c(wk3_start, wk2_start)) # we really don't need these two dates, however I am keeping them in 'start_dates' in case they need to be referenced later
+  mutate(date = base::as.Date(date, "%Y-%m-%d")) %>%
+  left_join(weather[, c(1:2, 4:6)], by = c("decimalLatitude", "decimalLongitude", "date")) %>%
+  relocate(c("date_t1", "date_t2"), .after = date)
 
-## Then finish editing weather df before exporting as .csv
-weather <- weather %>%
-  rename(t0 = date, t4 = ...7,
-         t8 = ...8, t9 = ...9, t10 = ...10, t11 = ...11, t12 = ...12, t13 = ...13, t14 = ...14,
-         t15 = ...15, t16 = ...16, t17 = ...17, t18 = ...18, t19 = ...19, t20 = ...20, t21 = ...21,
-         t22 = ...22, t23 = ...23, t24 = ...24, t25 = ...25, t26 = ...26, t27 = ...27, t28 = ...28) %>%
-  group_by(Lat, Lon) %>%
-  pivot_longer(cols = c(t0, t4, t8, t9, t10, t11, t12, t13, t14, 
-                        t15, t16, t17, t18, t19, t20, t21,
-                        t22, t23, t24, t25, t26, t27, t28),
+
+weather2 <- weather %>%
+  group_by(decimalLatitude, decimalLongitude) %>%
+  pivot_longer(cols = c(date, date_t1, date_t2),
                names_to = "timepoint",
                values_to = "date") %>%
   ungroup() %>%
-  relocate(c("timepoint", "date"), .after = "Lon") %>%
-  mutate(year = lubridate::year(date),
-         month = lubridate::month(date),
-         day = lubridate::day(date)) %>%
-  dplyr::select(-("date")) %>%
-  filter(year != '1905') # likely a museum specimen --  not useful for our analyses
-
-
+  dplyr::select(-c("LatLon", "yearCollected", "monthCollected", "dayCollected")) %>%
+  relocate(c("timepoint", "date"), .after = "decimalLongitude") %>%
+  unite(decimalLatitude, decimalLongitude, sep = ", ", col = "LatLon", remove = F)
 
 ## Export to use in Python and PyQGIS to obtain weather data
-setwd(file.path(dir, csvpath))
-# write.csv(weather, 'weather.csv', row.names = F, fileEncoding = "UTF-8")
-rm(weather)
+#write.csv(weather2, 'C:/Users/alexi/OneDrive/Documents/01_GradSchool/_Dissertation work/Chapter4/03_code/weather.csv', fileEncoding = "UTF-8")
 
-## Python v3.12.0 used to download .nc4 files from NASA's EarthData data repository for each date and location.
-## PyQGIS Python v3.9.5 used to process data in QGIS v3.28.3-Firenze.
 
-## Import DAILY temperature & soil moisture data from NASA's EarthData website (citation below) ----
-#  Li, B., H. Beaudoing, and M. Rodell, NASA/GSFC/HSL (2020), GLDAS Catchment Land Surface Model L4 daily 0.25 x 0.25 degree GRACE-DA1 V2.2, 
-#     Greenbelt, Maryland, USA, Goddard Earth Sciences Data and Information Services Center (GES DISC), Accessed: 2023-10-11. doi:10.5067/TXBMLX370XX8.
-#  Li, B., M. Rodell, S. Kumar, H. Beaudoing, A. Getirana, B. F. Zaitchik, et al. (2019) Global GRACE data assimilation for groundwater and drought 
-#     monitoring: Advances and challenges. Water Resources Research, 55, 7564-7586. doi:10.1029/2018wr024618.
-gldas_daily <- read.csv("weather_all.csv", header = T, encoding = "UTF-8")
+## Python 3.9.4 used to download .nc4 files from NASA's EarthData data repository for each date and location.
+
+## Import DAILY temperature & soil moisture data from NASA's EarthData website (citation below)
+## Li, B., H. Beaudoing, and M. Rodell, NASA/GSFC/HSL (2020), GLDAS Catchment Land Surface Model L4 daily 0.25 x 0.25 degree GRACE-DA1 V2.2, 
+## Greenbelt, Maryland, USA, Goddard Earth Sciences Data and Information Services Center (GES DISC), Accessed: 2022-09-08.
+gldas_daily <- read.csv("weather_merged.csv", header = T, encoding = "UTF-8")
 
 gldas_daily <- gldas_daily %>%
-  filter(timepoint != 't30' & timepoint != 't7') %>% # artifact from older 'datasetFetcher.py' script when obtaining weather .nc4 files -- do not need here
-  mutate(row = row_number(),
-         day = as.integer(case_match(day, "true" ~ "1", .default = day)),
-         month = as.integer(case_match(month, "true" ~ "1", .default = month))) %>%
-  relocate(row, .before = Lat) %>%
-  unite(c("year", "month", "day"), sep = "-", col = "date", remove = F) %>%
-  mutate(date = as.Date(date, format = "%Y-%m-%d"),
-         start_date = NA,
-         week = NA,
-         Lat = round(Lat, 6),
-         Lon = round(Lon, 6)) %>%
+  unite(c("yearCollected", "monthCollected", "dayCollected"), sep = "-", col = "date", remove = F) %>%
   rename(soilMoisture = "SOILMOIST_kgm.21",
          temp = "SURFTEMP_K1") %>%
-  assign_week(.,"timepoint", "week") 
+  dplyr::select(decimalLatitude, decimalLongitude, timepoint, date, soilMoisture, temp) %>%
+  unite(decimalLatitude, decimalLongitude, sep = ", ", col = "LatLon", remove = F) 
 
 
-## Separate and process temperature data ---------------------------------------
-temperature <- gldas_daily %>%
-  dplyr::select(-c(row, soilMoisture, year, month, day)) %>%
-  drop_na(temp) %>%
-  # Assign start date for each week
-  assign_start_date(., "timepoint", "date", "start_date") %>% 
-  mutate(temp = as.numeric(temp - 273.15)) %>% # Convert temp from K to C
-  unique()
-
-daily_temp <- temperature %>%
-  filter((week == "t0" |week == "t4")) %>%
-  arrange(Lat, Lon, week) %>%
-  # for t0 and t4, we just need to copy the temp for that day -- no need to avg.
-  mutate(avg_temp = temp)
-
-## Calculate mean temperature for each week
-avg_temp <- temperature %>%
-  filter(!(week == "t0" |week == "t4")) %>%
-  distinct_at(., .vars = c("Lat", "Lon", "timepoint", "date"), .keep_all = T) %>%
-  arrange(Lat, Lon, week) %>%
-  group_by(Lat, Lon, week) %>%
-  mutate(avg_temp = mean(temp)) %>%
-  rbind(daily_temp) %>%
+# Copy & separate temp from soilMoisture
+temp_d <- gldas_daily %>%
+  # exclude rows with sM data, as well as any NAs in the temp data
+  dplyr::select(decimalLatitude, decimalLongitude, date, timepoint, temp) %>%
   drop_na() %>%
-  mutate(id = row_number()) 
+  group_by(decimalLatitude, decimalLongitude, timepoint) %>%
+  distinct_all() %>%
+  # assign row # for matching purposes
+  mutate(row = row_number(),
+         date = as.Date(date, format = "%Y-%m-%d"),
+         # Convert temp from K to C
+         temp = as.numeric(temp - 273.15)) %>%
+  dplyr::group_by(decimalLatitude, decimalLongitude, timepoint) %>%
+  pivot_wider(names_from = timepoint, values_from = c(date, temp)) %>%
+  subset(., select = -c(temp_date_t2, temp_date_t1)) %>%
+  rename(date_t2 = "date_date_t2",
+         date_t1 = "date_date_t1",
+         date = "date_date",
+         temp_d = "temp_date")
 
 
-## Add mean temperatures back into temperature df
-temperature <- temperature %>%
-  drop_na(start_date) %>%
-  left_join(., avg_temp, by = c("Lat", "Lon", "timepoint", "temp", "date", "start_date", "week")) %>%
-  dplyr::select(-c(temp, start_date, timepoint)) %>%
-  pivot_wider(names_from = week, values_from = c(date, avg_temp))
-
-
-## Separate and process soil moisture data -------------------------------------
-soilMoisture <- gldas_daily %>%
-  dplyr::select(-c(row, temp, year, month, day)) %>%
-  drop_na(soilMoisture) %>%
-  # Assign start date for each week
-  assign_start_date(., "timepoint", "date", "start_date") %>% 
-  unique()
-
-daily_SM <- soilMoisture %>%
-  filter((week == "t0" |week == "t4")) %>%
-  arrange(Lat, Lon, week) %>%
-  # for t0 and t4, we just need to copy the temp for that day -- no need to avg.
-  mutate(avg_SM = soilMoisture)
-
-avg_soilMoist <- soilMoisture %>%
-  filter(!(week == "t0" |week == "t4")) %>%
-  distinct_at(., .vars = c("Lat", "Lon", "timepoint", "date"), .keep_all = T) %>%
-  arrange(Lat, Lon, week) %>%
-  group_by(Lat, Lon, week) %>%
-  mutate(avg_SM = mean(soilMoisture)) %>%
-  rbind(daily_SM) %>%
+gldas_daily <- gldas_daily %>%
+  dplyr::select(decimalLatitude, decimalLongitude, date, timepoint, soilMoisture) %>%
   drop_na() %>%
-  mutate(id = row_number()) 
+  group_by(decimalLatitude, decimalLongitude, timepoint) %>%
+  distinct_all() %>%
+  mutate(row = row_number(),
+         date = as.Date(date, format = "%Y-%m-%d")) %>%
+  dplyr::group_by(decimalLatitude, decimalLongitude, timepoint) %>%
+  pivot_wider(names_from = timepoint, values_from = c(date, soilMoisture)) %>%
+  subset(., select = -c(soilMoisture_date_t2, soilMoisture_date_t1)) %>%
+  rename(date_t2 = "date_date_t2",
+         date_t1 = "date_date_t1",
+         date = "date_date",
+         sMoist_d = "soilMoisture_date")
 
-soilMoisture <- soilMoisture %>%
-  drop_na(start_date) %>%
-  left_join(., avg_soilMoist, by = c("Lat", "Lon", "timepoint", "soilMoisture", "date", "start_date", "week")) %>%
-  dplyr::select(-c(soilMoisture, start_date, timepoint)) %>%
-  pivot_wider(names_from = week, values_from = c(date, avg_SM))
+# Add temp data back into gldas_daily df in preparation to add it back to the main df.
+gldas_daily <- left_join(gldas_daily, temp_d, by = c("decimalLatitude", "decimalLongitude", "date", "date_t1", "date_t2", "row")) %>%
+  subset(., select = -c(row))
 
-
-## Combine weekly soil moisture/temp data frames -------------------------------
-weatherData <- left_join(temperature, soilMoisture, by = c("id", "Lat", "Lon", "date_wk3", "date_wk2",
-                                                 "date_wk1", "date_t4", "date_t0")) %>%
-  dplyr::select(-(id)) %>%
-  # these column names can be shortened
-  rename(wk3_start = date_wk3, wk2_start = date_wk2, wk1_start = date_wk1, t4 = date_t4, date = date_t0,
-         temp_wk3 = avg_temp_wk3, temp_wk2 = avg_temp_wk2, temp_wk1 = avg_temp_wk1, temp_d4 = avg_temp_t4, temp_d = avg_temp_t0,
-         sMoist_wk3 = avg_SM_wk3, sMoist_wk2 = avg_SM_wk2, sMoist_wk1 = avg_SM_wk1, sMoist_d4 = avg_SM_t4, sMoist_d = avg_SM_t0) %>%
-  mutate(date = base::as.Date(date, format = "%Y-%m-%d"),
-         t4 = base::as.Date(t4, format = "%Y-%m-%d"),
-         wk1_start = base::as.Date(wk1_start, format = "%Y-%m-%d"),
-         wk2_start = base::as.Date(wk2_start, format = "%Y-%m-%d"),
-         wk3_start = base::as.Date(wk3_start, format = "%Y-%m-%d"))
 
 
 ## Import MONTHLY temperature, precip, & soil moisture data from NASA's EarthData website (citation below)
@@ -539,11 +368,11 @@ temp_m <- gldas_monthly %>%
          temp = as.numeric(temp - 273.15)) %>%
   dplyr::group_by(decimalLatitude, decimalLongitude, timepoint) %>%
   pivot_wider(names_from = timepoint, values_from = c(date, temp)) %>%
-  rename(date_m2 = "date_date_t2",
-         date_m1 = "date_date_t1",
+  rename(date_t2 = "date_date_t2",
+         date_t1 = "date_date_t1",
          date = "date_date",
-         temp_m2 = "temp_date_t2",
-         temp_m1 = "temp_date_t1",
+         temp_m_t2 = "temp_date_t2",
+         temp_m_t1 = "temp_date_t1",
          temp_m = "temp_date")
 
 precip_m <- gldas_monthly %>%
@@ -555,18 +384,14 @@ precip_m <- gldas_monthly %>%
          date = as.Date(date, format = "%Y-%m-%d")) %>%
   dplyr::group_by(decimalLatitude, decimalLongitude, timepoint) %>%
   pivot_wider(names_from = timepoint, values_from = c(date, precip)) %>%
-  rename(date_m2 = "date_date_t2",
-         date_m1 = "date_date_t1",
+  rename(date_t2 = "date_date_t2",
+         date_t1 = "date_date_t1",
          date = "date_date",
-         precip_m2 = "precip_date_t2",
-         precip_m1 = "precip_date_t1",
-         precip_m = "precip_date") %>%
-  # convert mm to cm to match precip climate data
-  mutate(precip_m2 = precip_m2*0.1,
-         precip_m1 = precip_m1*0.1, 
-         precip_m = precip_m*0.1) 
+         precip_m_t2 = "precip_date_t2",
+         precip_m_t1 = "precip_date_t1",
+         precip_m = "precip_date")
 
-sMoist_m <- gldas_monthly %>%
+gldas_monthly <- gldas_monthly %>%
   dplyr::select(decimalLatitude, decimalLongitude, date, timepoint, soilMoisture) %>%
   drop_na() %>%
   group_by(decimalLatitude, decimalLongitude, timepoint) %>%
@@ -575,42 +400,28 @@ sMoist_m <- gldas_monthly %>%
          date = as.Date(date, format = "%Y-%m-%d")) %>%
   dplyr::group_by(decimalLatitude, decimalLongitude, timepoint) %>%
   pivot_wider(names_from = timepoint, values_from = c(date, soilMoisture)) %>%
-  rename(date_m2 = "date_date_t2",
-         date_m1 = "date_date_t1",
+  rename(date_t2 = "date_date_t2",
+         date_t1 = "date_date_t1",
          date = "date_date",
-         sMoist_m2 = "soilMoisture_date_t2",
-         sMoist_m1 = "soilMoisture_date_t1",
+         sMoist_m_t2 = "soilMoisture_date_t2",
+         sMoist_m_t1 = "soilMoisture_date_t1",
          sMoist_m = "soilMoisture_date")
 
 
 # Add temp and precip data back into gldas_monthly df in preparation to add it back to the main df.
-monthlyWeather <- sMoist_m %>%
-  left_join(., precip_m, by = c("decimalLatitude", "decimalLongitude", "date", "date_m1", "date_m2", "row")) %>%
-  left_join(., temp_m, by = c("decimalLatitude", "decimalLongitude", "date", "date_m1", "date_m2", "row")) %>%
-  subset(., select = -c(row, date_m1, date_m2, sMoist_m2, temp_m2, precip_m2)) %>%
-  rename(Lat = decimalLatitude,
-         Lon = decimalLongitude) %>%
-  mutate(Lat = round(Lat, 6),
-         Lon = round(Lon, 6))
+gldas_monthly <- left_join(gldas_monthly, precip_m, by = c("decimalLatitude", "decimalLongitude", "date", "date_t1", "date_t2", "row"))
+gldas_monthly <- left_join(gldas_monthly, temp_m, by = c("decimalLatitude", "decimalLongitude", "date", "date_t1", "date_t2", "row")) %>%
+  subset(., select = -c(row))
 
 
-weatherData <- weatherData %>%
-  left_join(., monthlyWeather, by = c("Lat", "Lon", "date")) %>%
-  subset(., select = -c(wk3_start, wk2_start)) %>%
-  relocate(c(temp_m1, temp_m), .before = temp_wk3) %>%
-  relocate(c(sMoist_m1, sMoist_m), .before = sMoist_wk3)
+
+## Add weather data to main dataframe
+prev <- left_join(prev, gldas_monthly, by = c("decimalLatitude", "decimalLongitude", "date", "date_t1", "date_t2"))
+prev <- left_join(prev, gldas_daily, by = c("decimalLatitude", "decimalLongitude", "date", "date_t1", "date_t2"))
 
 
-## Add weather data to main dataframe ------------------------------------------
-prev <- prev %>%
-  left_join(., weatherData, by = c("Lat", "Lon", "date", "t4", "wk1_start")) %>% 
-  relocate(c(richness, sppAbun, siteAbun), .after = Site) %>%
-  relocate(c(wk1_start, t4, date), .after = day) %>%
-  relocate(c(temp_m1, temp_m, temp_wk3, temp_wk2, temp_wk1, temp_d4, temp_d, 
-             sMoist_m1, sMoist_m, sMoist_wk3, sMoist_wk2, sMoist_wk1, sMoist_d4, sMoist_d,
-             precip_m1, precip_m), .after = sampleRemarks) 
+prev <- prev[, c(1:6, 38, 10:12, 7:9, 13:31, 39:44, 51, 45:50, 52, 32:37)]
 
-rm(temp_m, precip_m, sMoist_m, avg_soilMoist, daily_SM, avg_temp, daily_temp, gldas_daily, soilMoisture, temperature)
 
 
 # Combine BdDetected and BsalDetected into one "diseaseDetected" column
@@ -640,147 +451,678 @@ levels(prev$diseaseDetected) <- c(0,1) #0 = F, 1 = T
 
 
 ## Climate data from geodata package
-## Construct file path to store WorldClim data 
-# dir.create(file.path(dir, shppath, "/WorldClim")) # Will give warning if path already exists
-wclim_path <- path.expand("csvFiles/shapefiles/WorldClim")
+#### Obtain borders of each ADM2 as a geometry ####
+## Subset unique values for ADM0, ADM1, and ADM2 levels from prev df
+temp <- prev %>%
+  dplyr::select(ADM0, ADM1, ADM2)
+temp <- unique(temp)
+temp <- with(temp, temp[order(ADM0, ADM1, ADM2) , ])
+
+CHE <- temp %>% # Switzerland
+  dplyr::group_by(ADM0) %>% 
+  filter(ADM0 == "CHE")
+DEU <- temp %>% # Germany
+  dplyr::group_by(ADM0) %>% 
+  filter(ADM0 == "DEU")
+GBR <- temp %>% # UK
+  dplyr::group_by(ADM0) %>% 
+  filter(ADM0 == "GBR")
+ESP <- temp %>% # Spain
+  dplyr::group_by(ADM0) %>%
+  filter(ADM0 == "ESP")
+BEL <- temp %>% # Belgium
+  dplyr::group_by(ADM0) %>%
+  filter(ADM0 == "BEL")
+
+
+## Construct file path to store WorldClim Data
+wclim_path <- (path.expand("csvFiles/shapefiles/WorldClim"))
 setwd(file.path(dir, wclim_path))
 
-## Create bounding box for Europe extent to crop WorldClim rasters
-euro_ext <- c(-15, 45, 35, 72)
+CHEadm2 <- geodata::gadm(country = CHE$ADM0, path = file.path(dir, wclim_path), level = 2, version = "latest")
+CHEadm2 <- sf::st_as_sf(CHEadm2)
 
-## add id column to adminlvls df
-latlon_id <- adminlvls %>%
-  mutate(id = row_number()) %>%
-  relocate(id, .before = Lon)
+DEUadm2 <- geodata::gadm(country = DEU$ADM0, path = file.path(dir, wclim_path), level = 2, version = "latest")
+DEUadm2 <- sf::st_as_sf(DEUadm2)
 
+GBRadm2 <- geodata::gadm(country = GBR$ADM0, path = file.path(dir, wclim_path), level = 2, version = "latest")
+GBRadm2 <- sf::st_as_sf(GBRadm2)
 
-## Obtain WorldClim data as SpatRasters and extract data using lat/lon from adminlvls df
-## WorldClim resolution of 2.5 arc minutes is approximately equivalent to 0.0417 degrees (finer scale than needed, but that's ok)
-#     a. tmin | temporal scale: monthly (30yr avg)
-tmin <- geodata::worldclim_global(var = 'tmin', path = file.path(dir, wclim_path), res = 2.5, version = "2.1") 
+ESPadm2 <- geodata::gadm(country = ESP$ADM0, path = file.path(dir, wclim_path), level = 2, version = "latest")
+ESPadm2 <- sf::st_as_sf(ESPadm2)
 
-tmin_cropped <- terra::crop(tmin, euro_ext)
-names(tmin_cropped) <- c("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12")
-tmin_extract <- terra::extract(tmin_cropped, adminlvls[,1:2], ID = F) 
-tmin_df <- as.data.frame(tmin_extract) %>%
-  reshape(., varying = c("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"),
-          v.names = "tmin",
-          timevar = "month",
-          times = as.integer(seq_len(12)),
-          direction = "long") %>%
-  left_join(., latlon_id, by = "id", keep = F) %>%
-  relocate(c(id, ADM0, country, ADM1, ADM2, Lon, Lat), .before = month)
+BELadm2 <- geodata::gadm(country = BEL$ADM0, path = file.path(dir, wclim_path), level = 2, version = "latest")
+BELadm2 <- sf::st_as_sf(BELadm2)
 
+#### Obtain WorldClim data as SpatVector layers ####
+tmin <- geodata::worldclim_global(var = 'tmin', path = file.path(dir, wclim_path), res = 2.5, version = "2.1")
+tmin <- as(tmin, "Raster") # convert SpatRaster to Rasterstack
 
- rm(tmin, tmin_extract)
-
-
-#     b. tmax | temporal scale: monthly (30yr avg)
 tmax <- geodata::worldclim_global(var = 'tmax', path = file.path(dir, wclim_path), res = 2.5, version = "2.1")
+tmax <- as(tmax, "Raster") # convert SpatRaster to Rasterstack
 
-tmax_cropped <- terra::crop(tmax, euro_ext)
-names(tmax_cropped) <- c("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12")
-tmax_extract <- terra::extract(tmax_cropped, adminlvls[,1:2], ID = F) 
-tmax_df <- as.data.frame(tmax_extract) %>%
-  reshape(., varying = c("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"),
-          v.names = "tmax",
-          timevar = "month",
-          times = as.integer(seq_len(12)),
-          direction = "long") %>%
-  left_join(., latlon_id, by = "id", keep = F) %>%
-  relocate(c(id, ADM0, country, ADM1, ADM2, Lon, Lat), .before = month)
-
-
-rm(tmax, tmax_extract)
-
-
-#     c. tavg | temporal scale: monthly (30yr avg)
 tavg <- geodata::worldclim_global(var = 'tavg', path = file.path(dir, wclim_path), res = 2.5, version = "2.1")
+tavg <- as(tavg, "Raster") # convert SpatRaster to Rasterstack
 
-tavg_cropped <- terra::crop(tavg, euro_ext)
-names(tavg_cropped) <- c("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12")
-tavg_extract <- terra::extract(tavg_cropped, adminlvls[,1:2], ID = F) 
-tavg_df <- as.data.frame(tavg_extract) %>%
-  reshape(., varying = c("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"),
-          v.names = "tavg",
-          timevar = "month",
-          times = as.integer(seq_len(12)),
-          direction = "long") %>%
-  left_join(., latlon_id, by = "id", keep = F) %>%
-  relocate(c(id, ADM0, country, ADM1, ADM2, Lon, Lat), .before = month)
-
-
-rm(tavg, tavg_extract)
-
-#     d. prec | temporal scale: monthly (30yr avg)
 prec <- geodata::worldclim_global(var = 'prec', path = file.path(dir, wclim_path), res = 2.5, version = "2.1")
+prec <- as(prec, "Raster") # convert SpatRaster to Rasterstack
+gain(prec) = 0.1 # convert to cm
 
-prec_cropped <- terra::crop(prec, euro_ext)
-names(prec_cropped) <- c("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12")
-prec_extract <- terra::extract(prec_cropped, adminlvls[,1:2], ID = F) 
-prec_df <- as.data.frame(prec_extract) %>%
-  reshape(., varying = c("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"),
-          v.names = "prec",
-          timevar = "month",
-          times = as.integer(seq_len(12)),
-          direction = "long") %>%
-  left_join(., latlon_id, by = "id", keep = F) %>%
-  relocate(c(id, ADM0, country, ADM1, ADM2, Lon, Lat), .before = month) %>%
-  mutate(prec = (prec * 0.1)) # convert mm to cm
-
-
-rm(prec, prec_extract)
-
-#     e. bio | temporal scale: annual (30yr avg)
 bio <- geodata::worldclim_global(var = 'bio', path = file.path(dir, wclim_path), res = 2.5, version = "2.1")
-
-bio_cropped <- terra::crop(bio, euro_ext)
-names(bio_cropped) <- c("bio1", "bio2", "bio3", "bio4", "bio5", "bio6", "bio7", "bio8", "bio9", "bio10", "bio11", "bio12",
-                        "bio13", "bio14", "bio15", "bio16", "bio17", "bio18", "bio19")
-bio_extract <- terra::extract(bio_cropped, adminlvls[,1:2], ID = F) 
-bio_df <- as.data.frame(bio_extract) %>%
-  mutate(bio12 = (0.1*bio12), # All bioclim precip vals are in mm. Convert to cm.
-         bio13 = (0.1*bio13),
-         bio14 = (0.1*bio14),
-         bio15 = (0.1*bio15),
-         bio16 = (0.1*bio16),
-         bio17 = (0.1*bio17),
-         bio18 = (0.1*bio18),
-         bio19 = (0.1*bio19),
-         id = row_number()) %>%
-  left_join(., latlon_id, by = "id", keep = F) %>%
-  relocate(c(id, ADM0, country, ADM1, ADM2, Lon, Lat), .before = bio1)
+bio <- as(bio, "Raster") # convert SpatRaster to Rasterstack
 
 
-rm(bio, bio_extract)
+###### Use ADM geometries to sample WorldClim rasters 
+#### tmin ####
+### CHE
+r1 <- crop(tmin, CHEadm2) 
+r_tmin1 <- mask(r1, CHEadm2)
+rsp_tmin1 <- as.data.frame(raster::extract(x = r_tmin1, y = CHEadm2, fun = mean, sp = T))
+rsp_tmin1 <- rsp_tmin1 %>% 
+  dplyr::select(GID_0, COUNTRY, NAME_1, NAME_2, wc2.1_2.5m_tmin_01, wc2.1_2.5m_tmin_02,
+                wc2.1_2.5m_tmin_03, wc2.1_2.5m_tmin_04, wc2.1_2.5m_tmin_05, wc2.1_2.5m_tmin_06,
+                wc2.1_2.5m_tmin_07, wc2.1_2.5m_tmin_08, wc2.1_2.5m_tmin_09, wc2.1_2.5m_tmin_10,
+                wc2.1_2.5m_tmin_11,wc2.1_2.5m_tmin_12)
+colnames(rsp_tmin1) <- c("ADM0", "country", "ADM1", "ADM2", "Jan", "Feb", "Mar", 
+                         "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov",
+                         "Dec")
+rsp_tmin1 <- reshape(rsp_tmin1, varying = c("Jan", "Feb", "Mar", "Apr", "May",
+                                            "Jun", "Jul", "Aug", "Sep", "Oct",
+                                            "Nov", "Dec"),
+                     v.names = "tmin",
+                     timevar = "monthCollected",
+                     times = month.abb,
+                     direction = "long")
+rsp_tmin1$ADM1 <- toupper(rsp_tmin1$ADM1)
+rsp_tmin1$ADM2 <- toupper(rsp_tmin1$ADM2)
+
+### DEU
+r2 <- crop(tmin, DEUadm2) 
+r_tmin2 <- mask(r2, DEUadm2)
+rsp_tmin2 <- as.data.frame(raster::extract(x = r_tmin2, y = DEUadm2, fun = mean, sp = T))
+rsp_tmin2 <- rsp_tmin2 %>% 
+  dplyr::select(GID_0, COUNTRY, NAME_1, NAME_2, wc2.1_2.5m_tmin_01, wc2.1_2.5m_tmin_02,
+                wc2.1_2.5m_tmin_03, wc2.1_2.5m_tmin_04, wc2.1_2.5m_tmin_05, wc2.1_2.5m_tmin_06,
+                wc2.1_2.5m_tmin_07, wc2.1_2.5m_tmin_08, wc2.1_2.5m_tmin_09, wc2.1_2.5m_tmin_10,
+                wc2.1_2.5m_tmin_11,wc2.1_2.5m_tmin_12)
+colnames(rsp_tmin2) <- c("ADM0", "country", "ADM1", "ADM2", "Jan", "Feb", "Mar",
+                         "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", 
+                         "Dec")
+rsp_tmin2 <- reshape(rsp_tmin2, varying = c("Jan", "Feb", "Mar", "Apr", "May",
+                                            "Jun", "Jul", "Aug", "Sep", "Oct",
+                                            "Nov", "Dec"),
+                     v.names = "tmin",
+                     timevar = "monthCollected",
+                     times = month.abb,
+                     direction = "long")
+rsp_tmin2$ADM1 <- toupper(rsp_tmin2$ADM1)
+rsp_tmin2$ADM2 <- toupper(rsp_tmin2$ADM2)
+
+### GBR
+r3 <- crop(tmin, GBRadm2) 
+r_tmin3 <- mask(r3, GBRadm2)
+rsp_tmin3 <- as.data.frame(raster::extract(x = r_tmin3, y = GBRadm2, fun = mean, sp = T))
+rsp_tmin3 <- rsp_tmin3 %>% 
+  dplyr::select(GID_0, COUNTRY, NAME_1, NAME_2, wc2.1_2.5m_tmin_01, wc2.1_2.5m_tmin_02,
+                wc2.1_2.5m_tmin_03, wc2.1_2.5m_tmin_04, wc2.1_2.5m_tmin_05, wc2.1_2.5m_tmin_06,
+                wc2.1_2.5m_tmin_07, wc2.1_2.5m_tmin_08, wc2.1_2.5m_tmin_09, wc2.1_2.5m_tmin_10,
+                wc2.1_2.5m_tmin_11,wc2.1_2.5m_tmin_12)
+colnames(rsp_tmin3) <- c("ADM0", "country", "ADM1", "ADM2", "Jan", "Feb", "Mar",
+                         "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", 
+                         "Dec")
+rsp_tmin3 <- reshape(rsp_tmin3, varying = c("Jan", "Feb", "Mar", "Apr", "May",
+                                            "Jun", "Jul", "Aug", "Sep", "Oct",
+                                            "Nov", "Dec"),
+                     v.names = "tmin",
+                     timevar = "monthCollected",
+                     times = month.abb,
+                     direction = "long")
+rsp_tmin3$ADM1 <- toupper(rsp_tmin3$ADM1)
+rsp_tmin3$ADM2 <- toupper(rsp_tmin3$ADM2)
+
+### ESP
+r4 <- crop(tmin, ESPadm2) 
+r_tmin4 <- mask(r4, ESPadm2)
+rsp_tmin4 <- as.data.frame(raster::extract(x = r_tmin4, y = ESPadm2, fun = mean, sp = T))
+rsp_tmin4 <- rsp_tmin4 %>% 
+  dplyr::select(GID_0, COUNTRY, NAME_1, NAME_2, wc2.1_2.5m_tmin_01, wc2.1_2.5m_tmin_02,
+                wc2.1_2.5m_tmin_03, wc2.1_2.5m_tmin_04, wc2.1_2.5m_tmin_05, wc2.1_2.5m_tmin_06,
+                wc2.1_2.5m_tmin_07, wc2.1_2.5m_tmin_08, wc2.1_2.5m_tmin_09, wc2.1_2.5m_tmin_10,
+                wc2.1_2.5m_tmin_11,wc2.1_2.5m_tmin_12)
+colnames(rsp_tmin4) <- c("ADM0", "country", "ADM1", "ADM2", "Jan", "Feb", "Mar",
+                         "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", 
+                         "Dec")
+rsp_tmin4 <- reshape(rsp_tmin4, varying = c("Jan", "Feb", "Mar", "Apr", "May",
+                                            "Jun", "Jul", "Aug", "Sep", "Oct",
+                                            "Nov", "Dec"),
+                     v.names = "tmin",
+                     timevar = "monthCollected",
+                     times = month.abb,
+                     direction = "long")
+rsp_tmin4$ADM1 <- toupper(rsp_tmin4$ADM1)
+rsp_tmin4$ADM2 <- toupper(rsp_tmin4$ADM2)
+
+### BEL
+r5 <- crop(tmin, BELadm2) 
+r_tmin5 <- mask(r5, BELadm2)
+rsp_tmin5 <- as.data.frame(raster::extract(x = r_tmin5, y = BELadm2, fun = mean, sp = T))
+rsp_tmin5 <- rsp_tmin5 %>% 
+  dplyr::select(GID_0, COUNTRY, NAME_1, NAME_2, wc2.1_2.5m_tmin_01, wc2.1_2.5m_tmin_02,
+                wc2.1_2.5m_tmin_03, wc2.1_2.5m_tmin_04, wc2.1_2.5m_tmin_05, wc2.1_2.5m_tmin_06,
+                wc2.1_2.5m_tmin_07, wc2.1_2.5m_tmin_08, wc2.1_2.5m_tmin_09, wc2.1_2.5m_tmin_10,
+                wc2.1_2.5m_tmin_11,wc2.1_2.5m_tmin_12)
+colnames(rsp_tmin5) <- c("ADM0", "country", "ADM1", "ADM2", "Jan", "Feb", "Mar",
+                         "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", 
+                         "Dec")
+rsp_tmin5 <- reshape(rsp_tmin5, varying = c("Jan", "Feb", "Mar", "Apr", "May",
+                                            "Jun", "Jul", "Aug", "Sep", "Oct",
+                                            "Nov", "Dec"),
+                     v.names = "tmin",
+                     timevar = "monthCollected",
+                     times = month.abb,
+                     direction = "long")
+rsp_tmin5$ADM1 <- toupper(rsp_tmin5$ADM1)
+rsp_tmin5$ADM2 <- toupper(rsp_tmin5$ADM2)
 
 
-## 6. Merge WorldClim data with main data frame
-wclim <- tmin_df %>%
-  left_join(., tavg_df, by = c("id", "Lat", "Lon", "month", "country", "ADM0", "ADM1", "ADM2"), keep = F) %>%
-  left_join(., tmax_df, by = c("id", "Lat", "Lon", "month", "country", "ADM0", "ADM1", "ADM2"), keep = F) %>%
-  left_join(., prec_df, by = c("id", "Lat", "Lon", "month", "country", "ADM0", "ADM1", "ADM2"), keep = F) %>%
-  left_join(., bio_df, by = c("id", "Lat", "Lon", "country", "ADM0", "ADM1", "ADM2")) %>%
-  dplyr::select(-(id))
+rsp_tmin <- rbind(rsp_tmin1, rsp_tmin2, rsp_tmin3, rsp_tmin4, rsp_tmin5)
+rsp_tmin$monthCollected <- match(rsp_tmin$monthCollected, month.abb)
 
-rm(tmin_cropped, tmin_df, tavg_cropped, tavg_df, tmax_cropped, tmax_df, bio_cropped, bio_df, latlon_id, prec_cropped, prec_df)
+#### tmax ####
+### CHE
+r1 <- crop(tmax, CHEadm2) 
+r_tmax1 <- mask(r1, CHEadm2)
+rsp_tmax1 <- as.data.frame(raster::extract(x = r_tmax1, y = CHEadm2, fun = mean, sp = T))
+rsp_tmax1 <- rsp_tmax1 %>% 
+  dplyr::select(GID_0, COUNTRY, NAME_1, NAME_2, wc2.1_2.5m_tmax_01, wc2.1_2.5m_tmax_02,
+                wc2.1_2.5m_tmax_03, wc2.1_2.5m_tmax_04, wc2.1_2.5m_tmax_05, wc2.1_2.5m_tmax_06,
+                wc2.1_2.5m_tmax_07, wc2.1_2.5m_tmax_08, wc2.1_2.5m_tmax_09, wc2.1_2.5m_tmax_10,
+                wc2.1_2.5m_tmax_11,wc2.1_2.5m_tmax_12)
+colnames(rsp_tmax1) <- c("ADM0", "country", "ADM1", "ADM2", "Jan", "Feb", "Mar", 
+                         "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov",
+                         "Dec")
+rsp_tmax1 <- reshape(rsp_tmax1, varying = c("Jan", "Feb", "Mar", "Apr", "May",
+                                            "Jun", "Jul", "Aug", "Sep", "Oct",
+                                            "Nov", "Dec"),
+                     v.names = "tmax",
+                     timevar = "monthCollected",
+                     times = month.abb,
+                     direction = "long")
+rsp_tmax1$ADM1 <- toupper(rsp_tmax1$ADM1)
+rsp_tmax1$ADM2 <- toupper(rsp_tmax1$ADM2)
 
-prev <- prev %>%
-  left_join(., wclim, by = c("Lat", "Lon", "month", "country", "ADM0", "ADM1", "ADM2"), keep = F) %>%
-  relocate(c(tmin, tavg, tmax, prec, bio1:bio19), .after = sMoist_d)
+### DEU
+r2 <- crop(tmax, DEUadm2) 
+r_tmax2 <- mask(r2, DEUadm2)
+rsp_tmax2 <- as.data.frame(raster::extract(x = r_tmax2, y = DEUadm2, fun = mean, sp = T))
+rsp_tmax2 <- rsp_tmax2 %>% 
+  dplyr::select(GID_0, COUNTRY, NAME_1, NAME_2, wc2.1_2.5m_tmax_01, wc2.1_2.5m_tmax_02,
+                wc2.1_2.5m_tmax_03, wc2.1_2.5m_tmax_04, wc2.1_2.5m_tmax_05, wc2.1_2.5m_tmax_06,
+                wc2.1_2.5m_tmax_07, wc2.1_2.5m_tmax_08, wc2.1_2.5m_tmax_09, wc2.1_2.5m_tmax_10,
+                wc2.1_2.5m_tmax_11,wc2.1_2.5m_tmax_12)
+colnames(rsp_tmax2) <- c("ADM0", "country", "ADM1", "ADM2", "Jan", "Feb", "Mar",
+                         "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", 
+                         "Dec")
+rsp_tmax2 <- reshape(rsp_tmax2, varying = c("Jan", "Feb", "Mar", "Apr", "May",
+                                            "Jun", "Jul", "Aug", "Sep", "Oct",
+                                            "Nov", "Dec"),
+                     v.names = "tmax",
+                     timevar = "monthCollected",
+                     times = month.abb,
+                     direction = "long")
+rsp_tmax2$ADM1 <- toupper(rsp_tmax2$ADM1)
+rsp_tmax2$ADM2 <- toupper(rsp_tmax2$ADM2)
+
+### GBR
+r3 <- crop(tmax, GBRadm2) 
+r_tmax3 <- mask(r3, GBRadm2)
+rsp_tmax3 <- as.data.frame(raster::extract(x = r_tmax3, y = GBRadm2, fun = mean, sp = T))
+rsp_tmax3 <- rsp_tmax3 %>% 
+  dplyr::select(GID_0, COUNTRY, NAME_1, NAME_2, wc2.1_2.5m_tmax_01, wc2.1_2.5m_tmax_02,
+                wc2.1_2.5m_tmax_03, wc2.1_2.5m_tmax_04, wc2.1_2.5m_tmax_05, wc2.1_2.5m_tmax_06,
+                wc2.1_2.5m_tmax_07, wc2.1_2.5m_tmax_08, wc2.1_2.5m_tmax_09, wc2.1_2.5m_tmax_10,
+                wc2.1_2.5m_tmax_11,wc2.1_2.5m_tmax_12)
+colnames(rsp_tmax3) <- c("ADM0", "country", "ADM1", "ADM2", "Jan", "Feb", "Mar",
+                         "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", 
+                         "Dec")
+rsp_tmax3 <- reshape(rsp_tmax3, varying = c("Jan", "Feb", "Mar", "Apr", "May",
+                                            "Jun", "Jul", "Aug", "Sep", "Oct",
+                                            "Nov", "Dec"),
+                     v.names = "tmax",
+                     timevar = "monthCollected",
+                     times = month.abb,
+                     direction = "long")
+rsp_tmax3$ADM1 <- toupper(rsp_tmax3$ADM1)
+rsp_tmax3$ADM2 <- toupper(rsp_tmax3$ADM2)
 
 
-prev$genus <- gsub("[[:space:]]", "", prev$genus) # get rid of weird spaces in this column
+### ESP
+r4 <- crop(tmax, ESPadm2) 
+r_tmax4 <- mask(r4, ESPadm2)
+rsp_tmax4 <- as.data.frame(raster::extract(x = r_tmax4, y = ESPadm2, fun = mean, sp = T))
+rsp_tmax4 <- rsp_tmax4 %>% 
+  dplyr::select(GID_0, COUNTRY, NAME_1, NAME_2, wc2.1_2.5m_tmax_01, wc2.1_2.5m_tmax_02,
+                wc2.1_2.5m_tmax_03, wc2.1_2.5m_tmax_04, wc2.1_2.5m_tmax_05, wc2.1_2.5m_tmax_06,
+                wc2.1_2.5m_tmax_07, wc2.1_2.5m_tmax_08, wc2.1_2.5m_tmax_09, wc2.1_2.5m_tmax_10,
+                wc2.1_2.5m_tmax_11,wc2.1_2.5m_tmax_12)
+colnames(rsp_tmax4) <- c("ADM0", "country", "ADM1", "ADM2", "Jan", "Feb", "Mar",
+                         "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", 
+                         "Dec")
+rsp_tmax4 <- reshape(rsp_tmax4, varying = c("Jan", "Feb", "Mar", "Apr", "May",
+                                            "Jun", "Jul", "Aug", "Sep", "Oct",
+                                            "Nov", "Dec"),
+                     v.names = "tmax",
+                     timevar = "monthCollected",
+                     times = month.abb,
+                     direction = "long")
+rsp_tmax4$ADM1 <- toupper(rsp_tmax4$ADM1)
+rsp_tmax4$ADM2 <- toupper(rsp_tmax4$ADM2)
+
+### BEL
+r5 <- crop(tmax, BELadm2) 
+r_tmax5 <- mask(r5, BELadm2)
+rsp_tmax5 <- as.data.frame(raster::extract(x = r_tmax5, y = BELadm2, fun = mean, sp = T))
+rsp_tmax5 <- rsp_tmax5 %>% 
+  dplyr::select(GID_0, COUNTRY, NAME_1, NAME_2, wc2.1_2.5m_tmax_01, wc2.1_2.5m_tmax_02,
+                wc2.1_2.5m_tmax_03, wc2.1_2.5m_tmax_04, wc2.1_2.5m_tmax_05, wc2.1_2.5m_tmax_06,
+                wc2.1_2.5m_tmax_07, wc2.1_2.5m_tmax_08, wc2.1_2.5m_tmax_09, wc2.1_2.5m_tmax_10,
+                wc2.1_2.5m_tmax_11,wc2.1_2.5m_tmax_12)
+colnames(rsp_tmax5) <- c("ADM0", "country", "ADM1", "ADM2", "Jan", "Feb", "Mar",
+                         "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", 
+                         "Dec")
+rsp_tmax5 <- reshape(rsp_tmax5, varying = c("Jan", "Feb", "Mar", "Apr", "May",
+                                            "Jun", "Jul", "Aug", "Sep", "Oct",
+                                            "Nov", "Dec"),
+                     v.names = "tmax",
+                     timevar = "monthCollected",
+                     times = month.abb,
+                     direction = "long")
+rsp_tmax5$ADM1 <- toupper(rsp_tmax5$ADM1)
+rsp_tmax5$ADM2 <- toupper(rsp_tmax5$ADM2)
+
+
+rsp_tmax <- rbind(rsp_tmax1, rsp_tmax2, rsp_tmax3, rsp_tmax4, rsp_tmax5)
+rsp_tmax$monthCollected <- match(rsp_tmax$monthCollected, month.abb)
+
+
+
+#### tavg ####
+### CHE
+r1 <- crop(tavg, CHEadm2) 
+r_tavg1 <- mask(r1, CHEadm2)
+rsp_tavg1 <- as.data.frame(raster::extract(x = r_tavg1, y = CHEadm2, fun = mean, sp = T))
+rsp_tavg1 <- rsp_tavg1 %>% 
+  dplyr::select(GID_0, COUNTRY, NAME_1, NAME_2, wc2.1_2.5m_tavg_01, wc2.1_2.5m_tavg_02,
+                wc2.1_2.5m_tavg_03, wc2.1_2.5m_tavg_04, wc2.1_2.5m_tavg_05, wc2.1_2.5m_tavg_06,
+                wc2.1_2.5m_tavg_07, wc2.1_2.5m_tavg_08, wc2.1_2.5m_tavg_09, wc2.1_2.5m_tavg_10,
+                wc2.1_2.5m_tavg_11,wc2.1_2.5m_tavg_12)
+colnames(rsp_tavg1) <- c("ADM0", "country", "ADM1", "ADM2", "Jan", "Feb", "Mar", 
+                         "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov",
+                         "Dec")
+rsp_tavg1 <- reshape(rsp_tavg1, varying = c("Jan", "Feb", "Mar", "Apr", "May",
+                                            "Jun", "Jul", "Aug", "Sep", "Oct",
+                                            "Nov", "Dec"),
+                     v.names = "tavg",
+                     timevar = "monthCollected",
+                     times = month.abb,
+                     direction = "long")
+rsp_tavg1$ADM1 <- toupper(rsp_tavg1$ADM1)
+rsp_tavg1$ADM2 <- toupper(rsp_tavg1$ADM2)
+
+### DEU
+r2 <- crop(tavg, DEUadm2)
+r_tavg2 <- mask(r2, DEUadm2)
+rsp_tavg2 <- as.data.frame(raster::extract(x = r_tavg2, y = DEUadm2, fun = mean, sp = T))
+rsp_tavg2 <- rsp_tavg2 %>% 
+  dplyr::select(GID_0, COUNTRY, NAME_1, NAME_2, wc2.1_2.5m_tavg_01, wc2.1_2.5m_tavg_02,
+                wc2.1_2.5m_tavg_03, wc2.1_2.5m_tavg_04, wc2.1_2.5m_tavg_05, wc2.1_2.5m_tavg_06,
+                wc2.1_2.5m_tavg_07, wc2.1_2.5m_tavg_08, wc2.1_2.5m_tavg_09, wc2.1_2.5m_tavg_10,
+                wc2.1_2.5m_tavg_11,wc2.1_2.5m_tavg_12)
+colnames(rsp_tavg2) <- c("ADM0", "country", "ADM1", "ADM2", "Jan", "Feb", "Mar",
+                         "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", 
+                         "Dec")
+rsp_tavg2 <- reshape(rsp_tavg2, varying = c("Jan", "Feb", "Mar", "Apr", "May",
+                                            "Jun", "Jul", "Aug", "Sep", "Oct",
+                                            "Nov", "Dec"),
+                     v.names = "tavg",
+                     timevar = "monthCollected",
+                     times = month.abb,
+                     direction = "long")
+rsp_tavg2$ADM1 <- toupper(rsp_tavg2$ADM1)
+rsp_tavg2$ADM2 <- toupper(rsp_tavg2$ADM2)
+
+### GBR
+r3 <- crop(tavg, GBRadm2) 
+r_tavg3 <- mask(r3, GBRadm2)
+rsp_tavg3 <- as.data.frame(raster::extract(x = r_tavg3, y = GBRadm2, fun = mean, sp = T))
+rsp_tavg3 <- rsp_tavg3 %>% 
+  dplyr::select(GID_0, COUNTRY, NAME_1, NAME_2, wc2.1_2.5m_tavg_01, wc2.1_2.5m_tavg_02,
+                wc2.1_2.5m_tavg_03, wc2.1_2.5m_tavg_04, wc2.1_2.5m_tavg_05, wc2.1_2.5m_tavg_06,
+                wc2.1_2.5m_tavg_07, wc2.1_2.5m_tavg_08, wc2.1_2.5m_tavg_09, wc2.1_2.5m_tavg_10,
+                wc2.1_2.5m_tavg_11,wc2.1_2.5m_tavg_12)
+colnames(rsp_tavg3) <- c("ADM0", "country", "ADM1", "ADM2", "Jan", "Feb", "Mar",
+                         "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", 
+                         "Dec")
+rsp_tavg3 <- reshape(rsp_tavg3, varying = c("Jan", "Feb", "Mar", "Apr", "May",
+                                            "Jun", "Jul", "Aug", "Sep", "Oct",
+                                            "Nov", "Dec"),
+                     v.names = "tavg",
+                     timevar = "monthCollected",
+                     times = month.abb,
+                     direction = "long")
+rsp_tavg3$ADM1 <- toupper(rsp_tavg3$ADM1)
+rsp_tavg3$ADM2 <- toupper(rsp_tavg3$ADM2)
+
+### ESP
+r4 <- crop(tavg, ESPadm2)
+r_tavg4 <- mask(r4, ESPadm2)
+rsp_tavg4 <- as.data.frame(raster::extract(x = r_tavg4, y = ESPadm2, fun = mean, sp = T))
+rsp_tavg4 <- rsp_tavg4 %>% 
+  dplyr::select(GID_0, COUNTRY, NAME_1, NAME_2, wc2.1_2.5m_tavg_01, wc2.1_2.5m_tavg_02,
+                wc2.1_2.5m_tavg_03, wc2.1_2.5m_tavg_04, wc2.1_2.5m_tavg_05, wc2.1_2.5m_tavg_06,
+                wc2.1_2.5m_tavg_07, wc2.1_2.5m_tavg_08, wc2.1_2.5m_tavg_09, wc2.1_2.5m_tavg_10,
+                wc2.1_2.5m_tavg_11,wc2.1_2.5m_tavg_12)
+colnames(rsp_tavg4) <- c("ADM0", "country", "ADM1", "ADM2", "Jan", "Feb", "Mar",
+                         "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", 
+                         "Dec")
+rsp_tavg4 <- reshape(rsp_tavg4, varying = c("Jan", "Feb", "Mar", "Apr", "May",
+                                            "Jun", "Jul", "Aug", "Sep", "Oct",
+                                            "Nov", "Dec"),
+                     v.names = "tavg",
+                     timevar = "monthCollected",
+                     times = month.abb,
+                     direction = "long")
+rsp_tavg4$ADM1 <- toupper(rsp_tavg4$ADM1)
+rsp_tavg4$ADM2 <- toupper(rsp_tavg4$ADM2)
+
+### BEL
+r5 <- crop(tavg, BELadm2) 
+r_tavg5 <- mask(r5, BELadm2)
+rsp_tavg5 <- as.data.frame(raster::extract(x = r_tavg5, y = BELadm2, fun = mean, sp = T))
+rsp_tavg5 <- rsp_tavg5 %>% 
+  dplyr::select(GID_0, COUNTRY, NAME_1, NAME_2, wc2.1_2.5m_tavg_01, wc2.1_2.5m_tavg_02,
+                wc2.1_2.5m_tavg_03, wc2.1_2.5m_tavg_04, wc2.1_2.5m_tavg_05, wc2.1_2.5m_tavg_06,
+                wc2.1_2.5m_tavg_07, wc2.1_2.5m_tavg_08, wc2.1_2.5m_tavg_09, wc2.1_2.5m_tavg_10,
+                wc2.1_2.5m_tavg_11,wc2.1_2.5m_tavg_12)
+colnames(rsp_tavg5) <- c("ADM0", "country", "ADM1", "ADM2", "Jan", "Feb", "Mar",
+                         "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", 
+                         "Dec")
+rsp_tavg5 <- reshape(rsp_tavg5, varying = c("Jan", "Feb", "Mar", "Apr", "May",
+                                            "Jun", "Jul", "Aug", "Sep", "Oct",
+                                            "Nov", "Dec"),
+                     v.names = "tavg",
+                     timevar = "monthCollected",
+                     times = month.abb,
+                     direction = "long")
+rsp_tavg5$ADM1 <- toupper(rsp_tavg5$ADM1)
+rsp_tavg5$ADM2 <- toupper(rsp_tavg5$ADM2)
+
+
+rsp_tavg <- rbind(rsp_tavg1, rsp_tavg2, rsp_tavg3, rsp_tavg4, rsp_tavg5)
+rsp_tavg$monthCollected <- match(rsp_tavg$monthCollected, month.abb)
+
+
+#### precip ####
+### CHE
+r1 <- crop(prec, CHEadm2)
+r_prec1 <- mask(r1, CHEadm2)
+rsp_prec1 <- as.data.frame(raster::extract(x = r_prec1, y = CHEadm2, fun = mean, sp = T))
+rsp_prec1 <- rsp_prec1 %>% 
+  dplyr::select(GID_0, COUNTRY, NAME_1, NAME_2, wc2.1_2.5m_prec_01, wc2.1_2.5m_prec_02,
+                wc2.1_2.5m_prec_03, wc2.1_2.5m_prec_04, wc2.1_2.5m_prec_05, wc2.1_2.5m_prec_06,
+                wc2.1_2.5m_prec_07, wc2.1_2.5m_prec_08, wc2.1_2.5m_prec_09, wc2.1_2.5m_prec_10,
+                wc2.1_2.5m_prec_11,wc2.1_2.5m_prec_12)
+colnames(rsp_prec1) <- c("ADM0", "country", "ADM1", "ADM2", "Jan", "Feb", "Mar", 
+                         "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov",
+                         "Dec")
+rsp_prec1 <- reshape(rsp_prec1, varying = c("Jan", "Feb", "Mar", "Apr", "May",
+                                            "Jun", "Jul", "Aug", "Sep", "Oct",
+                                            "Nov", "Dec"),
+                     v.names = "prec",
+                     timevar = "monthCollected",
+                     times = month.abb,
+                     direction = "long")
+rsp_prec1$ADM1 <- toupper(rsp_prec1$ADM1)
+rsp_prec1$ADM2 <- toupper(rsp_prec1$ADM2)
+
+### DEU
+r2 <- crop(prec, DEUadm2) 
+r_prec2 <- mask(r2, DEUadm2)
+rsp_prec2 <- as.data.frame(raster::extract(x = r_prec2, y = DEUadm2, fun = mean, sp = T))
+rsp_prec2 <- rsp_prec2 %>% 
+  dplyr::select(GID_0, COUNTRY, NAME_1, NAME_2, wc2.1_2.5m_prec_01, wc2.1_2.5m_prec_02,
+                wc2.1_2.5m_prec_03, wc2.1_2.5m_prec_04, wc2.1_2.5m_prec_05, wc2.1_2.5m_prec_06,
+                wc2.1_2.5m_prec_07, wc2.1_2.5m_prec_08, wc2.1_2.5m_prec_09, wc2.1_2.5m_prec_10,
+                wc2.1_2.5m_prec_11,wc2.1_2.5m_prec_12)
+colnames(rsp_prec2) <- c("ADM0", "country", "ADM1", "ADM2", "Jan", "Feb", "Mar",
+                         "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", 
+                         "Dec")
+rsp_prec2 <- reshape(rsp_prec2, varying = c("Jan", "Feb", "Mar", "Apr", "May",
+                                            "Jun", "Jul", "Aug", "Sep", "Oct",
+                                            "Nov", "Dec"),
+                     v.names = "prec",
+                     timevar = "monthCollected",
+                     times = month.abb,
+                     direction = "long")
+rsp_prec2$ADM1 <- toupper(rsp_prec2$ADM1)
+rsp_prec2$ADM2 <- toupper(rsp_prec2$ADM2)
+
+### GBR
+r3 <- crop(prec, GBRadm2)
+r_prec3 <- mask(r3, GBRadm2)
+rsp_prec3 <- as.data.frame(raster::extract(x = r_prec3, y = GBRadm2, fun = mean, sp = T))
+rsp_prec3 <- rsp_prec3 %>% 
+  dplyr::select(GID_0, COUNTRY, NAME_1, NAME_2, wc2.1_2.5m_prec_01, wc2.1_2.5m_prec_02,
+                wc2.1_2.5m_prec_03, wc2.1_2.5m_prec_04, wc2.1_2.5m_prec_05, wc2.1_2.5m_prec_06,
+                wc2.1_2.5m_prec_07, wc2.1_2.5m_prec_08, wc2.1_2.5m_prec_09, wc2.1_2.5m_prec_10,
+                wc2.1_2.5m_prec_11,wc2.1_2.5m_prec_12)
+colnames(rsp_prec3) <- c("ADM0", "country", "ADM1", "ADM2", "Jan", "Feb", "Mar",
+                         "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", 
+                         "Dec")
+rsp_prec3 <- reshape(rsp_prec3, varying = c("Jan", "Feb", "Mar", "Apr", "May",
+                                            "Jun", "Jul", "Aug", "Sep", "Oct",
+                                            "Nov", "Dec"),
+                     v.names = "prec",
+                     timevar = "monthCollected",
+                     times = month.abb,
+                     direction = "long")
+rsp_prec3$ADM1 <- toupper(rsp_prec3$ADM1)
+rsp_prec3$ADM2 <- toupper(rsp_prec3$ADM2)
+
+
+### ESP
+r4 <- crop(prec, ESPadm2)
+r_prec4 <- mask(r4, ESPadm2)
+rsp_prec4 <- as.data.frame(raster::extract(x = r_prec4, y = ESPadm2, fun = mean, sp = T))
+rsp_prec4 <- rsp_prec4 %>% 
+  dplyr::select(GID_0, COUNTRY, NAME_1, NAME_2, wc2.1_2.5m_prec_01, wc2.1_2.5m_prec_02,
+                wc2.1_2.5m_prec_03, wc2.1_2.5m_prec_04, wc2.1_2.5m_prec_05, wc2.1_2.5m_prec_06,
+                wc2.1_2.5m_prec_07, wc2.1_2.5m_prec_08, wc2.1_2.5m_prec_09, wc2.1_2.5m_prec_10,
+                wc2.1_2.5m_prec_11,wc2.1_2.5m_prec_12)
+colnames(rsp_prec4) <- c("ADM0", "country", "ADM1", "ADM2", "Jan", "Feb", "Mar",
+                         "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", 
+                         "Dec")
+rsp_prec4 <- reshape(rsp_prec4, varying = c("Jan", "Feb", "Mar", "Apr", "May",
+                                            "Jun", "Jul", "Aug", "Sep", "Oct",
+                                            "Nov", "Dec"),
+                     v.names = "prec",
+                     timevar = "monthCollected",
+                     times = month.abb,
+                     direction = "long")
+rsp_prec4$ADM1 <- toupper(rsp_prec4$ADM1)
+rsp_prec4$ADM2 <- toupper(rsp_prec4$ADM2)
+
+### BEL
+r5 <- crop(prec, BELadm2) 
+r_prec5 <- mask(r5, BELadm2)
+rsp_prec5 <- as.data.frame(raster::extract(x = r_prec5, y = BELadm2, fun = mean, sp = T))
+rsp_prec5 <- rsp_prec5 %>% 
+  dplyr::select(GID_0, COUNTRY, NAME_1, NAME_2, wc2.1_2.5m_prec_01, wc2.1_2.5m_prec_02,
+                wc2.1_2.5m_prec_03, wc2.1_2.5m_prec_04, wc2.1_2.5m_prec_05, wc2.1_2.5m_prec_06,
+                wc2.1_2.5m_prec_07, wc2.1_2.5m_prec_08, wc2.1_2.5m_prec_09, wc2.1_2.5m_prec_10,
+                wc2.1_2.5m_prec_11,wc2.1_2.5m_prec_12)
+colnames(rsp_prec5) <- c("ADM0", "country", "ADM1", "ADM2", "Jan", "Feb", "Mar",
+                         "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", 
+                         "Dec")
+rsp_prec5 <- reshape(rsp_prec5, varying = c("Jan", "Feb", "Mar", "Apr", "May",
+                                            "Jun", "Jul", "Aug", "Sep", "Oct",
+                                            "Nov", "Dec"),
+                     v.names = "prec",
+                     timevar = "monthCollected",
+                     times = month.abb,
+                     direction = "long")
+rsp_prec5$ADM1 <- toupper(rsp_prec5$ADM1)
+rsp_prec5$ADM2 <- toupper(rsp_prec5$ADM2)
+
+rsp_prec <- rbind(rsp_prec1, rsp_prec2, rsp_prec3, rsp_prec4, rsp_prec5)
+rsp_prec$monthCollected <- match(rsp_prec$monthCollected, month.abb)
+
+
+#### bio; these are annual trends, not monthly ####
+### CHE
+r1 <- crop(bio, CHEadm2)
+r_bio1 <- mask(r1, CHEadm2)
+rsp_bio1 <- as.data.frame(raster::extract(x = r_bio1, y = CHEadm2, fun = mean, sp = T))
+head(rsp_bio1)
+rsp_bio1 <- rsp_bio1 %>% 
+  dplyr::select(GID_0, COUNTRY, NAME_1, NAME_2, wc2.1_2.5m_bio_1, wc2.1_2.5m_bio_2, wc2.1_2.5m_bio_3,
+                wc2.1_2.5m_bio_4, wc2.1_2.5m_bio_5, wc2.1_2.5m_bio_6, wc2.1_2.5m_bio_7, wc2.1_2.5m_bio_8,
+                wc2.1_2.5m_bio_9, wc2.1_2.5m_bio_10, wc2.1_2.5m_bio_11, wc2.1_2.5m_bio_12, wc2.1_2.5m_bio_13,
+                wc2.1_2.5m_bio_14,wc2.1_2.5m_bio_15, wc2.1_2.5m_bio_16, wc2.1_2.5m_bio_17, wc2.1_2.5m_bio_18,
+                wc2.1_2.5m_bio_19)
+colnames(rsp_bio1) <- c("ADM0", "Country", "ADM1", "ADM2", "bio1", "bio2", "bio3",
+                        "bio4", "bio5", "bio6", "bio7", "bio8", "bio9", "bio10",
+                        "bio11", "bio12", "bio13", "bio14", "bio15", "bio16", "bio17",
+                        "bio18", "bio19")
+rsp_bio1$ADM1 <- toupper(rsp_bio1$ADM1)
+rsp_bio1$ADM2 <- toupper(rsp_bio1$ADM2)
+head(rsp_bio1)
+
+### DEU
+r2 <- crop(bio, DEUadm2)
+r_bio2 <- mask(r2, DEUadm2)
+rsp_bio2 <- as.data.frame(raster::extract(x = r_bio2, y = DEUadm2, fun = mean, sp = T))
+head(rsp_bio2)
+rsp_bio2 <- rsp_bio2 %>% 
+  dplyr::select(GID_0, COUNTRY, NAME_1, NAME_2, wc2.1_2.5m_bio_1, wc2.1_2.5m_bio_2, wc2.1_2.5m_bio_3,
+                wc2.1_2.5m_bio_4, wc2.1_2.5m_bio_5, wc2.1_2.5m_bio_6, wc2.1_2.5m_bio_7, wc2.1_2.5m_bio_8,
+                wc2.1_2.5m_bio_9, wc2.1_2.5m_bio_10, wc2.1_2.5m_bio_11, wc2.1_2.5m_bio_12, wc2.1_2.5m_bio_13,
+                wc2.1_2.5m_bio_14,wc2.1_2.5m_bio_15, wc2.1_2.5m_bio_16, wc2.1_2.5m_bio_17, wc2.1_2.5m_bio_18,
+                wc2.1_2.5m_bio_19)
+colnames(rsp_bio2) <- c("ADM0", "Country", "ADM1", "ADM2", "bio1", "bio2", "bio3",
+                        "bio4", "bio5", "bio6", "bio7", "bio8", "bio9", "bio10", 
+                        "bio11", "bio12", "bio13", "bio14", "bio15", "bio16", "bio17", 
+                        "bio18", "bio19")
+rsp_bio2$ADM1 <- toupper(rsp_bio2$ADM1)
+rsp_bio2$ADM2 <- toupper(rsp_bio2$ADM2)
+head(rsp_bio2)
+
+### GBR
+r3 <- crop(bio, GBRadm2) 
+r_bio3 <- mask(r3, GBRadm2)
+rsp_bio3 <- as.data.frame(raster::extract(x = r_bio3, y = GBRadm2, fun = mean, sp = T))
+head(rsp_bio3)
+rsp_bio3 <- rsp_bio3 %>% 
+  dplyr::select(GID_0, COUNTRY, NAME_1, NAME_2, wc2.1_2.5m_bio_1, wc2.1_2.5m_bio_2, wc2.1_2.5m_bio_3,
+                wc2.1_2.5m_bio_4, wc2.1_2.5m_bio_5, wc2.1_2.5m_bio_6, wc2.1_2.5m_bio_7, wc2.1_2.5m_bio_8,
+                wc2.1_2.5m_bio_9, wc2.1_2.5m_bio_10, wc2.1_2.5m_bio_11, wc2.1_2.5m_bio_12, wc2.1_2.5m_bio_13,
+                wc2.1_2.5m_bio_14,wc2.1_2.5m_bio_15, wc2.1_2.5m_bio_16, wc2.1_2.5m_bio_17, wc2.1_2.5m_bio_18,
+                wc2.1_2.5m_bio_19)
+colnames(rsp_bio3) <- c("ADM0", "Country", "ADM1", "ADM2", "bio1", "bio2", "bio3",
+                        "bio4", "bio5", "bio6", "bio7", "bio8", "bio9", "bio10", 
+                        "bio11", "bio12", "bio13", "bio14", "bio15", "bio16", "bio17", 
+                        "bio18", "bio19")
+rsp_bio3$ADM1 <- toupper(rsp_bio3$ADM1)
+rsp_bio3$ADM2 <- toupper(rsp_bio3$ADM2)
+head(rsp_bio3)
+
+### ESP
+r4 <- crop(bio, ESPadm2)
+r_bio4 <- mask(r4, ESPadm2)
+rsp_bio4 <- as.data.frame(raster::extract(x = r_bio4, y = ESPadm2, fun = mean, sp = T))
+head(rsp_bio4)
+rsp_bio4 <- rsp_bio4 %>% 
+  dplyr::select(GID_0, COUNTRY, NAME_1, NAME_2, wc2.1_2.5m_bio_1, wc2.1_2.5m_bio_2, wc2.1_2.5m_bio_3,
+                wc2.1_2.5m_bio_4, wc2.1_2.5m_bio_5, wc2.1_2.5m_bio_6, wc2.1_2.5m_bio_7, wc2.1_2.5m_bio_8,
+                wc2.1_2.5m_bio_9, wc2.1_2.5m_bio_10, wc2.1_2.5m_bio_11, wc2.1_2.5m_bio_12, wc2.1_2.5m_bio_13,
+                wc2.1_2.5m_bio_14,wc2.1_2.5m_bio_15, wc2.1_2.5m_bio_16, wc2.1_2.5m_bio_17, wc2.1_2.5m_bio_18,
+                wc2.1_2.5m_bio_19)
+colnames(rsp_bio4) <- c("ADM0", "Country", "ADM1", "ADM2", "bio1", "bio2", "bio3",
+                        "bio4", "bio5", "bio6", "bio7", "bio8", "bio9", "bio10", 
+                        "bio11", "bio12", "bio13", "bio14", "bio15", "bio16", "bio17", 
+                        "bio18", "bio19")
+rsp_bio4$ADM1 <- toupper(rsp_bio4$ADM1)
+rsp_bio4$ADM2 <- toupper(rsp_bio4$ADM2)
+head(rsp_bio4)
+
+### BEL
+r5 <- crop(bio, BELadm2)
+r_bio5 <- mask(r5, BELadm2)
+rsp_bio5 <- as.data.frame(raster::extract(x = r_bio5, y = BELadm2, fun = mean, sp = T))
+head(rsp_bio5)
+rsp_bio5 <- rsp_bio5 %>% 
+  dplyr::select(GID_0, COUNTRY, NAME_1, NAME_2, wc2.1_2.5m_bio_1, wc2.1_2.5m_bio_2, wc2.1_2.5m_bio_3,
+                wc2.1_2.5m_bio_4, wc2.1_2.5m_bio_5, wc2.1_2.5m_bio_6, wc2.1_2.5m_bio_7, wc2.1_2.5m_bio_8,
+                wc2.1_2.5m_bio_9, wc2.1_2.5m_bio_10, wc2.1_2.5m_bio_11, wc2.1_2.5m_bio_12, wc2.1_2.5m_bio_13,
+                wc2.1_2.5m_bio_14,wc2.1_2.5m_bio_15, wc2.1_2.5m_bio_16, wc2.1_2.5m_bio_17, wc2.1_2.5m_bio_18,
+                wc2.1_2.5m_bio_19)
+colnames(rsp_bio5) <- c("ADM0", "Country", "ADM1", "ADM2", "bio1", "bio2", "bio3",
+                        "bio4", "bio5", "bio6", "bio7", "bio8", "bio9", "bio10", 
+                        "bio11", "bio12", "bio13", "bio14", "bio15", "bio16", "bio17", 
+                        "bio18", "bio19")
+rsp_bio5$ADM1 <- toupper(rsp_bio5$ADM1)
+rsp_bio5$ADM2 <- toupper(rsp_bio5$ADM2)
+head(rsp_bio5)
+
+rsp_bio <- rbind(rsp_bio1, rsp_bio2, rsp_bio3, rsp_bio4, rsp_bio5)
+rsp_bio[, c(16:18, 20:23)] = rsp_bio[, c(16:18, 20:23)]*0.1
+
+
+#### Merge extracted data to original dataframe ####
+prev$tmin = rsp_tmin$tmin[base::match(paste(prev$ADM2, prev$monthCollected), 
+                                      paste(rsp_tmin$ADM2, rsp_tmin$monthCollected))]
+prev$tmax = rsp_tmax$tmax[base::match(paste(prev$ADM2, prev$monthCollected), 
+                                      paste(rsp_tmax$ADM2, rsp_tmax$monthCollected))]
+prev$tavg = rsp_tavg$tavg[base::match(paste(prev$ADM2, prev$monthCollected), 
+                                      paste(rsp_tavg$ADM2, rsp_tavg$monthCollected))]
+prev$prec = rsp_prec$prec[base::match(paste(prev$ADM2, prev$monthCollected), 
+                                      paste(rsp_prec$ADM2, rsp_prec$monthCollected))]
+prev$bio1 = rsp_bio$bio1[base::match(paste(prev$ADM2), paste(rsp_bio$ADM2))]
+prev$bio2 = rsp_bio$bio2[base::match(paste(prev$ADM2), paste(rsp_bio$ADM2))]
+prev$bio3 = rsp_bio$bio3[base::match(paste(prev$ADM2), paste(rsp_bio$ADM2))]
+prev$bio4 = rsp_bio$bio4[base::match(paste(prev$ADM2), paste(rsp_bio$ADM2))]
+prev$bio5 = rsp_bio$bio5[base::match(paste(prev$ADM2), paste(rsp_bio$ADM2))]
+prev$bio6 = rsp_bio$bio6[base::match(paste(prev$ADM2), paste(rsp_bio$ADM2))]
+prev$bio7 = rsp_bio$bio7[base::match(paste(prev$ADM2), paste(rsp_bio$ADM2))]
+prev$bio8 = rsp_bio$bio8[base::match(paste(prev$ADM2), paste(rsp_bio$ADM2))]
+prev$bio9 = rsp_bio$bio9[base::match(paste(prev$ADM2), paste(rsp_bio$ADM2))]
+prev$bio10 = rsp_bio$bio10[base::match(paste(prev$ADM2), paste(rsp_bio$ADM2))]
+prev$bio11 = rsp_bio$bio11[base::match(paste(prev$ADM2), paste(rsp_bio$ADM2))]
+prev$bio12 = rsp_bio$bio12[base::match(paste(prev$ADM2), paste(rsp_bio$ADM2))]
+prev$bio13 = rsp_bio$bio13[base::match(paste(prev$ADM2), paste(rsp_bio$ADM2))]
+prev$bio14 = rsp_bio$bio14[base::match(paste(prev$ADM2), paste(rsp_bio$ADM2))]
+prev$bio15 = rsp_bio$bio15[base::match(paste(prev$ADM2), paste(rsp_bio$ADM2))]
+prev$bio16 = rsp_bio$bio16[base::match(paste(prev$ADM2), paste(rsp_bio$ADM2))]
+prev$bio17 = rsp_bio$bio17[base::match(paste(prev$ADM2), paste(rsp_bio$ADM2))]
+prev$bio18 = rsp_bio$bio18[base::match(paste(prev$ADM2), paste(rsp_bio$ADM2))]
+prev$bio19 = rsp_bio$bio19[base::match(paste(prev$ADM2), paste(rsp_bio$ADM2))]
+
+
+data.frame(colnames(prev))
+
+prev <- prev[, c(1:48, 55:77, 49:54)]
 
 
 #### cbind model df ####
+prev$genus <- gsub("[[:space:]]", "", prev$genus) # get rid of weird spaces in this column
+
 # Classify which sites are Bsal positive beginning at the date of the first positive Bsal observation
 # A site may initially be Bsal negative and may later test positive, thus it is possible to have a site classified as both negative and positive
 Bsalpos_FS <- prev %>%
-  tidyr::drop_na(., any_of(c("BsalDetected", "date", "temp_d", "sMoist_d"))) %>%
+  tidyr::drop_na(., any_of(c("BsalDetected", "date", "sMoist_d", "temp_d"))) %>%
   subset(scientific != "Calotriton asper" & # Only one observation with NA vals for date 
-         scientific != "Lissotriton boscai" & 
-         scientific != "Hyla meridionalis") %>%
+           scientific != "Lissotriton boscai" & 
+           scientific != "Hyla meridionalis") %>%
   group_by(Site, date) %>%
   mutate(scientific = gsub(pattern = "Pelophylax perezi", replacement = "Pelophylax sp.", scientific),
          cumulative_prev = ave(BsalDetected == 1, FUN = cumsum),
@@ -790,29 +1132,23 @@ Bsalpos_FS <- prev %>%
 
 # Populate all rows with 1 or 0 based on Bsal presence at a given Site
 for(i in 1:nrow(Bsalpos_FS)){
-  if(Bsalpos_FS[i, 84] != 0){
-    Bsalpos_FS[i, 85] = 1 # true; at least one animal at that site tested positive for Bsal at the time of the observation
+  if(Bsalpos_FS[i, 78] != 0){
+    Bsalpos_FS[i, 79] = 1 # true; at least one animal at that site tested positive for Bsal at the time of the observation
   }
   else {
-    Bsalpos_FS[i, 85] <- 0 # false; Site either is Bsal negative, or Bsal had not been detected at the time of the observation
+    Bsalpos_FS[i, 79] <- 0 # false; Site either is Bsal negative, or Bsal had not been detected at the time of the observation
   }
 }
 
-## Double checking #s
-# nBsalPos <- aggregate(individualCount ~ BsalDetected+scientific, data = Bsalpos_FS, sum) %>%
-#   pivot_wider(names_from = BsalDetected, values_from = individualCount)
-# View(nBsalPos)
+
 
 # Return data frame containing only observations from sites that have tested positive for Bsal (starting at the date the sites initially tested positive) 
 prev <- Bsalpos_FS %>%
   relocate(c(cumulative_prev, prev_above_0), .after = Site) %>%
-  relocate(c(precip_m1, precip_m), .before = tmin) %>%
   dplyr::select(-cumulative_prev) %>%
   rename(tmin_wc = tmin, tmax_wc = tmax, tavg_wc = tavg, prec_wc = prec, bio1_wc = bio1, bio2_wc = bio2, bio3_wc = bio3, bio4_wc = bio4, bio5_wc = bio5, bio6_wc = bio6,
          bio7_wc = bio7, bio8_wc = bio8, bio9_wc = bio9, bio10_wc = bio10, bio11_wc = bio11, bio12_wc = bio12, bio13_wc = bio13, bio14_wc = bio14, bio15_wc = bio15, bio16_wc = bio16,
          bio17_wc = bio17, bio18_wc = bio18, bio19_wc = bio19) 
-
-
 
 
 dcbind <- Bsalpos_FS %>%
@@ -829,12 +1165,14 @@ dcbind <- Bsalpos_FS %>%
          nAlive_all = sum(fatal == 0, na.rm = T),
          nFatalUnk_all = sum(is.na(fatal)),
          prev_above_0 = as.factor(prev_above_0)) %>%
-  slice(1) %>%
+  # slice(1) %>%
   ungroup() %>%
   relocate(c(nPos_FS, nNeg_FS, nDead_FS, nAlive_FS, nFatalUnk_FS, nPos_all, nNeg_all, nDead_all, nAlive_all, nFatalUnk_all), .after = susceptibility) %>%
-  relocate(c(precip_m1, precip_m), .before = tmin) %>%
-  dplyr::select(country, Lat, Lon, Site, prev_above_0, wk1_start:date, genus, scientific:nFatalUnk_all,richness, sppAbun, siteAbun, 
-                temp_m1:bio19, diagnosticLab, principalInvestigator, Sample_bcid, collectorList) %>%
+  dplyr::select(country, decimalLatitude, decimalLongitude, Site, prev_above_0, date, date_t1, date_t2, scientific, susceptibility, 
+                nPos_FS, nNeg_FS, nDead_FS, nAlive_FS, nFatalUnk_FS, nPos_all, nNeg_all, nDead_all, nAlive_all, nFatalUnk_all,
+                richness, sppAbun, siteAbun, sMoist_m_t2, sMoist_m_t1, sMoist_m, sMoist_d, precip_m_t2, precip_m_t1, precip_m, temp_m_t2, temp_m_t1, temp_m, temp_d,
+                tmin, tmax, tavg, prec, bio1, bio2, bio3, bio4, bio5, bio6, bio7, bio8, bio9, bio10, bio11, bio12, bio13, bio14, bio15, bio16, bio17, bio18, bio19, 
+                diagnosticLab, principalInvestigator, collectorList) %>%
   rename(tmin_wc = tmin, tmax_wc = tmax, tavg_wc = tavg, prec_wc = prec, bio1_wc = bio1, bio2_wc = bio2, bio3_wc = bio3, bio4_wc = bio4, bio5_wc = bio5, bio6_wc = bio6,
          bio7_wc = bio7, bio8_wc = bio8, bio9_wc = bio9, bio10_wc = bio10, bio11_wc = bio11, bio12_wc = bio12, bio13_wc = bio13, bio14_wc = bio14, bio15_wc = bio15, bio16_wc = bio16,
          bio17_wc = bio17, bio18_wc = bio18, bio19_wc = bio19) 
@@ -860,6 +1198,3 @@ write.csv(prev, file = "bsalData_clean.csv", row.names = FALSE)
 
 ## File for cbind model:
 write.csv(dcbind, file = "bsalData_cbind.csv", row.names = FALSE)
-
-
-

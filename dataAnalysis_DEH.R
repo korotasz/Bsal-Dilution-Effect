@@ -758,35 +758,16 @@ ggsave("fig2_combined.pdf", fig2combined, device = cairo_pdf, path = file.path(d
 
 
 #### 3. Cbind models testing the Dilution Effect Hypothesis ####################
-## Old dcbind
-old_dcbind <- read.csv("C:/Users/Alexis/Desktop/DEH_RmdFiles/bsalData_cbind.csv",  header = T, encoding = "UTF-8")
-
-old_dcbind <- old_dcbind %>%
-  mutate(logsppAbun = log(sppAbun),
-         logsiteAbun = log(siteAbun),
-         scientific = as.factor(scientific),
-         susceptibility = as.factor(susceptibility)) %>%
-  relocate(c(logsppAbun, logsiteAbun), .after = sppAbun)
-
-## Data prep for cbind models
-# Scale relevant vars
-old_dcbindScaled <- old_dcbind %>%
-  mutate_at(c("temp_d", "sMoist_d",
-              "bio1_wc", "bio12_wc", "tavg_wc", "prec_wc"),
-            ~(scale(., center = T, scale = T %>% as.numeric))) %>%
-  tidyr::drop_na(., any_of(c(21:36))) %>%
-  filter(country == "Germany" | country == "Spain")
-
 ## Data prep for cbind models
 # Drop rows with NA vals in weather data & scale relevant vars
 dcbindScaled <- dcbind %>%
+  tidyr::drop_na(., any_of(c(21:36))) %>%
   mutate_at(c("temp_d", "sMoist_d",
-              "bio1_wc", "bio12_wc", "tavg_wc", "prec_wc"), 
-            ~(scale(., center = T, scale = T %>% as.numeric))) %>% 
-  tidyr::drop_na(., any_of(c(22:40))) %>%
+              "bio1_wc", "bio12_wc", "tavg_wc", "prec_wc"),
+            ~(scale(., center = T, scale = T %>% as.numeric))) %>%
   filter(country == "Germany" | country == "Spain")
 
-diff <- anti_join(old_dcbindScaled, dcbindScaled)
+
 ##      3a. Cbind model including all salamander spp. --------------------------
 m_all <- glmmTMB(cbind(nPos_all, nNeg_all) ~ richness*logsiteAbun +
                     temp_d*sMoist_d + (1|scientific),
