@@ -4,7 +4,7 @@ figures/*
 csvFiles/.Rhistory
 .Rproj.user/
 
-dataAnalysis.Rmd
+dataAnalysis_DEH.Rmd
 weatherProcessing_monthly.R
 InteractiveMap_Europe.R
 
