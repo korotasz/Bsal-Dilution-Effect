@@ -16,7 +16,7 @@ pckgs <- c("renv", # create environment lock for R to ensure code reproducibilit
 )
 
 ## Load packages
-pacman::p_load(pckgs, character.only = T)
+pacman::p_load(pckgs, update = F, character.only = T)
 
 
 dir <- dirname(rstudioapi::getActiveDocumentContext()$path)
@@ -36,7 +36,7 @@ prev <- rbind(belgium, euram, germany, uk)
 prev <- Filter(function(x)!all(is.na(x)), prev)
 
 prev <- prev %>%
-  # replace empty string with NA
+  # replace any empty cell with NA
   replace(., . == "", NA) %>%
   # fieldNumber and lifeStage both have life stage data -- combine
   unite(., col = "lifeStage_merged", c("fieldNumber", "lifeStage"), 
@@ -93,7 +93,7 @@ prev <- prev %>%
   mutate(individualCount = as.numeric(individualCount)) %>% 
   # assume all NA values are observations for a single individual
   mutate(individualCount = coalesce(NA, 1)) %>%
-  # replace NA values in diseaseTested with appropriate test
+  # replace NA values in diseaseTested with appropriate test (we assume they are testing for Bsal if they are in this dataset)
   mutate(diseaseTested = coalesce(NA, "Bsal")) %>%
   # remove rows with no data
   dplyr::filter(!(materialSampleID=="")) %>%
