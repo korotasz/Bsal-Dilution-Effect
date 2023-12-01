@@ -52,6 +52,13 @@ pckgs <- c("ggsignif", # adds labels to significant groups
 )
 
 ## Load packages
+#### IF RENV CANNOT INSTALL/LOAD PACKAGES, USE CODE BELOW TO NAVIGATE TO OTHER .libPaths() OUTSIDE OF PROJECT.
+## Home computer:
+# renv::hydrate(packages = c(pckgs, "pacman"), sources = c("C:/Users/alexi/AppData/Local/R/win-library/4.3", "C:/Program Files/R/R-4.3.1/library"))
+## Work computer
+# renv::hydrate(packages = c(pckgs, "pacman"), sources = c("C:/Users/Alexis/AppData/Local/R/win-library/4.3", "C:/Program Files/R/R-4.3.1/library"))
+
+
 pacman::p_load(pckgs, update = F, install = T, character.only = T)
 
 
@@ -61,13 +68,15 @@ csvpath <- (path.expand("/csvFiles"))
 figpath <- (path.expand("figures"))
 setwd(file.path(dir, csvpath))
 
-# Set the working directory to initialize/activate the project
-setwd(file.path(dir))
+## If this is your first time running this project, run the following two lines:
+# setwd(file.path(dir)) # set working directory to activate project
+# renv::activate() # activate project
 
 #-------------------------------------------------------------------------------
 #  *** ONLY NEED TO DO THIS ONCE; I HAVE ALREADY DONE THIS FOR THIS PROJ. ***
 
 ## Create a project-local environment to ensure code reproducibility
+# setwd(file.path(dir))
 # renv::init() # this also activates the project
 
 
@@ -141,20 +150,6 @@ nicelabs <- c(`(Intercept)` = "Intercept",
               soilM_t0 = "Soil moisture",
               "temp_d:sMoist_d" = "Temp:Soil moisture")
 
-
-## Function to populate dummy columns with uniform labels in ggpredict dataframe
-## NEED TO FIX!! Not working as of R v 4.3.1
-# create_dummy_col <- function(df){
-#   values <- c("Low", "Med", "High")
-#   keys <-  unique(df[,8])
-#   index <- setNames(as.list(values), keys)
-# 
-#   df$dummy <- dplyr::recode(as.list(df[,8]), !!!index)
-# 
-#   # df$dummy <- dplyr::mutate(df = as.factor(dplyr::recode(df[,6], !!!index)))
-# 
-#   return(df)
-# }
 
 
 #### 1) Descriptive Figures ####################################################
@@ -779,14 +774,15 @@ summary(m_all)
 Anova(m_all)
 
 
-m_all_old <- glmmTMB(cbind(nPos_all, nNeg_all) ~ richness*logsiteAbun +
+m_all_noFS <- glmmTMB(cbind(nPos_all, nNeg_all) ~ richness*logsiteAbun +
                    temp_d*sMoist_d + (1|scientific),
-                 data = old_dcbindScaled, family = "binomial", na.action = "na.fail",
+                 data = dcbindScaled, family = "binomial", na.action = "na.fail",
                  control = glmmTMBControl(optimizer = optim,
                                           optArgs = list(method = "BFGS")))
 
-summary(m_all_old)
-Anova(m_all_old)
+summary(m_all_noFS)
+Anova(m_all_noFS)
+
 
 # m_all2 <- glmmTMB(cbind(nPos_all, nNeg_all) ~ richness*logsiteAbun +
 #                    temp_d*sMoist_d + (1|scientific) + (1|principalInvestigator),
