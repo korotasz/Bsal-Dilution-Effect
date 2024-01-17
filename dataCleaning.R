@@ -838,7 +838,8 @@ Bsalpos <- prev %>%
   tidyr::drop_na(., any_of(c("BsalDetected", "date", "sMoist_d", "temp_d"))) %>%
   subset(scientific != "Calotriton asper" & # Only one observation with NA vals for date 
          scientific != "Lissotriton boscai" & 
-         scientific != "Hyla meridionalis") %>%
+         scientific != "Hyla meridionalis" &
+         scientific != "Pleurodeles waltl") %>%
   group_by(Site, date) %>%
   mutate(scientific = gsub(pattern = "Pelophylax perezi", replacement = "Pelophylax sp.", scientific),
          cumulative_prev = ave(BsalDetected == 1, FUN = cumsum),
@@ -869,37 +870,37 @@ prev <- Bsalpos %>%
          bio7_wc = bio7, bio8_wc = bio8, bio9_wc = bio9, bio10_wc = bio10, bio11_wc = bio11, bio12_wc = bio12, bio13_wc = bio13, bio14_wc = bio14, bio15_wc = bio15, bio16_wc = bio16,
          bio17_wc = bio17, bio18_wc = bio18, bio19_wc = bio19) 
 
-# Return data frame containing only observations from sites that have tested positive for Bsal (starting at the date the sites initially tested positive) 
-Bsalpos_cbind <- prev %>%
-  relocate(c(prev_above_0), .after = Site) %>%
-  filter(prev_above_0 == 1)  %>%
-  group_by(Site, date, scientific) %>%
-  mutate(nPos_FS = sum(BsalDetected != 0 & scientific == "Salamandra salamandra"),
-         nNeg_FS = sum(BsalDetected == 0 & scientific == "Salamandra salamandra"),
-         nDead_FS = sum(fatal != 0 & scientific == "Salamandra salamandra", na.rm = T),
-         nAlive_FS = sum(fatal == 0 & scientific == "Salamandra salamandra", na.rm = T),
-         nFatalUnk_FS = sum(is.na(fatal) & scientific == "Salamandra salamandra"), 
-         nPos_all = sum(BsalDetected != 0),
-         nNeg_all = sum(BsalDetected == 0),
-         nDead_all = sum(fatal != 0, na.rm = T),
-         nAlive_all = sum(fatal == 0, na.rm = T),
-         nFatalUnk_all = sum(is.na(fatal)),
-         nPos_all_noFS = sum(BsalDetected != 0 & scientific != "Salamandra salamandra"),
-         nNeg_all_noFS = sum(BsalDetected == 0 & scientific != "Salamandra salamandra"),
-         nDead_all_noFS = sum(fatal != 0 & scientific != "Salamandra salamandra", na.rm = T),
-         nAlive_all_noFS = sum(fatal == 0 & scientific != "Salamandra salamandra", na.rm = T),
-         nFatalUnk_all_noFS = sum(is.na(fatal)),
-         prev_above_0 = as.factor(prev_above_0)) %>%
-  slice(1) %>%
-  ungroup() %>%
-  relocate(c(nPos_FS, nNeg_FS, nDead_FS, nAlive_FS, nFatalUnk_FS, nPos_all, nNeg_all, nDead_all, nAlive_all, nFatalUnk_all, 
-             nPos_all_noFS, nNeg_all_noFS, nDead_all_noFS, nAlive_all_noFS, nFatalUnk_all_noFS), .after = nativeStatus) %>%
-  dplyr::select(country, Lat, Lon, Site, prev_above_0, date, genus, scientific:nFatalUnk_all_noFS, richness, sppAbun, siteAbun, 
-                temp_m2:bio19_wc, diagnosticLab, principalInvestigator, Sample_bcid, collectorList, sMoist_m2:temp_m2) 
-
-
-Bsalpos_cbind <- with(Bsalpos_cbind, Bsalpos_cbind[order(Site, scientific), ])
-
+# Return data frame containing all observations from countries that had confirmed Bsal positive sites (will separate out Bsal+ and Bsal- sites later)
+# Bsalpos_cbind <- prev %>%
+#   relocate(c(prev_above_0), .after = Site) %>%
+#   filter(prev_above_0 == 1)  %>%
+#   group_by(Site, date, scientific) %>%
+#   mutate(nPos_FS = sum(BsalDetected != 0 & scientific == "Salamandra salamandra"),
+#          nNeg_FS = sum(BsalDetected == 0 & scientific == "Salamandra salamandra"),
+#          nDead_FS = sum(fatal != 0 & scientific == "Salamandra salamandra", na.rm = T),
+#          nAlive_FS = sum(fatal == 0 & scientific == "Salamandra salamandra", na.rm = T),
+#          nFatalUnk_FS = sum(is.na(fatal) & scientific == "Salamandra salamandra"), 
+#          nPos_all = sum(BsalDetected != 0),
+#          nNeg_all = sum(BsalDetected == 0),
+#          nDead_all = sum(fatal != 0, na.rm = T),
+#          nAlive_all = sum(fatal == 0, na.rm = T),
+#          nFatalUnk_all = sum(is.na(fatal)),
+#          nPos_all_noFS = sum(BsalDetected != 0 & scientific != "Salamandra salamandra"),
+#          nNeg_all_noFS = sum(BsalDetected == 0 & scientific != "Salamandra salamandra"),
+#          nDead_all_noFS = sum(fatal != 0 & scientific != "Salamandra salamandra", na.rm = T),
+#          nAlive_all_noFS = sum(fatal == 0 & scientific != "Salamandra salamandra", na.rm = T),
+#          nFatalUnk_all_noFS = sum(is.na(fatal)),
+#          prev_above_0 = as.factor(prev_above_0)) %>%
+#   slice(1) %>%
+#   ungroup() %>%
+#   relocate(c(nPos_FS, nNeg_FS, nDead_FS, nAlive_FS, nFatalUnk_FS, nPos_all, nNeg_all, nDead_all, nAlive_all, nFatalUnk_all, 
+#              nPos_all_noFS, nNeg_all_noFS, nDead_all_noFS, nAlive_all_noFS, nFatalUnk_all_noFS), .after = nativeStatus) %>%
+#   dplyr::select(country, Lat, Lon, Site, prev_above_0, date, genus, scientific:nFatalUnk_all_noFS, richness, sppAbun, siteAbun, 
+#                 temp_m2:bio19_wc, diagnosticLab, principalInvestigator, Sample_bcid, collectorList, sMoist_m2:temp_m2) 
+# 
+# 
+# Bsalpos_cbind <- with(Bsalpos_cbind, Bsalpos_cbind[order(Site, scientific), ])
+# 
 Bsal_all <- prev %>%
   relocate(c(prev_above_0), .after = Site) %>%
   group_by(Site, date, scientific) %>%
@@ -907,7 +908,7 @@ Bsal_all <- prev %>%
          nNeg_FS = sum(BsalDetected == 0 & scientific == "Salamandra salamandra"),
          nDead_FS = sum(fatal != 0 & scientific == "Salamandra salamandra", na.rm = T),
          nAlive_FS = sum(fatal == 0 & scientific == "Salamandra salamandra", na.rm = T),
-         nFatalUnk_FS = sum(is.na(fatal) & scientific == "Salamandra salamandra"), 
+         nFatalUnk_FS = sum(is.na(fatal) & scientific == "Salamandra salamandra"),
          nPos_all = sum(BsalDetected != 0),
          nNeg_all = sum(BsalDetected == 0),
          nDead_all = sum(fatal != 0, na.rm = T),
@@ -921,13 +922,12 @@ Bsal_all <- prev %>%
          prev_above_0 = as.factor(prev_above_0)) %>%
   slice(1) %>%
   ungroup() %>%
-  relocate(c(nPos_FS, nNeg_FS, nDead_FS, nAlive_FS, nFatalUnk_FS, nPos_all, nNeg_all, nDead_all, nAlive_all, nFatalUnk_all, 
+  relocate(c(nPos_FS, nNeg_FS, nDead_FS, nAlive_FS, nFatalUnk_FS, nPos_all, nNeg_all, nDead_all, nAlive_all, nFatalUnk_all,
              nPos_all_noFS, nNeg_all_noFS, nDead_all_noFS, nAlive_all_noFS, nFatalUnk_all_noFS), .after = nativeStatus) %>%
-  dplyr::select(country, Lat, Lon, Site, prev_above_0, date, genus, scientific:nFatalUnk_all_noFS, richness, sppAbun, siteAbun, 
-                temp_m2:bio19_wc, diagnosticLab, principalInvestigator, Sample_bcid, collectorList, sMoist_m2:temp_m2) 
+  dplyr::select(country, Lat, Lon, Site, prev_above_0, date, genus, scientific:nFatalUnk_all_noFS, richness, sppAbun, siteAbun,
+                temp_m2:bio19_wc, diagnosticLab, principalInvestigator, Sample_bcid, collectorList, sMoist_m2:temp_m2)
 
 
-Bsal_all <- with(Bsal_all, Bsal_all[order(Site, scientific), ])
 # check_dcbind <- dcbind %>%
 #   tidyr::drop_na(., any_of(c(24:42))) %>%
 #   filter(country == "Germany" | country == "Spain")
@@ -952,8 +952,8 @@ setwd(file.path(dir, csvpath))
 ## File for final prev dataframe:
 write.csv(prev, file = "Bsal_all.csv", row.names = FALSE)
 
-## File for cbind model -- only Bsal positive sites:
-write.csv(Bsalpos_cbind, file = "cbind_posSites.csv", row.names = FALSE)
+# ## File for cbind model -- only Bsal positive sites:
+# write.csv(Bsalpos_cbind, file = "cbind_posSites.csv", row.names = FALSE)
 
 ## File for cbind model -- only Bsal positive countries:
 write.csv(Bsal_all, file = "cbind_allSites.csv", row.names = FALSE)
