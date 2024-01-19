@@ -113,30 +113,65 @@ prev <- prev %>%
 
 ## Delete irrelevant columns
 data.frame(colnames(prev)) # returns indexed data frame 
-prev <- prev[-c(3, 22, 24:28, 33, 35, 37:41)]
+prev <- prev %>%
+  subset(., select = -c(locality, cycleTimeFirstDetection, locationRemarks:locationID, 
+                        occurrenceRemarks, diseaseLineage, zeScore:DiagFALSEstics_bcid))
 
 ## Rearrange dataframe
 data.frame(colnames(prev)) 
-prev <- prev[, c(2, 31:33, 4:5, 3, 19:20, 6, 8:10, 34:35, 24:26, 
-                 13:18, 27, 7, 11:12, 21:22, 1, 23, 28:30)]
+prev <- prev %>%
+  relocate(country, .before = principalInvestigator) %>%
+  relocate(c(ADM0:ADM2, decimalLatitude, decimalLongitude, yearCollected, monthCollected, dayCollected,
+             materialSampleID, genus:scientific, susceptibility, nativeStatus, lifeStage:individualCount,
+             diseaseTested:fatal, specimenFate, basisOfRecord,sampleType, testMethod, diagnosticLab, sampleRemarks,
+             principalInvestigator, collectorList, Sample_bcid:projectId), .after = country)
 
 
 ## Remove columns from Spain
 data.frame(colnames(spain)) 
-spain <- spain[, -c(8:9, 32:54)]
-
+spain <- spain %>%
+  subset(., select = -c(coordinateUncertaintyInMeters, minimumElevationInMeters,
+                        soilMoisture:bio19))
 
 ## Rearrange columns in Spain df
-spain <- spain[, c(2:10, 1, 11:13, 15, 14, 28:29, 26, 18, 
-                   20:24, 27, 16:17, 19, 25, 30:33)]
+spain <- spain %>%
+  relocate(c(country:dayCollected), .before = materialSampleID) %>%
+  relocate(c(materialSampleID, genus:scientific, susceptibility, nativeStatus,
+           lifeStage, sex, individualCount, diseaseTested, BdDetected:fatal,
+           specimenDisposition, basisOfRecord, sampleType, testMethod, diagnosticLab,
+           collectorList:projectId), .after = dayCollected)
+
+  
 spain <- spain %>%
   replace(., . == "", NA) %>%
   rename(specimenFate = specimenDisposition) %>%
-  mutate(sampleRemarks = NA, principalInvestigator = "An Martel") %>%
-  relocate(c("sampleRemarks", "principalInvestigator"), .after = "diagnosticLab")
+  mutate(sampleRemarks = NA, 
+         principalInvestigator = "An Martel") %>%
+  relocate(c(sampleRemarks, principalInvestigator), .after = diagnosticLab)
   
 ## Join Spain to main df
 prev <- rbind(prev, spain)
+
+larvae <- prev %>%
+  filter(lifeStage == "larva" | lifeStage == "larvae" | lifeStage == "larvae, adult")
+test <- prev %>%
+  prev %>%
+  # make sure individualCount is numeric
+  mutate(individualCount = as.numeric(individualCount)) %>% 
+  # assume all NA values are observations for a single individual
+  mutate(individualCount = coalesce(NA, 1)) %>%
+  # replace NA values in diseaseTested with appropriate test
+  mutate(diseaseTested = coalesce(NA, "Bsal")) %>%
+  # remove rows with no data
+  dplyr::filter(!(materialSampleID=="")) %>%
+  # drop rows that include sampling from Peru or the US (imported with euram df)
+  dplyr::filter(!(country == "Peru")) %>%
+  dplyr::filter(!(country == "United States")) %>%
+  rename(year = yearCollected,
+         month = monthCollected,
+         day = dayCollected,
+         Lat = decimalLatitude,
+         Lon = decimalLongitude)
 
 prev <- prev %>%
   # make sure individualCount is numeric
@@ -290,11 +325,11 @@ names(SAb)[names(SAb) == 'sppAbun'] <- 'siteAbun'
 ## Add abundance and richness back into prev df
 prev <- prev %>%
   # species richness
-  left_join(spr[,c(1:2,25)], by = c("Site", "date")) %>%
+  left_join(spr[,c(1:2, 18)], by = c("Site", "date")) %>%
   # species abundance
   left_join(spa, by = c("scientific", "Site", "date")) %>%
   # site abundance
-  left_join(SAb[,c(1:2,3)], by = c("Site", "date")) 
+  left_join(SAb, by = c("Site", "date")) 
 
 ## Make sure columns that have categorical data are uniform in coding
 prev <- prev %>%
@@ -838,6 +873,7 @@ prev$genus <- gsub("[[:space:]]", "", prev$genus) # get rid of weird spaces in t
 # A site may initially be Bsal negative and may later test positive, thus it is possible to have a site classified as both negative and positive
 Bsalpos <- prev %>%
   tidyr::drop_na(., any_of(c("BsalDetected", "date", "sMoist_d", "temp_d"))) %>%
+  # Drop species that have <10 observations
   subset(scientific != "Calotriton asper" & # Only one observation with NA vals for date 
          scientific != "Lissotriton boscai" & 
          scientific != "Hyla meridionalis" &
@@ -847,6 +883,7 @@ Bsalpos <- prev %>%
          total_pos = ave(BsalDetected == 1, FUN = sum), # total # of individuals at this site that tested positive for Bsal during this sampling event
          prev_above_0 = ifelse(total_pos != 0, 1, 0)) %>% # bool; at least one individual at this site tested positive (1) or negative (0) during this sampling event 
   ungroup() %>%
+  subset(scientific != "Pelophylax sp.") %>% # now has 2 obs. need to drop.
   group_by(Site) %>%
   mutate(posSite = ifelse(sum(prev_above_0) != 0, 1, 0)) # bool; The site associated with this observation has tested positive (1) for Bsal at some point, or has never (0) tested positive for Bsal
 
@@ -957,6 +994,8 @@ write.csv(Bsal_all, file = "cbind_allSites.csv", row.names = FALSE)
 
 ## Export data for collaborators to xlsx sheet:
 library(xlsx)
+setwd(file.path(dir, csvpath))
+prev <- read.csv("Bsal_all.csv", header = TRUE, encoding = "UTF-8")
 
 all_data <- prev %>% 
   filter(country == "Germany") %>%
@@ -969,7 +1008,7 @@ all_data <- prev %>%
 
 
 
-site_summary <- Bsalpos %>%
+site_summary <- prev %>%
   filter(country == "Germany") %>%
   subset(., select = c(country, ADM0, ADM1, ADM2, Lat, Lon, Site, posSite,
                        richness, siteAbun, BsalDetected, principalInvestigator,
@@ -979,17 +1018,22 @@ site_summary <- Bsalpos %>%
   relocate(total_pos, .after = siteAbun) %>%
   dplyr::select(-(BsalDetected)) %>%
   unique()
-
+site_summary <- site_summary[order(site_summary$Site),]
 
 positive_sites <- site_summary %>%
   filter(posSite != 0)
 
 
-repeated_sampling <- AllSites %>%
+repeated_sampling <- prev %>%
   dplyr::select(c(Site, date)) %>%
   group_by(Site) %>%
   summarise(n = n()) %>%
   filter(n != 1)
+
+repeated_sampling <-  repeated_sampling[order(repeated_sampling$Site),]
+
+
+
 View(repeated_sampling)
 
 
