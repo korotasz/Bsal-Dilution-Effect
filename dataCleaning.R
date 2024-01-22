@@ -152,39 +152,19 @@ spain <- spain %>%
 ## Join Spain to main df
 prev <- rbind(prev, spain)
 
-larvae <- prev %>%
-  filter(lifeStage == "larva" | lifeStage == "larvae" | lifeStage == "larvae, adult")
-test <- prev %>%
-  prev %>%
-  # make sure individualCount is numeric
-  mutate(individualCount = as.numeric(individualCount)) %>% 
-  # assume all NA values are observations for a single individual
-  mutate(individualCount = coalesce(NA, 1)) %>%
-  # replace NA values in diseaseTested with appropriate test
-  mutate(diseaseTested = coalesce(NA, "Bsal")) %>%
-  # remove rows with no data
-  dplyr::filter(!(materialSampleID=="")) %>%
-  # drop rows that include sampling from Peru or the US (imported with euram df)
-  dplyr::filter(!(country == "Peru")) %>%
-  dplyr::filter(!(country == "United States")) %>%
-  rename(year = yearCollected,
-         month = monthCollected,
-         day = dayCollected,
-         Lat = decimalLatitude,
-         Lon = decimalLongitude)
-
 prev <- prev %>%
   # make sure individualCount is numeric
   mutate(individualCount = as.numeric(individualCount)) %>% 
   # assume all NA values are observations for a single individual
-  mutate(individualCount = coalesce(NA, 1)) %>%
-  # replace NA values in diseaseTested with appropriate test
-  mutate(diseaseTested = coalesce(NA, "Bsal")) %>%
+  plyr::mutate(individualCount = case_match(individualCount, NA ~ 1, .default = individualCount),
+               # replace NA values in diseaseTested with appropriate test       
+               diseaseTested = case_match(diseaseTested, NA ~ "Bsal", .default = diseaseTested),
+               # replace NA values in lifeStage with 'unknown'
+               lifeStage = case_match(lifeStage, c(NA, "") ~ "unknown", .default = lifeStage)) %>%
   # remove rows with no data
   dplyr::filter(!(materialSampleID=="")) %>%
   # drop rows that include sampling from Peru or the US (imported with euram df)
-  dplyr::filter(!(country == "Peru")) %>%
-  dplyr::filter(!(country == "United States")) %>%
+  dplyr::filter(country != "Peru" & country != "United States") %>%
   # drop observations of larvae
   dplyr::filter(lifeStage != "larva" & lifeStage != "larvae" & lifeStage != "larvae, adult") %>%
   rename(year = yearCollected,
@@ -325,7 +305,7 @@ names(SAb)[names(SAb) == 'sppAbun'] <- 'siteAbun'
 ## Add abundance and richness back into prev df
 prev <- prev %>%
   # species richness
-  left_join(spr[,c(1:2, 18)], by = c("Site", "date")) %>%
+  left_join(spr[,c(1:2, 25)], by = c("Site", "date")) %>%
   # species abundance
   left_join(spa, by = c("scientific", "Site", "date")) %>%
   # site abundance
@@ -869,8 +849,7 @@ prev$genus <- gsub("[[:space:]]", "", prev$genus) # get rid of weird spaces in t
 
 
 #### cbind model df ####
-# Classify which sites are Bsal positive beginning at the date of the first positive Bsal observation
-# A site may initially be Bsal negative and may later test positive, thus it is possible to have a site classified as both negative and positive
+# Classify which sites are Bsal positive, i.e., if that site has ever had any Bsal+ cases
 Bsalpos <- prev %>%
   tidyr::drop_na(., any_of(c("BsalDetected", "date", "sMoist_d", "temp_d"))) %>%
   # Drop species that have <10 observations
@@ -1004,40 +983,43 @@ all_data <- prev %>%
                 scientific, susceptibility,  nativeStatus, sex, individualCount, 
                 BsalDetected, BsalLoad, fatal, specimenFate, basisOfRecord, 
                 sampleType, testMethod, diagnosticLab, sampleRemarks, principalInvestigator, 
-                collectorList, Sample_bcid, expeditionCode, projectId) 
-
-
-
-site_summary <- prev %>%
-  filter(country == "Germany") %>%
-  subset(., select = c(country, ADM0, ADM1, ADM2, Lat, Lon, Site, posSite,
-                       richness, siteAbun, BsalDetected, principalInvestigator,
-                       collectorList, expeditionCode, projectId)) %>%
+                collectorList, Sample_bcid, expeditionCode, projectId) %>%
   group_by(Site) %>%
   mutate(total_pos = ave(BsalDetected == 1, FUN = sum)) %>%
-  relocate(total_pos, .after = siteAbun) %>%
-  dplyr::select(-(BsalDetected)) %>%
+  relocate(total_pos, .after = posSite)
+
+
+repeated_sampling <- all_data %>%
+  dplyr::select(c(Site, date)) %>%
+  unique() %>%
+  group_by(Site) %>%
+  summarise(samplingEvents = n()) 
+
+
+all_data <- left_join(all_data, repeated_sampling, by = "Site") %>%
+  relocate(samplingEvents, .after = Site)
+all_data <- all_data[order(all_data$Site),]
+data.frame(colnames(all_data))
+
+
+site_summary <- all_data %>%
+  subset(., select = c(country:Lon, Site:posSite, BsalDetected, total_pos,
+                       diagnosticLab, principalInvestigator,
+                       collectorList, expeditionCode, projectId)) %>%
   unique()
-site_summary <- site_summary[order(site_summary$Site),]
+
+#site_summary <- site_summary[order(site_summary$Site),]
+
+repeated_sampling <- site_summary %>%
+  filter(samplingEvents > 1)
 
 positive_sites <- site_summary %>%
-  filter(posSite != 0)
+  subset(., select = -(BsalDetected)) %>%
+  filter(posSite != 0) %>%
+  unique()
 
 
-repeated_sampling <- prev %>%
-  dplyr::select(c(Site, date)) %>%
-  group_by(Site) %>%
-  summarise(n = n()) %>%
-  filter(n != 1)
-
-repeated_sampling <-  repeated_sampling[order(repeated_sampling$Site),]
-
-
-
-View(repeated_sampling)
-
-
-write.xlsx(as.data.frame(data), file = "Germany_data.xlsx", sheetName = "germany_all", row.names = FALSE)
-write.xlsx(as.data.frame(site_data), file = "Germany_data.xlsx", sheetName = "site_data", append = TRUE, row.names = FALSE)
-write.xlsx(as.data.frame(test), file = "Germany_data.xlsx", sheetName = "repeated_sampling", append = TRUE, row.names = FALSE)
-
+write.xlsx(as.data.frame(all_data), file = "Germany_data.xlsx", sheetName = "germany_all", row.names = FALSE)
+write.xlsx(as.data.frame(site_summary), file = "Germany_data.xlsx", sheetName = "site_summary", append = TRUE, row.names = FALSE)
+write.xlsx(as.data.frame(repeated_sampling), file = "Germany_data.xlsx", sheetName = "repeated_sampling", append = TRUE, row.names = FALSE)
+write.xlsx(as.data.frame(positive_sites), file = "Germany_data.xlsx", sheetName = "positive_sites", append = TRUE, row.names = FALSE)
