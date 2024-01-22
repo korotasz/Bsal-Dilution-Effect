@@ -857,14 +857,10 @@ Bsalpos <- prev %>%
          scientific != "Lissotriton boscai" & 
          scientific != "Hyla meridionalis" &
          scientific != "Pleurodeles waltl") %>%
-  group_by(Site, date) %>%
-  mutate(scientific = gsub(pattern = "Pelophylax perezi", replacement = "Pelophylax sp.", scientific),
-         total_pos = ave(BsalDetected == 1, FUN = sum), # total # of individuals at this site that tested positive for Bsal during this sampling event
-         prev_above_0 = ifelse(total_pos != 0, 1, 0)) %>% # bool; at least one individual at this site tested positive (1) or negative (0) during this sampling event 
-  ungroup() %>%
+  mutate(scientific = gsub(pattern = "Pelophylax perezi", replacement = "Pelophylax sp.", scientific))
   subset(scientific != "Pelophylax sp.") %>% # now has 2 obs. need to drop.
-  group_by(Site) %>%
-  mutate(posSite = ifelse(sum(prev_above_0) != 0, 1, 0)) # bool; The site associated with this observation has tested positive (1) for Bsal at some point, or has never (0) tested positive for Bsal
+    group_by(Site) %>%
+    mutate(posSite = ifelse(sum(BsalDetected) != 0, 1, 0)) # bool; The site associated with this observation has tested positive (1) for Bsal at some point, or has never (0) tested positive for Bsal
 
 
 ## Double checking #s
@@ -876,7 +872,7 @@ View(nBsalPos)
 # Add all data back into 'prev' data frame, even sites that are negative
 prev <- Bsalpos %>%
   relocate(c(posSite), .after = Site) %>%
-  subset(., select = -c(total_pos, prev_above_0, date_m1, date_m2, wk1_start, t4, year, month, day)) %>%
+  subset(., select = -c(date_m1, date_m2, wk1_start, t4, year, month, day)) %>%
   rename(tmin_wc = tmin, tmax_wc = tmax, tavg_wc = tavg, prec_wc = prec, bio1_wc = bio1, bio2_wc = bio2, bio3_wc = bio3, bio4_wc = bio4, bio5_wc = bio5, bio6_wc = bio6,
          bio7_wc = bio7, bio8_wc = bio8, bio9_wc = bio9, bio10_wc = bio10, bio11_wc = bio11, bio12_wc = bio12, bio13_wc = bio13, bio14_wc = bio14, bio15_wc = bio15, bio16_wc = bio16,
          bio17_wc = bio17, bio18_wc = bio18, bio19_wc = bio19) 
@@ -972,7 +968,9 @@ write.csv(Bsal_all, file = "cbind_allSites.csv", row.names = FALSE)
 
 
 ## Export data for collaborators to xlsx sheet:
-library(xlsx)
+options(java.parameters = "-Xmx8000m")
+library(openxlsx)
+library(rJava)
 setwd(file.path(dir, csvpath))
 prev <- read.csv("Bsal_all.csv", header = TRUE, encoding = "UTF-8")
 
@@ -1019,7 +1017,18 @@ positive_sites <- site_summary %>%
   unique()
 
 
-write.xlsx(as.data.frame(all_data), file = "Germany_data.xlsx", sheetName = "germany_all", row.names = FALSE)
-write.xlsx(as.data.frame(site_summary), file = "Germany_data.xlsx", sheetName = "site_summary", append = TRUE, row.names = FALSE)
-write.xlsx(as.data.frame(repeated_sampling), file = "Germany_data.xlsx", sheetName = "repeated_sampling", append = TRUE, row.names = FALSE)
-write.xlsx(as.data.frame(positive_sites), file = "Germany_data.xlsx", sheetName = "positive_sites", append = TRUE, row.names = FALSE)
+# Create workbook to store all 'sheets'
+Germany_wb <- createWorkbook()
+
+addWorksheet(Germany_wb, "germany_all") 
+addWorksheet(Germany_wb, "site_summary")
+addWorksheet(Germany_wb, "repeated_sampling") 
+addWorksheet(Germany_wb, "positive_sites") 
+
+writeData(Germany_wb, "germany_all", all_data, colNames = T)
+writeData(Germany_wb, "site_summary", site_summary, colNames = T) 
+writeData(Germany_wb, "repeated_sampling", repeated_sampling, colNames = T) 
+writeData(Germany_wb, "positive_sites", positive_sites, colNames = T)
+  
+## Save workbook
+saveWorkbook(Germany_wb, "Germany_data.xlsx", overwrite = TRUE)
