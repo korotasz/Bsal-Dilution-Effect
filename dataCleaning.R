@@ -19,6 +19,7 @@ pckgs <- c("tidyverse", # data wrangling/manipulation
            "geosphere", # distGeo(); distm()
             "maptools", # package to create maps
                "gstat", # spatio-temporal geostatistical modelling
+               "stars", # interacting with rasters as sf objects
                   "sp", # working with geospatial data
                   "sf", # working with geospatial data
                   "fs"  # construct relative paths to files/directories
@@ -278,7 +279,7 @@ native <- prev %>%
 prev <- unite(prev, c("year", "month", "day"), sep = "-", col = "date", remove = F)
 
 ## INCLUDES FIRE SALAMANDERS
-## calculate relative spp richness 
+## calculate relative spp richness (from our dataset)
 spr <- prev %>%
   dplyr::select(Site, date, scientific) %>%
   group_by(Site, date, scientific) %>%
@@ -292,6 +293,12 @@ spr <- prev %>%
   ungroup() %>%
   mutate(richness = apply(.[,3:(ncol(.))] > 0, 1, sum))
 
+# Read in IUCN richness .csv (data processed in QGIS)
+iucn_rich <- read.csv("iucn_richness.csv", header = T, encoding = "UTF-8")
+
+prev$iucn_rich <- iucn_rich$iucn_rich[base::match(paste(test$Lat, test$Lon),
+                                                           paste(iucn_rich$Lat, iucn_rich$Lon))]
+  
 ## Calculate abundance of individual spp at a site during each sampling event
 spa <- prev %>%
   dplyr::select(Site, date, scientific, individualCount) # subset relevant data
