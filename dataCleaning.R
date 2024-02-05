@@ -199,8 +199,6 @@ points <- prev %>%
          Lon = sf::st_coordinates(.)[,1],
          Lat = sf::st_coordinates(.)[,2]) 
 
-# st_write(points, "locations.shp", append = F)
-
 ## Intersect lat/lon coordinates with each raster to get the correct admin levels associated with our data
 out <- st_intersection(points, polygon) %>%
   mutate(Lon = sf::st_coordinates(.)[,1],
@@ -236,11 +234,54 @@ prev <- prev %>%
 # rm(out, points, polygon)
 
 ## Group sites by unique lat/long combos and assign site #s to them, for all countries
-siteNumber <- prev %>%
-  dplyr::select(materialSampleID, Lat, Lon) %>%
-  dplyr::group_by(Lat, Lon) %>%
-  mutate(Site = cur_group_id()) %>% 
-  ungroup() 
+# siteNumber <- prev %>%
+#   dplyr::select(materialSampleID, Lat, Lon) %>%
+#   dplyr::group_by(Lat, Lon) %>%
+#  mutate(Site = cur_group_id()) %>% 
+#  ungroup() 
+
+## Make sure that sites (lat/lon coords) are actually independent from one another 
+## Create 1km buffer around each unique lat/lon
+pts <- prev %>% 
+  dplyr::select(Lon, Lat) %>%
+  st_as_sf(x = ., coords = c("Lon", "Lat"), crs = 4326) %>%
+  unique() %>%
+  st_transform(3035)
+
+
+# Obtain world map
+worldmap <- ne_countries(scale = "medium", type = "map_units", returnclass = "sf")
+
+# Polygons are re-projected to the EPSG:3035 (Lambert Azimuthal Equal Area Projection) 
+# This projection covers all of Europe (on- and off-shore), is based on the GCS ETRS 89,
+# and has been used in the EU's INSPIRE directive. In other words, it is well established.
+# Coordinates are displayed in meters and must be translated back into decimal degrees.
+europe <- worldmap %>%
+  filter(continent == "Europe" & !name %in% c("Russia")) %>%
+  st_transform(., crs = 3035) 
+
+# Specify countries with Bsal field sampling efforts
+countriesSampled <- worldmap %>% 
+  filter(sovereignt %in% c("Spain", "Switzerland", "Germany", "United Kingdom") 
+         & !name %in% c("Guernsey", "Isle of Man", "Jersey", "N. Ireland", 
+                        "Scotland", "Wales", "Anguilla", "Bermuda", "Br. Indian Ocean Ter.",
+                        "Cayman Is.",  "Falkland Is.", "Montserrat", "Pitcairn Is.",
+                        "S. Geo. and S. Sandw. Is.", "Saint Helena", "Turks and Caicos Is.",
+                        "British Virgin Is.")) %>%
+  st_transform(., crs = 3035) 
+
+
+# Map
+europe_map <- ggplot() +
+  geom_sf(data = europe, col = "gray40", fill = "white", show.legend = F) +
+  geom_sf(data = pts, aes(fill = "black", geometry = geometry)) #+
+#  scale_fill_manual(values = "black", guide = "none") +
+#  scale_shape_manual(values = 21, guide = "none") +
+coord_sf(xlim = c(2652777.0489846086, 4632884.549024921), # c(-16, 15)
+         ylim = c(1615336.1806950625, 3665962.1500697937), 
+         crs = 3035) #+ # c(37, 56)
+
+europe_map
 
 prev$Site <- siteNumber$Site[base::match(paste(prev$materialSampleID), 
                                       paste(siteNumber$materialSampleID))]
@@ -688,6 +729,33 @@ prev <- prev %>%
 temp_prev <- prev ## in case I need to come back to this point
 #prev <- temp_prev
 rm(temp_m, precip_m, avg_soilMoist, daily_SM, avg_temp, daily_temp, gldas_daily, soilMoisture, temperature)
+
+
+## Sampling elevation with polygons instead of points --------------------------
+#     a. First, we need to obtain elevation as a raster layer (elevatr package)
+#        zoom 5 = 2.5 arc minutes; same resolution as our other data
+setwd(file.path(dir, csvpath))
+elevation <- get_elev_raster(col_adm2, prj = "EPSG:4326", src = "aws", z = 5) 
+
+#     b. Use ADM geometries to sample elevation raster 
+elev_crop <- crop(elev_COL, col_adm2) 
+elev_mask <- mask(elev_crop, col_adm2)
+elev_extract <- as.data.frame(raster::extract(x = elev_mask, y = col_adm2, fun = mean, df = T, sp = T))
+elev_df <- elev_extract %>% 
+  dplyr::select(8, 3, 15) 
+# Elevation column name subject to change if code is ran at a later date. 
+names(elev_df) <- c("ADM1", "ADM2", "elev_m")  
+
+#     c. Add back to main dataframe 
+colombia <- left_join(colombia, elev_df, by = c("ADM1", "ADM2")) %>%
+  relocate(., elev_m, .before = tmin) 
+
+## The following was used to check for missing vals -- retaining just in case
+# missing <- colombia %>%
+#   dplyr::select(ADM0, ADM1, ADM2, Lat, Lon, EpiYear, EpiWeek, Disease, Incidence) %>%
+#   filter(is.na("elev_m")) %>%
+#   dplyr::select(ADM1, ADM2) %>%
+#   unique()
 
 
 # Combine BdDetected and BsalDetected into one "diseaseDetected" column
