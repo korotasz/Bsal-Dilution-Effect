@@ -16,12 +16,14 @@ pckgs <- c("tidyverse", # data wrangling/manipulation
               "raster", # raster manipulation/working with geospatial data
                "terra", # supercedes raster package
              "geodata", # get admin levels for each country
+               "rgbif", # obtain species occurrence data
            "geosphere", # distGeo(); distm()
             "maptools", # package to create maps
                "gstat", # spatio-temporal geostatistical modelling
                "stars", # interacting with rasters as sf objects
                   "sp", # working with geospatial data
                   "sf", # working with geospatial data
+             "usethis", # edit R environ to access gbif data
                   "fs"  # construct relative paths to files/directories
 )
 
@@ -33,7 +35,8 @@ pckgs <- c("tidyverse", # data wrangling/manipulation
 # renv::hydrate(packages = c(pckgs, "pacman"), sources = c("C:/Users/Alexis/AppData/Local/R/win-library/4.3", "C:/Program Files/R/R-4.3.1/library"))
 pacman::p_load(pckgs, character.only = T, update = F)
 
-
+## Edit .Renviron to be able to access gbif data
+# usethis::edit_r_environ() # need to restart R for changes to take effect
 
 ## Create file paths for each wd
 dir <- dirname(rstudioapi::getActiveDocumentContext()$path)
@@ -174,7 +177,7 @@ prev <- prev %>%
          Lat = decimalLatitude,
          Lon = decimalLongitude)
 
-
+rm(belgium, euram, germany, spain, uk)
 #### Obtaining administrative level data from geodata package ------------------
 ## Construct file path to store Euro country shapefiles
 dir.create(file.path(dir, shppath)) # Will give warning if path already exists
@@ -198,8 +201,11 @@ points <- prev %>%
   mutate(L1 = row_number(),
          Lon = sf::st_coordinates(.)[,1],
          Lat = sf::st_coordinates(.)[,2]) 
+# st_write(points, "locations.shp", append = F)
 
 ## Intersect lat/lon coordinates with each raster to get the correct admin levels associated with our data
+## Compared this method with previous method of loading gadm.org shapefiles into QGIS fore ea. country & 
+#  sampling locations, and it is just as accurate.
 out <- st_intersection(points, polygon) %>%
   mutate(Lon = sf::st_coordinates(.)[,1],
          Lat = sf::st_coordinates(.)[,2])
@@ -230,58 +236,15 @@ prev <- prev %>%
   relocate(c(country, ADM0, ADM1, ADM2), .before = LatLon) %>%
   separate(LatLon, c("Lat", "Lon"), sep = ", ")
 
-## Compared this method with previous method of loading gadm.org shapefiles into QGIS fore ea. country & sampling locations, and it is just as accurate.
-# rm(out, points, polygon)
+
+rm(out, points, polygon)
 
 ## Group sites by unique lat/long combos and assign site #s to them, for all countries
-# siteNumber <- prev %>%
-#   dplyr::select(materialSampleID, Lat, Lon) %>%
-#   dplyr::group_by(Lat, Lon) %>%
-#  mutate(Site = cur_group_id()) %>% 
-#  ungroup() 
-
-## Make sure that sites (lat/lon coords) are actually independent from one another 
-## Create 1km buffer around each unique lat/lon
-pts <- prev %>% 
-  dplyr::select(Lon, Lat) %>%
-  st_as_sf(x = ., coords = c("Lon", "Lat"), crs = 4326) %>%
-  unique() %>%
-  st_transform(3035)
-
-
-# Obtain world map
-worldmap <- ne_countries(scale = "medium", type = "map_units", returnclass = "sf")
-
-# Polygons are re-projected to the EPSG:3035 (Lambert Azimuthal Equal Area Projection) 
-# This projection covers all of Europe (on- and off-shore), is based on the GCS ETRS 89,
-# and has been used in the EU's INSPIRE directive. In other words, it is well established.
-# Coordinates are displayed in meters and must be translated back into decimal degrees.
-europe <- worldmap %>%
-  filter(continent == "Europe" & !name %in% c("Russia")) %>%
-  st_transform(., crs = 3035) 
-
-# Specify countries with Bsal field sampling efforts
-countriesSampled <- worldmap %>% 
-  filter(sovereignt %in% c("Spain", "Switzerland", "Germany", "United Kingdom") 
-         & !name %in% c("Guernsey", "Isle of Man", "Jersey", "N. Ireland", 
-                        "Scotland", "Wales", "Anguilla", "Bermuda", "Br. Indian Ocean Ter.",
-                        "Cayman Is.",  "Falkland Is.", "Montserrat", "Pitcairn Is.",
-                        "S. Geo. and S. Sandw. Is.", "Saint Helena", "Turks and Caicos Is.",
-                        "British Virgin Is.")) %>%
-  st_transform(., crs = 3035) 
-
-
-# Map
-europe_map <- ggplot() +
-  geom_sf(data = europe, col = "gray40", fill = "white", show.legend = F) +
-  geom_sf(data = pts, aes(fill = "black", geometry = geometry)) #+
-#  scale_fill_manual(values = "black", guide = "none") +
-#  scale_shape_manual(values = 21, guide = "none") +
-coord_sf(xlim = c(2652777.0489846086, 4632884.549024921), # c(-16, 15)
-         ylim = c(1615336.1806950625, 3665962.1500697937), 
-         crs = 3035) #+ # c(37, 56)
-
-europe_map
+siteNumber <- prev %>%
+  dplyr::select(materialSampleID, Lat, Lon) %>%
+  dplyr::group_by(Lat, Lon) %>%
+ mutate(Site = cur_group_id()) %>%
+ ungroup()
 
 prev$Site <- siteNumber$Site[base::match(paste(prev$materialSampleID), 
                                       paste(siteNumber$materialSampleID))]
@@ -319,7 +282,7 @@ native <- prev %>%
 #### Calculate abundance, richness, and diversity ####
 prev <- unite(prev, c("year", "month", "day"), sep = "-", col = "date", remove = F)
 
-## INCLUDES FIRE SALAMANDERS
+## Richness calculations include fire salamanders
 ## calculate relative spp richness (from our dataset)
 spr <- prev %>%
   dplyr::select(Site, date, scientific) %>%
@@ -335,20 +298,71 @@ spr <- prev %>%
   mutate(richness = apply(.[,3:(ncol(.))] > 0, 1, sum))
 
 # Read in IUCN richness .csv (data processed in QGIS)
-iucn_rich <- read.csv("iucn_richness.csv", header = T, encoding = "UTF-8")
+iucn_rich <- read.csv("iucn_richness.csv", header = T, encoding = "UTF-8") %>%
+  rename(., iucn_rich = SAMPLE_1)
 
-prev$iucn_rich <- iucn_rich$iucn_rich[base::match(paste(test$Lat, test$Lon),
-                                                           paste(iucn_rich$Lat, iucn_rich$Lon))]
+prev$iucn_rich <- iucn_rich$iucn_rich[base::match(paste(prev$Lat, prev$Lon),
+                                                  paste(iucn_rich$Lat, iucn_rich$Lon))]
+
+# Read in IUCN rarity-weighted richness (RWR) score .csv (data processed in QGIS)
+# RWR: The proportion of the species' range contained within a cell. 
+#      For this raster, it is 1/the total number of cells overlapped by that species' range.
+#      The values are summed across all the species in the analysis to give the 
+#      relative importance of each cell to the species found there.
+iucn_rwr <- read.csv("iucn_rwr.csv", header = T, encoding = "UTF-8") %>%
+  rename(., iucn_rwr = SAMPLE_1)
+
+prev$iucn_rwr <- iucn_rwr$iucn_rwr[base::match(paste(prev$Lat, prev$Lon),
+                                                           paste(iucn_rwr$Lat, iucn_rwr$Lon))]
   
-## Calculate abundance of individual spp at a site during each sampling event
+## Calculate abundance of individual spp at a site during each sampling event using ONLY our data
 spa <- prev %>%
   dplyr::select(Site, date, scientific, individualCount) # subset relevant data
 spa <- aggregate(individualCount ~ scientific+Site+date, spa, sum) # aggregate by Site, date, spp. & summarise
 names(spa)[names(spa) == 'individualCount'] <- 'sppAbun'
 
-## Calculate abundance of total spp at a site during each sampling event
+## Calculate abundance of total spp at a site during each sampling event using ONLY our data
 SAb <- aggregate(sppAbun ~ Site + date, spa, sum)
 names(SAb)[names(SAb) == 'sppAbun'] <- 'siteAbun'
+
+## Get species occurrence data using gbif "Sampling Event Data" -- an alternate measure of abundance?
+## Citation: GBIF.org (07 February 2024) GBIF Occurrence Download  https://doi.org/10.15468/dl.fc6dp6
+setwd(file.path(dir, csvpath))
+
+gbif_amphib <- data.table::fread("gbif_amphibs.csv") %>%
+  rename(., Lat = decimalLatitude,
+            Lon = decimalLongitude, 
+            scientific = verbatimScientificName) %>%
+  unite(c("year", "month", "day"), sep = "-", col = "date", remove = F) %>%
+  dplyr::filter(!(day == "NA")) 
+
+## Create key to match dates in 'prev' to dates in 'gbif_amphib'
+dates <- prev %>%
+  dplyr::filter(!(day == "NA")) %>%
+  subset(., select = date) %>%
+  unique() 
+
+## Only retain observations that occurred on our sampling dates
+gbif_amphib <- inner_join(dates, gbif_amphib) ## only 378 of 395 dates matched observations
+
+## Create buffer around points that correspond with their coordinate uncertainty
+gbif_coords <- st_as_sf(gbif_amphib, coords = c("Lon", "Lat"), crs = 4326)
+
+# *Only do this if the coordinates have any uncertainty*
+# gbif_buffer <- for(i in 1:nrow(gbif_coords)){
+#   if(is.na(gbif_coords$coordinateUncertaintyInMeters[i])){
+#     
+#     copy(gbif_coords$geometry)
+#     
+#   }
+#   
+#   else{
+#     
+#     st_buffer(gbif_coords, (gbif_coords$coordinateUncertaintyInMeters[i]*0.001))
+#   }
+# }
+
+ 
 
 ## Add abundance and richness back into prev df
 prev <- prev %>%

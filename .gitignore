@@ -10,14 +10,10 @@ InteractiveMap_Europe.R
 csvFiles/shapefiles/*
 csvFiles/nativeStatus.xlsx
 csvFiles/BsalMap.html
-csvFiles/intersected_3035.qmd
-csvFiles/intersected_4326.qmd
 csvFiles/locations
 csvFiles/Germany_data.xlsx
+csvFiles/Germany_data.xlsx
 csvFiles/weather.csv
-csvFiles/weather_3035.csv
-csvFiles/weather_3035.qmd
-csvFiles/weather_4326.csv
-csvFiles/weather_4326.qmd
+csvFiles/gbif_amphibs.csv
 
 weatherSampling/weatherProcessing_monthly.R
