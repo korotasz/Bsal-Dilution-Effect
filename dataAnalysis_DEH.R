@@ -48,6 +48,7 @@ pckgs <- c("ggsignif", # adds labels to significant groups
               "MuMIn", # model.sel()
           "ggeffects", # ggpredict()
                "epiR", # calculate prevalence & CIs
+              "binom", # credible intervals
              "sjmisc"  # data and variable transformation
 )
 
@@ -121,8 +122,8 @@ ak_theme <- theme_ipsum() +
 
 
 #### Load csv files ####
-d <- read.csv("bsalData_clean.csv", header = T, encoding = "UTF-8")
-dcbind <- read.csv("bsalData_cbind.csv", header = T, encoding = "UTF-8")
+d <- read.csv("Bsal_all.csv", header = T, encoding = "UTF-8")
+dcbind <- read.csv("cbind_allSites.csv", header = T, encoding = "UTF-8")
 
 # log transform vars
 d <- d %>%
@@ -470,6 +471,8 @@ prev <- d %>%
 
 # Use binconf function to sample binomial distribution and get CIs for prevalence
 bsal_ci <- binconf(prev$ncas_Bsal, prev$npop, method = "exact", return.df = T)
+bsal_bayesci <- binom::binom.bayes(x = prev$ncas_Bsal, n = prev$npop, type = "highest", tol = 1e-9, maxit = 1000)
+
 
 sampSize <- d %>%
   dplyr::select(country, ADM0, Lat, Lon, diseaseTested,

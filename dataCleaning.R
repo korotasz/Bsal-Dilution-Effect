@@ -15,6 +15,7 @@ pckgs <- c("tidyverse", # data wrangling/manipulation
                "stats", # aggregate()
               "raster", # raster manipulation/working with geospatial data
                "terra", # supercedes raster package
+       "rnaturalearth", # obtain spatial polygons that can be used with sf
              "geodata", # get admin levels for each country
                "rgbif", # obtain species occurrence data
            "geosphere", # distGeo(); distm()
@@ -346,23 +347,29 @@ dates <- prev %>%
 gbif_amphib <- inner_join(dates, gbif_amphib) ## only 378 of 395 dates matched observations
 
 ## Create buffer around points that correspond with their coordinate uncertainty
-gbif_coords <- st_as_sf(gbif_amphib, coords = c("Lon", "Lat"), crs = 4326)
+gbif_coords <- gbif_amphib %>%
+  filter(!(is.na(coordinateUncertaintyInMeters))) %>%
+  st_as_sf(., coords = c("Lon", "Lat"), crs = 4326) 
+gbif_buffer <- st_buffer(gbif_coords, (gbif_coords$coordinateUncertaintyInMeters*0.001))
 
-# *Only do this if the coordinates have any uncertainty*
-# gbif_buffer <- for(i in 1:nrow(gbif_coords)){
-#   if(is.na(gbif_coords$coordinateUncertaintyInMeters[i])){
-#     
-#     copy(gbif_coords$geometry)
-#     
-#   }
-#   
-#   else{
-#     
-#     st_buffer(gbif_coords, (gbif_coords$coordinateUncertaintyInMeters[i]*0.001))
-#   }
-# }
 
- 
+## Set aside points that do not have any coordinate uncertainty listed
+gbif_coordsNA <- gbif_amphib %>%
+  filter(is.na(coordinateUncertaintyInMeters)) %>%
+  st_as_sf(., coords = c("Lon", "Lat"), crs = 4326)
+
+## Set aside unique combos of lat/lon/date from our dataset
+points <- prev %>%
+  dplyr::filter(!(day == "NA")) %>%
+  subset(., select = c(Lat, Lon, date)) %>%
+  unique() %>%
+  st_as_sf(x = ., coords = c("Lon", "Lat"), crs = 4326) %>%
+  mutate(Lon = sf::st_coordinates(.)[,1],
+         Lat = sf::st_coordinates(.)[,2]) 
+
+st_write(gbif_buffer, "gbif_buff_data.shp", append = F)
+st_write(gbif_coordsNA, "gbif_NA_data.shp", append = F)
+st_write(points, "datelatlon.shp", append = F)
 
 ## Add abundance and richness back into prev df
 prev <- prev %>%
