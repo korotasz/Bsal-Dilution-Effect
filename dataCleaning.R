@@ -1,10 +1,17 @@
 require(renv)
 require(pacman)
 
+
 ## Activate project (only need to do once upon first use of script)
-# renv::activate() 
-## May need to run: 
+# renv::activate()
+## May need to run:
 # renv::restore(packages = "renv")
+# renv::snapshot(project = "C:/Development/Chapter-2-Analyses",
+#                library = c("C:/Users/Alexis/AppData/Local/R/win-library/4.3", "C:/Program Files/R/R-4.3.2/library"),
+#                type = "all",
+#                update = T,
+#                force = T)
+
 
 #### Packages ####
 pckgs <- c("tidyverse", # data wrangling/manipulation
@@ -34,7 +41,7 @@ pckgs <- c("tidyverse", # data wrangling/manipulation
 # renv::hydrate(packages = c(pckgs, "pacman"), sources = c("C:/Users/alexi/AppData/Local/R/win-library/4.3", "C:/Program Files/R/R-4.3.1/library"))
 ## Work computer
 # renv::hydrate(packages = c(pckgs, "pacman"), sources = c("C:/Users/Alexis/AppData/Local/R/win-library/4.3", "C:/Program Files/R/R-4.3.1/library"))
-pacman::p_load(pckgs, character.only = T, update = F)
+pacman::p_load(pckgs, character.only = T, update = T)
 
 ## Edit .Renviron to be able to access gbif data
 # usethis::edit_r_environ() # need to restart R for changes to take effect
@@ -73,7 +80,7 @@ assign_start_date <- function(df, timepoint, date, out_col){
       df[[out_col]][i] <- paste(df[[date]][i])
     }
   }
-  return(df) 
+  return(df)
 }
 
 ## -----------------------------------------------------------------------------
@@ -95,7 +102,7 @@ prev <- prev %>%
   # replace empty string with NA
   replace(., . == "", NA) %>%
   # fieldNumber and lifeStage both have life stage data -- combine
-  unite(., col = "lifeStage_merged", c("fieldNumber", "lifeStage"), 
+  unite(., col = "lifeStage_merged", c("fieldNumber", "lifeStage"),
         sep = "/", remove = TRUE, na.rm = TRUE) %>%
   rename(lifeStage = lifeStage_merged) %>%
   # taxonRemarks and sex both have life stage data -- combine
@@ -109,21 +116,21 @@ prev <- prev %>%
   rename(species = specificEpithet,
          sampleRemarks = eventRemarks,
          specimenFate = specimenDisposition) %>%
-  # Combine genus & species into one new column 
+  # Combine genus & species into one new column
   unite(., col = "scientific", c("genus", "species"),
         sep = " ", remove = FALSE) %>%
   relocate(scientific, .after = species) %>%
-  # Add empty columns for new variables 
+  # Add empty columns for new variables
   mutate(ADM0 = NA, ADM1 = NA, ADM2 = NA, susceptibility = NA, nativeStatus = NA)
 
 ## Delete irrelevant columns
-data.frame(colnames(prev)) # returns indexed data frame 
+data.frame(colnames(prev)) # returns indexed data frame
 prev <- prev %>%
-  subset(., select = -c(locality, cycleTimeFirstDetection, locationRemarks:locationID, 
+  subset(., select = -c(locality, cycleTimeFirstDetection, locationRemarks:locationID,
                         occurrenceRemarks, diseaseLineage, zeScore:DiagFALSEstics_bcid))
 
 ## Rearrange dataframe
-data.frame(colnames(prev)) 
+data.frame(colnames(prev))
 prev <- prev %>%
   relocate(country, .before = principalInvestigator) %>%
   relocate(c(ADM0:ADM2, decimalLatitude, decimalLongitude, yearCollected, monthCollected, dayCollected,
@@ -133,7 +140,7 @@ prev <- prev %>%
 
 
 ## Remove columns from Spain
-data.frame(colnames(spain)) 
+data.frame(colnames(spain))
 spain <- spain %>%
   subset(., select = -c(coordinateUncertaintyInMeters, minimumElevationInMeters,
                         soilMoisture:bio19))
@@ -146,23 +153,23 @@ spain <- spain %>%
            specimenDisposition, basisOfRecord, sampleType, testMethod, diagnosticLab,
            collectorList:projectId), .after = dayCollected)
 
-  
+
 spain <- spain %>%
   replace(., . == "", NA) %>%
   rename(specimenFate = specimenDisposition) %>%
-  mutate(sampleRemarks = NA, 
+  mutate(sampleRemarks = NA,
          principalInvestigator = "An Martel") %>%
   relocate(c(sampleRemarks, principalInvestigator), .after = diagnosticLab)
-  
+
 ## Join Spain to main df
 prev <- rbind(prev, spain)
 
 prev <- prev %>%
   # make sure individualCount is numeric
-  mutate(individualCount = as.numeric(individualCount)) %>% 
+  mutate(individualCount = as.numeric(individualCount)) %>%
   # assume all NA values are observations for a single individual
   plyr::mutate(individualCount = case_match(individualCount, NA ~ 1, .default = individualCount),
-               # replace NA values in diseaseTested with appropriate test       
+               # replace NA values in diseaseTested with appropriate test
                diseaseTested = case_match(diseaseTested, NA ~ "Bsal", .default = diseaseTested),
                # replace NA values in lifeStage with 'unknown'
                lifeStage = case_match(lifeStage, c(NA, "") ~ "unknown", .default = lifeStage)) %>%
@@ -187,30 +194,30 @@ setwd(file.path(dir, shppath))
 ## 1. Use 'raster' pckg to get shapefiles for each country. We are using EPSG:4326 (WGS 84), as these are lat/lon data
 #     that are presented in decimal degrees. EPSG:3035 (ETRS-89) was initially used. However, ETRS-89 and WGS 84 are both
 #     realizations of the International Terrestrial Reference System (ITRS) coincident to within 1 meter, meaning that the
-#     ETRS-89 transformation has an accuracy equal to that of WGS 84 (see:https://epsg.io/3035). 
-polygon <- geodata::gadm(country = c('BEL', 'DEU', 'CHE', 'GBR', 'ESP'), level = 2, 
+#     ETRS-89 transformation has an accuracy equal to that of WGS 84 (see:https://epsg.io/3035).
+polygon <- geodata::gadm(country = c('BEL', 'DEU', 'CHE', 'GBR', 'ESP'), level = 2,
              path = file.path(dir, shppath), version = "latest", resolution = 1) %>%
   sf::st_as_sf(., crs = 4326) %>%
-  st_cast(., "MULTIPOLYGON") 
+  st_cast(., "MULTIPOLYGON")
 
 ## Write multipolygon to .shp file for later use with WorldClim
 # st_write(polygon, "europe.shp", append = F)
 
-points <- prev %>% 
+points <- prev %>%
   dplyr::select(Lon, Lat) %>%
   st_as_sf(x = ., coords = c("Lon", "Lat"), crs = 4326) %>%
   mutate(L1 = row_number(),
          Lon = sf::st_coordinates(.)[,1],
-         Lat = sf::st_coordinates(.)[,2]) 
+         Lat = sf::st_coordinates(.)[,2])
 # st_write(points, "locations.shp", append = F)
 
 ## Intersect lat/lon coordinates with each raster to get the correct admin levels associated with our data
-## Compared this method with previous method of loading gadm.org shapefiles into QGIS fore ea. country & 
+## Compared this method with previous method of loading gadm.org shapefiles into QGIS fore ea. country &
 #  sampling locations, and it is just as accurate.
 out <- st_intersection(points, polygon) %>%
   mutate(Lon = sf::st_coordinates(.)[,1],
          Lat = sf::st_coordinates(.)[,2])
-  
+
 # st_write(out, "adm_info.shp", append = F)
 
 ## Get admin levels in a dataframe format
@@ -224,7 +231,7 @@ adminlvls <- data.frame(out) %>%
   unique(.)
 
 
-## Check for missing admin levels!! 
+## Check for missing admin levels!!
 # adminlvls %>%
 #   filter(is.na(ADM2)) # only one location missing (ADM2 in GBR).
 
@@ -247,7 +254,7 @@ siteNumber <- prev %>%
  mutate(Site = cur_group_id()) %>%
  ungroup()
 
-prev$Site <- siteNumber$Site[base::match(paste(prev$materialSampleID), 
+prev$Site <- siteNumber$Site[base::match(paste(prev$materialSampleID),
                                       paste(siteNumber$materialSampleID))]
 
 prev <- relocate(prev, Site, .after = "day")
@@ -260,12 +267,12 @@ prev <- relocate(prev, Site, .after = "day")
 setwd(file.path(dir, csvpath))
 s <- read.csv("susceptibility.csv", header = T, encoding = "UTF-8")
 data.frame(colnames(s))
-names(s) <- c("order", "family", "genus", "species", "scientific", 
+names(s) <- c("order", "family", "genus", "species", "scientific",
               "susceptibility", "citation")
 
 prev$susceptibility <- s$susceptibility[base::match(prev$scientific, s$scientific)]
 ## double check there are no NAs
-plyr::count(prev, "susceptibility") 
+plyr::count(prev, "susceptibility")
 ## check for any missing data
 #sus <- prev %>% dplyr::filter(is.na(susceptibility))
 
@@ -275,7 +282,7 @@ nativeStatus <- read.csv("nativeStatus.csv", header = T, encoding = "UTF-8")
 prev$nativeStatus <- nativeStatus$nativeStatus[base::match(paste(prev$country, prev$scientific),
                                                paste(nativeStatus$country, nativeStatus$scientific))]
 
-native <- prev %>% 
+native <- prev %>%
   subset(., select = c(country, scientific, nativeStatus)) %>%
   group_by(country, scientific, nativeStatus) %>%
   summarise()
@@ -292,8 +299,8 @@ spr <- prev %>%
   ungroup() %>% # ungroup dataframe by aforementioned variables
   mutate(presence = 1) %>% # insert a 1 for presence, 0 for absence
   pivot_wider(names_from = scientific, # convert df to matrix
-              values_from = presence, values_fill = 0) %>% 
-  group_by(Site, date) %>% 
+              values_from = presence, values_fill = 0) %>%
+  group_by(Site, date) %>%
   summarise_all(sum) %>%
   ungroup() %>%
   mutate(richness = apply(.[,3:(ncol(.))] > 0, 1, sum))
@@ -306,16 +313,16 @@ prev$iucn_rich <- iucn_rich$iucn_rich[base::match(paste(prev$Lat, prev$Lon),
                                                   paste(iucn_rich$Lat, iucn_rich$Lon))]
 
 # Read in IUCN rarity-weighted richness (RWR) score .csv (data processed in QGIS)
-# RWR: The proportion of the species' range contained within a cell. 
+# RWR: The proportion of the species' range contained within a cell.
 #      For this raster, it is 1/the total number of cells overlapped by that species' range.
-#      The values are summed across all the species in the analysis to give the 
+#      The values are summed across all the species in the analysis to give the
 #      relative importance of each cell to the species found there.
 iucn_rwr <- read.csv("iucn_rwr.csv", header = T, encoding = "UTF-8") %>%
   rename(., iucn_rwr = SAMPLE_1)
 
 prev$iucn_rwr <- iucn_rwr$iucn_rwr[base::match(paste(prev$Lat, prev$Lon),
                                                            paste(iucn_rwr$Lat, iucn_rwr$Lon))]
-  
+
 ## Calculate abundance of individual spp at a site during each sampling event using ONLY our data
 spa <- prev %>%
   dplyr::select(Site, date, scientific, individualCount) # subset relevant data
@@ -332,16 +339,16 @@ setwd(file.path(dir, csvpath))
 
 gbif_amphib <- data.table::fread("gbif_amphibs.csv") %>%
   rename(., Lat = decimalLatitude,
-            Lon = decimalLongitude, 
+            Lon = decimalLongitude,
             scientific = verbatimScientificName) %>%
   unite(c("year", "month", "day"), sep = "-", col = "date", remove = F) %>%
-  dplyr::filter(!(day == "NA")) 
+  dplyr::filter(!(day == "NA"))
 
 ## Create key to match dates in 'prev' to dates in 'gbif_amphib'
 dates <- prev %>%
   dplyr::filter(!(day == "NA")) %>%
   subset(., select = date) %>%
-  unique() 
+  unique()
 
 ## Only retain observations that occurred on our sampling dates
 gbif_amphib <- inner_join(dates, gbif_amphib) ## only 378 of 395 dates matched observations
@@ -349,7 +356,7 @@ gbif_amphib <- inner_join(dates, gbif_amphib) ## only 378 of 395 dates matched o
 ## Create buffer around points that correspond with their coordinate uncertainty
 gbif_coords <- gbif_amphib %>%
   filter(!(is.na(coordinateUncertaintyInMeters))) %>%
-  st_as_sf(., coords = c("Lon", "Lat"), crs = 4326) 
+  st_as_sf(., coords = c("Lon", "Lat"), crs = 4326)
 gbif_buffer <- st_buffer(gbif_coords, (gbif_coords$coordinateUncertaintyInMeters*0.001))
 
 
@@ -365,7 +372,7 @@ points <- prev %>%
   unique() %>%
   st_as_sf(x = ., coords = c("Lon", "Lat"), crs = 4326) %>%
   mutate(Lon = sf::st_coordinates(.)[,1],
-         Lat = sf::st_coordinates(.)[,2]) 
+         Lat = sf::st_coordinates(.)[,2])
 
 st_write(gbif_buffer, "gbif_buff_data.shp", append = F)
 st_write(gbif_coordsNA, "gbif_NA_data.shp", append = F)
@@ -378,7 +385,7 @@ prev <- prev %>%
   # species abundance
   left_join(spa, by = c("scientific", "Site", "date")) %>%
   # site abundance
-  left_join(SAb, by = c("Site", "date")) 
+  left_join(SAb, by = c("Site", "date"))
 
 ## Make sure columns that have categorical data are uniform in coding
 prev <- prev %>%
@@ -416,7 +423,7 @@ weather <- prev %>%
   ungroup() %>%
   dplyr::select(!(LatLon)) %>%
   mutate(date = base::as.Date(date, format = "%Y-%m-%d"))
-  
+
 ## get dates for 4 days prior to sample date
 for(i in 1:nrow(weather)){
   weather[i,7] <- as.Date(weather$date[i], format = "%Y-%m-%d") - days(4)
@@ -429,7 +436,7 @@ for(i in 1:nrow(weather)){
   weather[i,12] <- as.Date(weather$date[i], format = "%Y-%m-%d") - days(12)
   weather[i,13] <- as.Date(weather$date[i], format = "%Y-%m-%d") - days(13)
   weather[i,14] <- as.Date(weather$date[i], format = "%Y-%m-%d") - days(14)
-  
+
 ## get dates for 2 weeks prior to sample date (for avg temp/soil moisture)
   weather[i,15] <- as.Date(weather$date[i], format = "%Y-%m-%d") - days(15)
   weather[i,16] <- as.Date(weather$date[i], format = "%Y-%m-%d") - days(16)
@@ -446,14 +453,14 @@ for(i in 1:nrow(weather)){
   weather[i,25] <- as.Date(weather$date[i], format = "%Y-%m-%d") - days(25)
   weather[i,26] <- as.Date(weather$date[i], format = "%Y-%m-%d") - days(26)
   weather[i,27] <- as.Date(weather$date[i], format = "%Y-%m-%d") - days(27)
-  weather[i,28] <- as.Date(weather$date[i], format = "%Y-%m-%d") - days(28)  
+  weather[i,28] <- as.Date(weather$date[i], format = "%Y-%m-%d") - days(28)
 
 ## get date for 1 month prior
   weather[i,29] <- as.Date(weather$date[i], format = "%Y-%m-%d") - days(30)
-  
+
 ## get date for 2 months prior
   weather[i,30] <- as.Date(weather$date[i], format = "%Y-%m-%d") - days(60)
-      
+
 }
 
 
@@ -465,7 +472,7 @@ start_dates <- weather %>%
          t22 = ...22, t23 = ...23, t24 = ...24, t25 = ...25, t26 = ...26, t27 = ...27, wk3_start = ...28,
          date_m1 = ...29, date_m2 = ...30) %>%
   subset(., select = c(Lat, Lon, date_m2, date_m1, wk3_start, wk2_start, wk1_start, t4, date)) %>%
-  arrange(Lat, Lon, date) 
+  arrange(Lat, Lon, date)
 
 prev <- prev %>%
   mutate(date = base::as.Date(date, format = "%Y-%m-%d"),) %>%
@@ -482,7 +489,7 @@ weather <- weather %>%
          t22 = ...22, t23 = ...23, t24 = ...24, t25 = ...25, t26 = ...26, t27 = ...27, t28 = ...28,
          t30 = ...29, t60 = ...30) %>%
   group_by(Lat, Lon) %>%
-  pivot_longer(cols = c(t0, t4, t8, t9, t10, t11, t12, t13, t14, 
+  pivot_longer(cols = c(t0, t4, t8, t9, t10, t11, t12, t13, t14,
                         t15, t16, t17, t18, t19, t20, t21,
                         t22, t23, t24, t25, t26, t27, t28,
                         t30, t60),
@@ -499,10 +506,10 @@ weather <- weather %>%
 
 
 weather_d <- weather %>%
-  filter(timepoint != "t30" & timepoint != "t60") 
+  filter(timepoint != "t30" & timepoint != "t60")
 
 weather_m <- weather %>%
-  filter(timepoint == "t30" | timepoint == "t60") 
+  filter(timepoint == "t30" | timepoint == "t60")
 
 ## Export to use in Python and PyQGIS to obtain weather data
 # setwd(file.path(dir, csvpath))
@@ -514,9 +521,9 @@ weather_m <- weather %>%
 ## PyQGIS Python v3.9.5 used to process data in QGIS v3.28.3-Firenze.
 
 ## Import DAILY temperature & soil moisture data from NASA's EarthData website (citation below) ----
-#  Li, B., H. Beaudoing, and M. Rodell, NASA/GSFC/HSL (2020), GLDAS Catchment Land Surface Model L4 daily 0.25 x 0.25 degree GRACE-DA1 V2.2, 
+#  Li, B., H. Beaudoing, and M. Rodell, NASA/GSFC/HSL (2020), GLDAS Catchment Land Surface Model L4 daily 0.25 x 0.25 degree GRACE-DA1 V2.2,
 #     Greenbelt, Maryland, USA, Goddard Earth Sciences Data and Information Services Center (GES DISC), Accessed: 2023-10-11. doi:10.5067/TXBMLX370XX8.
-#  Li, B., M. Rodell, S. Kumar, H. Beaudoing, A. Getirana, B. F. Zaitchik, et al. (2019) Global GRACE data assimilation for groundwater and drought 
+#  Li, B., M. Rodell, S. Kumar, H. Beaudoing, A. Getirana, B. F. Zaitchik, et al. (2019) Global GRACE data assimilation for groundwater and drought
 #     monitoring: Advances and challenges. Water Resources Research, 55, 7564-7586. doi:10.1029/2018wr024618.
 gldas_daily <- read.csv("weather_merged.csv", header = T, encoding = "UTF-8")
 
@@ -532,7 +539,7 @@ gldas_daily <- gldas_daily %>%
          week = NA) %>%
   rename(soilMoisture = "SOILMOIST_kgm.21",
          temp = "SURFTEMP_K1") %>%
-  assign_week(.,"timepoint", "week") 
+  assign_week(.,"timepoint", "week")
 
 
 ## Separate and process temperature data ---------------------------------------
@@ -540,7 +547,7 @@ temperature <- gldas_daily %>%
   dplyr::select(-c(row, soilMoisture, year, month, day)) %>%
   drop_na(temp) %>%
   # Assign start date for each week
-  assign_start_date(., "timepoint", "date", "start_date") %>% 
+  assign_start_date(., "timepoint", "date", "start_date") %>%
   mutate(temp = as.numeric(temp - 273.15)) %>% # Convert temp from K to C
   unique()
 
@@ -559,7 +566,7 @@ avg_temp <- temperature %>%
   mutate(avg_temp = mean(temp)) %>%
   rbind(daily_temp) %>%
   drop_na() %>%
-  mutate(id = row_number()) 
+  mutate(id = row_number())
 #temp <- aggregate(temp ~ Lat+Lon+week, FUN = mean, data = temperature)
 
 ## Add mean temperatures back into temperature df
@@ -575,7 +582,7 @@ soilMoisture <- gldas_daily %>%
   dplyr::select(-c(row, temp, year, month, day)) %>%
   drop_na(soilMoisture) %>%
   # Assign start date for each week
-  assign_start_date(., "timepoint", "date", "start_date") %>% 
+  assign_start_date(., "timepoint", "date", "start_date") %>%
   unique()
 
 daily_SM <- soilMoisture %>%
@@ -592,7 +599,7 @@ avg_soilMoist <- soilMoisture %>%
   mutate(avg_SM = mean(soilMoisture)) %>%
   rbind(daily_SM) %>%
   drop_na() %>%
-  mutate(id = row_number()) 
+  mutate(id = row_number())
 
 soilMoisture <- soilMoisture %>%
   drop_na(start_date) %>%
@@ -611,16 +618,16 @@ weatherData <- left_join(temperature, soilMoisture, by = c("id", "Lat", "Lon", "
          sMoist_wk3 = avg_SM_wk3, sMoist_wk2 = avg_SM_wk2, sMoist_wk1 = avg_SM_wk1, sMoist_d4 = avg_SM_t4, sMoist_d = avg_SM_t0) %>%
   mutate(date = base::as.Date(date, format = "%Y-%m-%d"),
          t4 = base::as.Date(t4, format = "%Y-%m-%d"),
-         wk1_start = base::as.Date(wk1_start, format = "%Y-%m-%d")) 
+         wk1_start = base::as.Date(wk1_start, format = "%Y-%m-%d"))
 
-## Add back to main df 
+## Add back to main df
 prev <- prev %>%
   plyr::mutate(Lat = as.double(Lat),
                Lon = as.double(Lon)) %>%
   left_join(., weatherData, by = c("Lat", "Lon", "date", "t4", "wk1_start")) %>%
   relocate(c(richness, sppAbun, siteAbun), .after = Site) %>%
   relocate(c(wk1_start, t4, date), .after = date_m1) %>%
-  relocate(c(temp_wk3, temp_wk2, temp_wk1, temp_d4, temp_d, 
+  relocate(c(temp_wk3, temp_wk2, temp_wk1, temp_d4, temp_d,
              sMoist_wk3, sMoist_wk2, sMoist_wk1, sMoist_d4, sMoist_d), .after = sampleRemarks)
 
 ## Import MONTHLY temperature, precip, & soil moisture data from NASA's EarthData website (citation below)
@@ -636,22 +643,22 @@ gldas_monthly <- gldas_monthly %>%
   unite(c("yearCollected", "monthCollected", "dayCollected"), sep = "-", col = "date", remove = F) %>%
   rename(soilMoisture = "SOILMOIST_kgm.21",
          temp = "SURFTEMP_K1",
-         precip = "PRECIP_kgm.2s.11") 
+         precip = "PRECIP_kgm.2s.11")
 
 # Convert precipitation rate kg/m^2/s to mm/month
 for(i in 1:nrow(gldas_monthly)){
   if(gldas_monthly[i, 8] == 31){
     gldas_monthly[i, 9] <- gldas_monthly[i, 9] * (31*24*60*60)}
-  
+
   else if(gldas_monthly[i, 8] == 30){
     gldas_monthly[i, 9] <- gldas_monthly[i, 9] * (30*24*60*60)}
-  
+
   else if(gldas_monthly[i, 8] == 28){
     gldas_monthly[i, 9] <- gldas_monthly[i, 9] * (28*24*60*60)}
-  
+
   else if(gldas_monthly[i, 8] == 29){
     gldas_monthly[i, 9] <- gldas_monthly[i, 9] * (29*24*60*60)}
-  
+
   else if(is.na(gldas_monthly[i, 8]) == TRUE){
     gldas_monthly[i, 9] <- NA}
 }
@@ -699,7 +706,7 @@ precip_m <- gldas_monthly %>%
          Lon = decimalLongitude) %>%
   # convert mm to cm to match precip climate data
   mutate(precip_m2 = precip_m2*0.1,
-         precip_m1 = precip_m1*0.1, 
+         precip_m1 = precip_m1*0.1,
          precip_m = precip_m*0.1)
 
 
@@ -723,7 +730,7 @@ gldas_monthly <- gldas_monthly %>%
 
 
 # Add temp and precip data back into gldas_monthly df in preparation to add it back to the main df.
-gldas_monthly <- gldas_monthly %>% 
+gldas_monthly <- gldas_monthly %>%
   left_join(., precip_m, by = c("Lat", "Lon", "date", "date_m1", "date_m2", "row")) %>%
   left_join(., temp_m, by = c("Lat", "Lon", "date", "date_m1", "date_m2", "row")) %>%
   subset(., select = -c(row))
@@ -742,9 +749,9 @@ prev <- prev %>%
   left_join(., gldas_monthly, by = c("Lat", "Lon", "date", "date_m1", "date_m2")) %>%
   relocate(c(temp_m2, temp_m1, temp_m), .before = temp_wk3) %>%
   relocate(c(sMoist_m2, sMoist_m1, sMoist_m), .before = sMoist_wk3) %>%
-  relocate(c(temp_m2, temp_m1, temp_m, temp_wk3, temp_wk2, temp_wk1, temp_d4, temp_d, 
+  relocate(c(temp_m2, temp_m1, temp_m, temp_wk3, temp_wk2, temp_wk1, temp_d4, temp_d,
              sMoist_m2, sMoist_m1, sMoist_m, sMoist_wk3, sMoist_wk2, sMoist_wk1, sMoist_d4, sMoist_d,
-             precip_m2, precip_m1, precip_m), .after = sampleRemarks) 
+             precip_m2, precip_m1, precip_m), .after = sampleRemarks)
 
 
 temp_prev <- prev ## in case I need to come back to this point
@@ -756,20 +763,20 @@ rm(temp_m, precip_m, avg_soilMoist, daily_SM, avg_temp, daily_temp, gldas_daily,
 #     a. First, we need to obtain elevation as a raster layer (elevatr package)
 #        zoom 5 = 2.5 arc minutes; same resolution as our other data
 setwd(file.path(dir, csvpath))
-elevation <- get_elev_raster(col_adm2, prj = "EPSG:4326", src = "aws", z = 5) 
+elevation <- get_elev_raster(col_adm2, prj = "EPSG:4326", src = "aws", z = 5)
 
-#     b. Use ADM geometries to sample elevation raster 
-elev_crop <- crop(elev_COL, col_adm2) 
+#     b. Use ADM geometries to sample elevation raster
+elev_crop <- crop(elev_COL, col_adm2)
 elev_mask <- mask(elev_crop, col_adm2)
 elev_extract <- as.data.frame(raster::extract(x = elev_mask, y = col_adm2, fun = mean, df = T, sp = T))
-elev_df <- elev_extract %>% 
-  dplyr::select(8, 3, 15) 
-# Elevation column name subject to change if code is ran at a later date. 
-names(elev_df) <- c("ADM1", "ADM2", "elev_m")  
+elev_df <- elev_extract %>%
+  dplyr::select(8, 3, 15)
+# Elevation column name subject to change if code is ran at a later date.
+names(elev_df) <- c("ADM1", "ADM2", "elev_m")
 
-#     c. Add back to main dataframe 
+#     c. Add back to main dataframe
 colombia <- left_join(colombia, elev_df, by = c("ADM1", "ADM2")) %>%
-  relocate(., elev_m, .before = tmin) 
+  relocate(., elev_m, .before = tmin)
 
 ## The following was used to check for missing vals -- retaining just in case
 # missing <- colombia %>%
@@ -806,7 +813,7 @@ levels(prev$diseaseDetected) <- c(0,1) #0 = F, 1 = T
 
 
 ## Climate data from geodata package
-## Construct file path to store WorldClim data 
+## Construct file path to store WorldClim data
 dir.create(file.path(dir, shppath, "/WorldClim")) # Will give warning if path already exists
 wclim_path <- path.expand("csvFiles/shapefiles/WorldClim")
 setwd(file.path(dir, wclim_path))
@@ -828,11 +835,11 @@ latlon_id <- adminlvls %>%
 ## Obtain WorldClim data as SpatRasters and extract data using lat/lon from adminlvls df
 ## WorldClim resolution of 2.5 arc minutes is approximately equivalent to 0.0417 degrees (finer scale than needed, but that's ok)
 #     a. tmin | temporal scale: monthly (30yr avg)
-tmin <- geodata::worldclim_global(var = 'tmin', path = file.path(dir, wclim_path), res = 2.5, version = "2.1") 
+tmin <- geodata::worldclim_global(var = 'tmin', path = file.path(dir, wclim_path), res = 2.5, version = "2.1")
 
 tmin_cropped <- terra::crop(tmin, euro_ext)
 names(tmin_cropped) <- c("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12")
-tmin_extract <- terra::extract(tmin_cropped, points[,1], ID = F) 
+tmin_extract <- terra::extract(tmin_cropped, points[,1], ID = F)
 tmin_df <- as.data.frame(tmin_extract) %>%
   reshape(., varying = c("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"),
           v.names = "tmin",
@@ -851,7 +858,7 @@ tmax <- geodata::worldclim_global(var = 'tmax', path = file.path(dir, wclim_path
 
 tmax_cropped <- terra::crop(tmax, euro_ext)
 names(tmax_cropped) <- c("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12")
-tmax_extract <- terra::extract(tmax_cropped, points[,1], ID = F) 
+tmax_extract <- terra::extract(tmax_cropped, points[,1], ID = F)
 tmax_df <- as.data.frame(tmax_extract) %>%
   reshape(., varying = c("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"),
           v.names = "tmax",
@@ -870,7 +877,7 @@ tavg <- geodata::worldclim_global(var = 'tavg', path = file.path(dir, wclim_path
 
 tavg_cropped <- terra::crop(tavg, euro_ext)
 names(tavg_cropped) <- c("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12")
-tavg_extract <- terra::extract(tavg_cropped, points[,1], ID = F) 
+tavg_extract <- terra::extract(tavg_cropped, points[,1], ID = F)
 tavg_df <- as.data.frame(tavg_extract) %>%
   reshape(., varying = c("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"),
           v.names = "tavg",
@@ -888,7 +895,7 @@ prec <- geodata::worldclim_global(var = 'prec', path = file.path(dir, wclim_path
 
 prec_cropped <- terra::crop(prec, euro_ext)
 names(prec_cropped) <- c("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12")
-prec_extract <- terra::extract(prec_cropped, points[,1], ID = F) 
+prec_extract <- terra::extract(prec_cropped, points[,1], ID = F)
 prec_df <- as.data.frame(prec_extract) %>%
   reshape(., varying = c("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"),
           v.names = "prec",
@@ -908,7 +915,7 @@ bio <- geodata::worldclim_global(var = 'bio', path = file.path(dir, wclim_path),
 bio_cropped <- terra::crop(bio, euro_ext)
 names(bio_cropped) <- c("bio1", "bio2", "bio3", "bio4", "bio5", "bio6", "bio7", "bio8", "bio9", "bio10", "bio11", "bio12",
                         "bio13", "bio14", "bio15", "bio16", "bio17", "bio18", "bio19")
-bio_extract <- terra::extract(bio_cropped, points[,1], ID = F) 
+bio_extract <- terra::extract(bio_cropped, points[,1], ID = F)
 bio_df <- as.data.frame(bio_extract) %>%
   mutate(bio12 = (0.1*bio12), # All bioclim precip vals are in mm. Convert to cm.
          bio13 = (0.1*bio13),
@@ -949,8 +956,8 @@ prev$genus <- gsub("[[:space:]]", "", prev$genus) # get rid of weird spaces in t
 Bsalpos <- prev %>%
   tidyr::drop_na(., any_of(c("BsalDetected", "date", "sMoist_d", "temp_d"))) %>%
   # Drop species that have <10 observations
-  subset(scientific != "Calotriton asper" & # Only one observation with NA vals for date 
-         scientific != "Lissotriton boscai" & 
+  subset(scientific != "Calotriton asper" & # Only one observation with NA vals for date
+         scientific != "Lissotriton boscai" &
          scientific != "Hyla meridionalis" &
          scientific != "Pleurodeles waltl") %>%
   mutate(scientific = gsub(pattern = "Pelophylax perezi", replacement = "Pelophylax sp.", scientific))
@@ -971,7 +978,7 @@ prev <- Bsalpos %>%
   subset(., select = -c(date_m1, date_m2, wk1_start, t4, year, month, day)) %>%
   rename(tmin_wc = tmin, tmax_wc = tmax, tavg_wc = tavg, prec_wc = prec, bio1_wc = bio1, bio2_wc = bio2, bio3_wc = bio3, bio4_wc = bio4, bio5_wc = bio5, bio6_wc = bio6,
          bio7_wc = bio7, bio8_wc = bio8, bio9_wc = bio9, bio10_wc = bio10, bio11_wc = bio11, bio12_wc = bio12, bio13_wc = bio13, bio14_wc = bio14, bio15_wc = bio15, bio16_wc = bio16,
-         bio17_wc = bio17, bio18_wc = bio18, bio19_wc = bio19) 
+         bio17_wc = bio17, bio18_wc = bio18, bio19_wc = bio19)
 
 
 # Return data frame containing all observations from countries that had confirmed Bsal positive sites (will separate out Bsal+ and Bsal- sites later)
@@ -1001,7 +1008,7 @@ prev <- Bsalpos %>%
 #              nPos_all_noFS, nNeg_all_noFS, nDead_all_noFS, nAlive_all_noFS, nFatalUnk_all_noFS), .after = nativeStatus) %>%
 #   dplyr::select(country, Lat, Lon, Site, posSite, date, genus, scientific:nFatalUnk_all_noFS, richness, sppAbun, siteAbun,
 #                 temp_m2:bio19_wc, diagnosticLab, principalInvestigator, Sample_bcid, collectorList, sMoist_m2:temp_m2)
-# 
+#
 # Bsalpos_cbind <- with(Bsalpos_cbind, Bsalpos_cbind[order(Site, scientific), ])
 
 
@@ -1037,8 +1044,8 @@ Bsal_all <- prev %>%
 #   filter(country == "Germany" | country == "Spain")
 # filtered_dcbind <- dcbind %>%
 #   filter(country == "Germany" | country == "Spain")
-# 
-# 
+#
+#
 # missing <- anti_join(check_dcbind, filtered_dcbind)
 
 ## Double check everything matches
@@ -1070,13 +1077,13 @@ library(rJava)
 setwd(file.path(dir, csvpath))
 prev <- read.csv("Bsal_all.csv", header = TRUE, encoding = "UTF-8")
 
-all_data <- prev %>% 
+all_data <- prev %>%
   filter(country == "Germany") %>%
   dplyr::select(country, ADM0, ADM1, ADM2, Lat, Lon, date, Site, posSite,
-                richness, siteAbun, materialSampleID, genus, species, 
-                scientific, susceptibility,  nativeStatus, sex, individualCount, 
-                BsalDetected, BsalLoad, fatal, specimenFate, basisOfRecord, 
-                sampleType, testMethod, diagnosticLab, sampleRemarks, principalInvestigator, 
+                richness, siteAbun, materialSampleID, genus, species,
+                scientific, susceptibility,  nativeStatus, sex, individualCount,
+                BsalDetected, BsalLoad, fatal, specimenFate, basisOfRecord,
+                sampleType, testMethod, diagnosticLab, sampleRemarks, principalInvestigator,
                 collectorList, Sample_bcid, expeditionCode, projectId) %>%
   group_by(Site) %>%
   mutate(total_pos = ave(BsalDetected == 1, FUN = sum)) %>%
@@ -1087,7 +1094,7 @@ repeated_sampling <- all_data %>%
   dplyr::select(c(Site, date)) %>%
   unique() %>%
   group_by(Site) %>%
-  summarise(samplingEvents = n()) 
+  summarise(samplingEvents = n())
 
 
 all_data <- left_join(all_data, repeated_sampling, by = "Site") %>%
@@ -1116,15 +1123,15 @@ positive_sites <- site_summary %>%
 # Create workbook to store all 'sheets'
 Germany_wb <- createWorkbook()
 
-addWorksheet(Germany_wb, "germany_all") 
+addWorksheet(Germany_wb, "germany_all")
 addWorksheet(Germany_wb, "site_summary")
-addWorksheet(Germany_wb, "repeated_sampling") 
-addWorksheet(Germany_wb, "positive_sites") 
+addWorksheet(Germany_wb, "repeated_sampling")
+addWorksheet(Germany_wb, "positive_sites")
 
 writeData(Germany_wb, "germany_all", all_data, colNames = T)
-writeData(Germany_wb, "site_summary", site_summary, colNames = T) 
-writeData(Germany_wb, "repeated_sampling", repeated_sampling, colNames = T) 
+writeData(Germany_wb, "site_summary", site_summary, colNames = T)
+writeData(Germany_wb, "repeated_sampling", repeated_sampling, colNames = T)
 writeData(Germany_wb, "positive_sites", positive_sites, colNames = T)
-  
+
 ## Save workbook
 saveWorkbook(Germany_wb, "Germany_data.xlsx", overwrite = TRUE)
