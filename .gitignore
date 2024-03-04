@@ -1,19 +1,16 @@
-.Rhistory
-.vscode/
 figures/*
-csvFiles/.Rhistory
-.Rproj.user/
+markdownFiles/*
+weatherSampling/weatherProcessing_monthly.R
 
-dataAnalysis_DEH.Rmd
-InteractiveMap_Europe.R
+.Rhistory
+.Rproj.user/*
 
 csvFiles/shapefiles/*
 csvFiles/nativeStatus.xlsx
-csvFiles/BsalMap.html
 csvFiles/locations
-csvFiles/Germany_data.xlsx
+csvFiles/locations_with_ADMs
 csvFiles/Germany_data.xlsx
 csvFiles/weather.csv
 csvFiles/gbif_amphibs.csv
+csvFiles/.Rhistory
 
-weatherSampling/weatherProcessing_monthly.R

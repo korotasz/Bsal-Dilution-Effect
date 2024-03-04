@@ -1,17 +1,8 @@
 require(renv)
 require(pacman)
 
-
-## Activate project (only need to do once upon first use of script)
-# renv::activate()
 ## May need to run:
 # renv::restore(packages = "renv")
-# renv::snapshot(project = "C:/Development/Chapter-2-Analyses",
-#                library = c("C:/Users/Alexis/AppData/Local/R/win-library/4.3", "C:/Program Files/R/R-4.3.2/library"),
-#                type = "all",
-#                update = T,
-#                force = T)
-
 
 #### Packages ####
 pckgs <- c("tidyverse", # data wrangling/manipulation
@@ -41,7 +32,7 @@ pckgs <- c("tidyverse", # data wrangling/manipulation
 # renv::hydrate(packages = c(pckgs, "pacman"), sources = c("C:/Users/alexi/AppData/Local/R/win-library/4.3", "C:/Program Files/R/R-4.3.1/library"))
 ## Work computer
 # renv::hydrate(packages = c(pckgs, "pacman"), sources = c("C:/Users/Alexis/AppData/Local/R/win-library/4.3", "C:/Program Files/R/R-4.3.1/library"))
-pacman::p_load(pckgs, character.only = T, update = T)
+pacman::p_load(pckgs, character.only = T, update = F)
 
 ## Edit .Renviron to be able to access gbif data
 # usethis::edit_r_environ() # need to restart R for changes to take effect
