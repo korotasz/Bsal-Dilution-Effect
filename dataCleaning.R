@@ -77,11 +77,18 @@ assign_start_date <- function(df, timepoint, date, out_col){
 ## -----------------------------------------------------------------------------
 setwd(file.path(dir, csvpath))
 
-euram <- read.csv("euram.csv", header = T, encoding = "UTF-8")
+
 germany <- read.csv("germany.csv", header = T, encoding = "UTF-8")
-uk <- read.csv("uk.csv", header = T, encoding = "UTF-8")
-spain <- read.csv("spain.csv", header = T, encoding = "UTF-8")
+euram <- read.csv("euram.csv", header = T, encoding = "UTF-8")
 belgium <- read.csv("belgium.csv", header = T, encoding = "UTF-8")
+uk <- read.csv("uk.csv", header = T, encoding = "UTF-8")
+
+spain <- read.csv("spain.csv", header = T, encoding = "UTF-8")
+china <- read.csv("china.csv", header = T, encoding = "UTF-8")
+vietnam <- read.csv("vietnam.csv", header = T, encoding = "UTF-8")
+
+
+
 
 ## Combine dataframes
 prev <- rbind(belgium, euram, germany, uk)
@@ -120,7 +127,7 @@ prev <- prev %>%
   subset(., select = -c(locality, cycleTimeFirstDetection, locationRemarks:locationID,
                         occurrenceRemarks, diseaseLineage, zeScore:DiagFALSEstics_bcid))
 
-## Rearrange dataframe
+## Rearrange df
 data.frame(colnames(prev))
 prev <- prev %>%
   relocate(country, .before = principalInvestigator) %>%
@@ -130,27 +137,50 @@ prev <- prev %>%
              principalInvestigator, collectorList, Sample_bcid:projectId), .after = country)
 
 
-## Remove columns from Spain
+## Subset relevant columns from Spain df
 data.frame(colnames(spain))
-spain <- spain %>%
-  subset(., select = -c(coordinateUncertaintyInMeters, minimumElevationInMeters,
-                        soilMoisture:bio19))
-
-## Rearrange columns in Spain df
-spain <- spain %>%
-  relocate(c(country:dayCollected), .before = materialSampleID) %>%
-  relocate(c(materialSampleID, genus:scientific, susceptibility, nativeStatus,
-           lifeStage, sex, individualCount, diseaseTested, BdDetected:fatal,
-           specimenDisposition, basisOfRecord, sampleType, testMethod, diagnosticLab,
-           collectorList:projectId), .after = dayCollected)
-
-
-spain <- spain %>%
+spain_test <- spain %>%
+  subset(., select = c(country, ADM0:ADM2, Lat:Lon, yearCollected:dayCollected,
+                       materialSampleID, genus:scientific, susceptibility, nativeStatus,
+                       lifeStage:sex, individualCount, diseaseTested, BdDetected:fatal,
+                       specimenDisposition, basisOfRecord, sampleType, testMethod,
+                       diagnosticLab, location, collectorList, Sample_bcid, expeditionCode, projectId)) %>%
   replace(., . == "", NA) %>%
-  rename(specimenFate = specimenDisposition) %>%
-  mutate(sampleRemarks = NA,
-         principalInvestigator = "An Martel") %>%
+  rename(specimenFate = specimenDisposition,
+         sampleRemarks = location) %>%
+  mutate(principalInvestigator = "An Martel") %>%
   relocate(c(sampleRemarks, principalInvestigator), .after = diagnosticLab)
+
+## Subset relevant columns from China df
+china_test <- china %>%
+  subset(., select = c(country:ADM2, N:E, year:day, materialSampleID, genus:scientific,
+                       susceptibility, nativeStatus, lifeStage:sex, individualCount, diseaseTested,
+                       BdDetected:fatal, specimenDisposition, basisOfRecord:sampleType, testMethod,
+                       diagnosticLab, sampleRemarks, comments, collectorList:projectId)) %>%
+  # Remove non-wild observations
+  filter(scientific != "Andrias davidianus") %>%
+  unite(., sampRemarks, c(sampleRemarks, comments), sep = "; ", remove = T) %>%
+  # Replace any empty cells with 'NA'
+  replace(., . == "", NA) %>%
+  rename(decimalLatitude = N,
+         decimalLongitude = E,
+         specimenFate = specimenDisposition,
+         sampleRemarks = sampRemarks) %>%
+  mutate(principalInvestigator = "Frank Pasmans", # Last author on Yuan et al. 2018 paper
+         basisOfRecord = "LivingSpecimen",
+         # Create new sample IDs based on row number -- Did not use original sample IDs here to avoid confusion:
+         # Bsal+ individuals in 'Table 1.xlsx' were not associated with specific sample IDs.
+         rowID_prefix = "yuan",
+         rowID_suffix = sprintf("%04d", 1:nrow(.))) %>%
+  unite(., materialSampleID, c(rowID_prefix, rowID_suffix), sep = "_", remove = T) %>%
+  relocate(materialSampleID, .after = day) %>%
+  relocate(c(sampleRemarks, principalInvestigator), .after = diagnosticLab)
+
+
+
+
+
+
 
 ## Join Spain to main df
 prev <- rbind(prev, spain)
