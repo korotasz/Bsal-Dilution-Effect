@@ -284,7 +284,7 @@ vietnam <- vietnam %>%
 
 rm(vietnam_coords, VNM_btwn, x, y)
 
-## Join Spain to main df
+## Join Spain, China, & Vietnam to main df
 df <- rbind(df, spain, china, vietnam)
 
 # df %>%
