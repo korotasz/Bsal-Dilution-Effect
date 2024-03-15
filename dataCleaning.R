@@ -17,6 +17,7 @@ pckgs <- c("tidyverse", # data wrangling/manipulation
        "rnaturalearth", # obtain spatial polygons that can be used with sf
              "geodata", # get admin levels for each country
                "rgbif", # obtain species occurrence data
+             "taxlist", # standardize/update taxonomic names
            "geosphere", # distGeo(); distm()
         "measurements", # convert coordinates from DMS to DD
             "maptools", # package to create maps
@@ -77,7 +78,7 @@ assign_start_date <- function(df, timepoint, date, out_col){
   return(df)
 }
 
-## -----------------------------------------------------------------------------
+## Read in .csv files-----------------------------------------------------------
 setwd(file.path(dir, csvpath))
 
 
@@ -92,8 +93,7 @@ vietnam <- read.csv("vietnam.csv", header = T, encoding = "UTF-8")
 
 
 
-
-## Combine dataframes
+## Belgium, Germany, UK, and Europe/North America combined data ----------------
 df <- rbind(belgium, euram, germany, uk)
 
 ## Remove empty columns
@@ -145,7 +145,7 @@ df <- df %>%
          Lon = decimalLongitude)
 
 
-## Subset relevant columns from Spain df
+## Spain -----------------------------------------------------------------------
 data.frame(colnames(spain))
 spain <- spain %>%
   subset(., select = c(country, ADM0:ADM2, Lat:Lon, yearCollected:dayCollected,
@@ -162,7 +162,9 @@ spain <- spain %>%
   mutate(principalInvestigator = "An Martel") %>%
   relocate(c(sampleRemarks, principalInvestigator), .after = diagnosticLab)
 
-## Subset relevant columns from China df and reorganize data frame to match others
+
+## China -----------------------------------------------------------------------
+data.frame(colnames(china))
 china <- china %>%
   subset(., select = c(country:ADM2, N:E, year:day, materialSampleID, genus:scientific,
                        susceptibility, nativeStatus, lifeStage:sex, individualCount, diseaseTested,
@@ -182,7 +184,10 @@ china <- china %>%
          # Create new sample IDs based on row number -- Did not use original sample IDs here to avoid confusion:
          # Bsal+ individuals in 'Table 1.xlsx' were not associated with specific sample IDs.
          rowID_prefix = "yuan",
-         rowID_suffix = sprintf("%04d", 1:nrow(.))) %>%
+         rowID_suffix = sprintf("%04d", 1:nrow(.)),
+         scientific = trimws(scientific, which = "right"),
+         ADM1 = case_when(ADM1 == "Liaoling" ~ "Liaoning",
+                          TRUE ~ ADM1)) %>%
   unite(., materialSampleID, c(rowID_prefix, rowID_suffix), sep = "_", remove = T) %>%
   relocate(materialSampleID, .after = day) %>%
   relocate(c(sampleRemarks, principalInvestigator), .after = diagnosticLab)
@@ -193,14 +198,19 @@ china %>%
   group_by(ADM1, ADM2) %>%
   summarise(n = n())
 
+## Summary of Bsal+ and Bsal- spp.
+china %>%
+  base::subset(., select = c(scientific, BsalDetected)) %>%
+  group_by(scientific, BsalDetected) %>%
+  summarise(n = n())
 
-data.frame(colnames(vietnam))
 
+## Vietnam ---------------------------------------------------------------------
 ## Fix naming conventions for Vietnam
 vietnam <- vietnam %>%
   # replace empty strings with NA
   replace(., . == "", NA) %>%
-  filter(!(is.na(ADM1) & is.na(ADM2))) %>%
+ filter(!(is.na(ADM1) & is.na(ADM2) & is.na(N_start) & is.na(E_start))) %>%
   mutate(ADM1 = case_when(ADM1 == "B?c Giang" ~ "Bắc Giang",
                           ADM1 == "V?nh Phúc" ~ "Vĩnh Phúc",
                           ADM1 == "Qu?ng Ninh" ~ "Quảng Ninh",
@@ -284,16 +294,18 @@ vietnam <- vietnam %>%
 
 rm(vietnam_coords, VNM_btwn, x, y)
 
-## Join Spain, China, & Vietnam to main df
+## Join Spain, China, & Vietnam to main df -------------------------------------
 df <- rbind(df, spain, china, vietnam)
 
 # df %>%
 #   group_by(country, BsalDetected) %>%
 #   summarise(n = n())
 
+
 df <- df %>%
   # make sure individualCount is numeric
-  mutate(individualCount = as.numeric(individualCount)) %>%
+  mutate(individualCount = as.numeric(individualCount),
+         scientific = trimws(scientific, which = "right")) %>%
   # assume all NA values are observations for a single individual
   plyr::mutate(individualCount = case_match(individualCount, NA ~ 1, .default = individualCount),
                # replace NA values in diseaseTested with appropriate test
@@ -309,7 +321,34 @@ df <- df %>%
 
 
 rm(belgium, euram, germany, spain, uk, vietnam, china)
-#### Obtaining administrative level data from geodata package ------------------
+
+## Identify/resolve any taxonomic errors ---------------------------------------
+sppNames <- df %>%
+  subset(., select = c(scientific, genus, species)) %>%
+  unique()
+sppNames <- as.data.frame(sppNames[order(sppNames$scientific), ])
+print(sppNames)
+
+df <- df %>%
+  mutate(scientific = case_when(scientific %in% "Cynops cyanurus" ~ "Hypselotriton cyanurus",
+                                scientific %in% "Cynops fudingensis" ~ "Hypselotriton fudingensis",
+                                scientific %in% "Cynops glaucus" ~ "Hypselotriton glaucus",
+                                scientific %in% "Cynops orientalis" ~ "Hypselotriton orientalis",
+                                scientific %in% "Cynops orphicus" ~ "Hypselotriton orphicus",
+                                scientific %in% "Paramesotriton guanxiensis" ~ "Paramesotriton guangxiensis",
+                                scientific %in% "Paramesotriton sp" ~ "Paramesotriton sp.",
+                                scientific %in% "Tylototriton sp" ~ "Tylototriton sp.",
+                                TRUE ~ scientific),
+         genus = trimws(case_when(scientific %in% c("Cynops cyanurus", "Cynops fudingensis", "Cynops glaucus",
+                                             "Cynops orientalis", "Cynops orphicus") ~ "Hypselotriton",
+                           TRUE ~ genus), which = "right"),
+         species = trimws(case_when(species %in% "guanxiensis" ~ "guangxiensis",
+                             species %in% c("sp", "sp ") ~ "sp.",
+                             TRUE ~ species), which = "right"))
+
+
+rm(sppNames)
+#### Obtain administrative level data from geodata package ---------------------
 ## Construct file path to store Euro country shapefiles
 dir.create(file.path(dir, shppath)) # Will give warning if path already exists
 setwd(file.path(dir, shppath))
@@ -345,6 +384,66 @@ out <- st_intersection(points, polygon) %>%
          Lat = sf::st_coordinates(.)[,2])
 
 # st_write(out, "adm_info.shp", append = F)
+
+
+## Get centroids of these 3 that are missing lat/lon coordinates and convert lat/lon back to EPSG:4326
+missing_coords <- df %>%
+  filter(is.na(Lat)) %>%
+  group_by(ADM1, ADM2) %>%
+  summarise(n = n())
+
+chn_adm1_centroids <- geodata::gadm(country = 'CHN', level = 1, path = file.path(dir, shppath), version = "latest", resolution = 1) %>%
+  st_as_sf(., crs = 4326) %>%
+  st_centroid(.) %>%
+  data.frame(.) %>%
+  mutate(row = row_number()) %>%
+  relocate(row, .before = GID_1)
+
+chn_adm1 <- data.frame(st_coordinates(st_cast(chn_adm1_centroids$geometry, "POINT"))) %>%
+  mutate(row = row_number()) %>%
+  left_join(chn_adm1_centroids, ., by = "row", keep = F) %>% # X = LON, Y = LAT
+  mutate(Lat = Y,
+         Lon = X,
+         ADM0 = GID_0,
+         country = COUNTRY,
+         ADM1 = NAME_1,
+         ADM2 = NA) %>%
+  subset(., select = c(Lat, Lon, ADM0, country, ADM1, ADM2)) %>%
+  filter(ADM1 == "Guangdong")
+
+chn_adm2_centroids <- geodata::gadm(country = 'CHN', level = 2, path = file.path(dir, shppath), version = "latest", resolution = 1) %>%
+  st_as_sf(., crs = 4326) %>%
+  st_centroid(.) %>%
+  data.frame(.) %>%
+  mutate(row = row_number()) %>%
+  relocate(row, .before = GID_2)
+
+chn_adm2 <- data.frame(st_coordinates(st_cast(chn_adm2_centroids$geometry, "POINT"))) %>%
+  mutate(row = row_number()) %>%
+  left_join(chn_adm2_centroids, ., by = "row", keep = F) %>% # X = LON, Y = LAT
+  mutate(Lat = Y,
+         Lon = X,
+         ADM0 = GID_0,
+         country = COUNTRY,
+         ADM1 = NAME_1,
+         ADM2 = NAME_2) %>%
+  subset(., select = c(Lat, Lon, ADM0, country, ADM1, ADM2)) #%>%
+  filter(ADM1 == "Liaoning" & ADM2 == "Anshan" | ADM1 == "Zhejiang" & ADM2 == "Hangzhou")
+
+
+
+#     e. Join lat/lon data to identifiers (ADM levels)
+centroid_df <- centroid_df %>%
+  left_join(., geometry, by = "L1") %>% # X = LON, Y = LAT
+  dplyr::select(ADM1_ES, ADM2_ES, Y, X) %>%
+  plyr::mutate(ADM1 = ADM1_ES,
+               ADM2 = ADM2_ES,
+               Lat = Y,
+               Lon = X) %>%
+  dplyr::select(-c(ADM1_ES, ADM2_ES, Y, X))
+## Check for missing lat/lon!!
+# centroid_df %>%
+
 
 ## Get admin levels in a dataframe format
 adminlvls <- data.frame(out) %>%
@@ -385,12 +484,15 @@ df$Site <- siteNumber$Site[base::match(paste(df$materialSampleID),
 
 df <- relocate(df, Site, .after = "day")
 
-## Add data to the susceptibility column in df df
+setwd(file.path(dir, csvpath))
+
+
+
+## Add data to the susceptibility column in df
 ## Susceptibility codes (based on coding system from Bosch et al. 2021)
 ## 1 = resistant
 ## 2 = tolerant/susceptible
 ## 3 = lethal
-setwd(file.path(dir, csvpath))
 s <- read.csv("susceptibility.csv", header = T, encoding = "UTF-8")
 data.frame(colnames(s))
 names(s) <- c("order", "family", "genus", "species", "scientific",
