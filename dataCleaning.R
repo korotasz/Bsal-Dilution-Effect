@@ -192,6 +192,7 @@ china <- china %>%
   relocate(materialSampleID, .after = day) %>%
   relocate(c(sampleRemarks, principalInvestigator), .after = diagnosticLab)
 
+
 ## Need coords for these locs.; Get centroid
 china %>%
   filter(is.na(Lat)) %>%
@@ -210,7 +211,8 @@ china %>%
 vietnam <- vietnam %>%
   # replace empty strings with NA
   replace(., . == "", NA) %>%
- filter(!(is.na(ADM1) & is.na(ADM2) & is.na(N_start) & is.na(E_start))) %>%
+  # filter out locations I can't obtain lat/lon data for
+  filter(!(is.na(ADM1) & is.na(ADM2) & is.na(N_start) & is.na(E_start))) %>%
   mutate(ADM1 = case_when(ADM1 == "B?c Giang" ~ "Bắc Giang",
                           ADM1 == "V?nh Phúc" ~ "Vĩnh Phúc",
                           ADM1 == "Qu?ng Ninh" ~ "Quảng Ninh",
@@ -233,7 +235,8 @@ vietnam <- vietnam %>%
                           ADM2 == "B?c Quang" ~ "Bắc Quang",
                           ADM2 == "V?n Bàn" ~ "Văn Bàn",
                           ADM2 == "Sìn H?" ~ "Sìn Hồ",
-                          ADM2 == "Nguyên Bình" ~ "Nguyên Bình"))
+                          ADM2 == "Nguyên Bình" ~ "Nguyên Bình"),
+         scientific = trimws(scientific, which = "right"))
 
 
 vietnam_coords <- vietnam %>%
@@ -262,8 +265,7 @@ VNM_btwn <- geosphere::gcIntermediate(x, y, n = 1, addStartEnd = F, sepNA = T) %
   rename(Lon_btwn = lon,
          Lat_btwn = lat) %>%
   cbind(., x, y) %>%
-  full_join(., vietnam_coords) %>%
-  filter(!is.na(Lon2)) %>%
+  left_join(., vietnam_coords, by = c("Lon", "Lat", "Lon2", "Lat2"), keep = F) %>%
   subset(., select = c(ADM1, ADM2, N_start, E_start, N_end, E_end, Lon_btwn, Lat_btwn)) %>%
   rename(Lon = Lon_btwn,
          Lat = Lat_btwn)
@@ -275,7 +277,7 @@ vietnam_coords <- vietnam_coords %>%
   rbind(., VNM_btwn)
 
 vietnam <- vietnam %>%
-  left_join(., vietnam_coords) %>%
+  left_join(., vietnam_coords, by = c("ADM1", "ADM2", "N_start", "E_start", "N_end", "E_end"), keep = F) %>%
   unite(., sampRemarks, c(sampleRemarks, comments), sep = "; ", remove = T) %>%
   mutate(principalInvestigator = "Nguyen",
   # Create new sample IDs based on row number -- Did not use original sample IDs here to avoid confusion:
@@ -292,15 +294,19 @@ vietnam <- vietnam %>%
                        basisOfRecord, sampleType, testMethod, diagnosticLab,
                        sampleRemarks, principalInvestigator, collectorList:projectId))
 
-rm(vietnam_coords, VNM_btwn, x, y)
 
+vietnam %>% ## Need centroids for these locs
+  filter(is.na(Lat) | is.na(Lon)) %>%
+  group_by(ADM1, ADM2) %>%
+  summarise(n = n())
+
+
+rm(vietnam_coords, VNM_btwn, x, y)
 ## Join Spain, China, & Vietnam to main df -------------------------------------
 df <- rbind(df, spain, china, vietnam)
-
 # df %>%
 #   group_by(country, BsalDetected) %>%
 #   summarise(n = n())
-
 
 df <- df %>%
   # make sure individualCount is numeric
@@ -375,7 +381,6 @@ points <- df %>%
 
 # st_write(points, "locations.shp", append = F)
 
-
 ## Intersect lat/lon coordinates with each raster to get the correct admin levels associated with our data
 ## Compared this method with previous method of loading gadm.org shapefiles into QGIS fore ea. country &
 #  sampling locations, and it is just as accurate.
@@ -385,22 +390,22 @@ out <- st_intersection(points, polygon) %>%
 
 # st_write(out, "adm_info.shp", append = F)
 
-## Get centroids of these 3 that are missing lat/lon coordinates and convert lat/lon back to EPSG:4326
+## Get centroids of these 5 that are missing lat/lon coordinates and convert lat/lon back to EPSG:4326
 missing_coords <- df %>%
   filter(is.na(Lat)) %>%
-  group_by(ADM1, ADM2) %>%
+  group_by(ADM1, ADM2, scientific) %>%
   summarise(n = n())
 
-chn_adm1_centroids <- geodata::gadm(country = 'CHN', level = 1, path = file.path(dir, shppath), version = "latest", resolution = 1) %>%
+adm1_centroids <- geodata::gadm(country = c('CHN', 'VNM'), level = 1, path = file.path(dir, shppath), version = "latest", resolution = 1) %>%
   st_as_sf(., crs = 4326) %>%
   st_centroid(.) %>%
   data.frame(.) %>%
   mutate(row = row_number()) %>%
   relocate(row, .before = GID_1)
 
-chn_adm1 <- data.frame(st_coordinates(st_cast(chn_adm1_centroids$geometry, "POINT"))) %>%
+adm1 <- data.frame(st_coordinates(st_cast(adm1_centroids$geometry, "POINT"))) %>%
   mutate(row = row_number()) %>%
-  left_join(chn_adm1_centroids, ., by = "row", keep = F) %>% # X = LON, Y = LAT
+  left_join(adm1_centroids, ., by = "row", keep = F) %>% # X = LON, Y = LAT
   mutate(Lat = Y,
          Lon = X,
          ADM0 = GID_0,
@@ -410,16 +415,16 @@ chn_adm1 <- data.frame(st_coordinates(st_cast(chn_adm1_centroids$geometry, "POIN
   subset(., select = c(Lat, Lon, ADM0, country, ADM1, ADM2)) %>%
   filter(ADM1 == "Guangdong")
 
-chn_adm2_centroids <- geodata::gadm(country = 'CHN', level = 2, path = file.path(dir, shppath), version = "latest", resolution = 1) %>%
+adm2_centroids <- geodata::gadm(country = c('CHN','VNM'), level = 2, path = file.path(dir, shppath), version = "latest", resolution = 1) %>%
   st_as_sf(., crs = 4326) %>%
   st_centroid(.) %>%
   data.frame(.) %>%
   mutate(row = row_number()) %>%
   relocate(row, .before = GID_2)
 
-chn_adm2 <- data.frame(st_coordinates(st_cast(chn_adm2_centroids$geometry, "POINT"))) %>%
+adm2 <- data.frame(st_coordinates(st_cast(adm2_centroids$geometry, "POINT"))) %>%
   mutate(row = row_number()) %>%
-  left_join(chn_adm2_centroids, ., by = "row", keep = F) %>% # X = LON, Y = LAT
+  left_join(adm2_centroids, ., by = "row", keep = F) %>% # X = LON, Y = LAT
   mutate(Lat = Y,
          Lon = X,
          ADM0 = GID_0,
@@ -427,10 +432,21 @@ chn_adm2 <- data.frame(st_coordinates(st_cast(chn_adm2_centroids$geometry, "POIN
          ADM1 = NAME_1,
          ADM2 = NAME_2) %>%
   subset(., select = c(Lat, Lon, ADM0, country, ADM1, ADM2)) %>%
-  filter(ADM1 == "Liaoning" & ADM2 == "Anshan" | ADM1 == "Zhejiang" & ADM2 == "Hangzhou")
+  filter(ADM1 == "Liaoning" & ADM2 == "Anshan" |
+           ADM1 == "Zhejiang" & ADM2 == "Hangzhou" |
+           ADM1 == "Cao Bằng" & ADM2 == "Nguyên Bình" |
+           ADM1 == "Vĩnh Phúc" & ADM2 == "Tam Đảo")
 
-missing_coords <- rbind(chn_adm1, chn_adm2) %>%
-  unite("LatLon", c(Lat, Lon), sep = ", ")
+missing_coords <- df %>%
+  filter(scientific == "Echinotriton maxiquadratus" |
+           scientific == "Hynobius leechii" & ADM1 == "Liaoning" & ADM2 == "Anshan" |
+           scientific == "Hypselotriton orientalis" & ADM1 == "Zhejiang" & ADM2 == "Hangzhou" |
+           scientific == "Paramesotriton deloustali" &  ADM1 == "Vĩnh Phúc" & ADM2 == "Tam Đảo" |
+           scientific == "Tylototriton ziegleri" & ADM1 == is.na(ADM1) & ADM2 == "Nguyên Bình") #%>%
+  dplyr::select(!("Lat":"Lon")) %>%
+  left_join(., rbind(adm1, adm2), by = c("ADM0", "country", "ADM1", "ADM2"), keep = F) %>%
+  relocate(c(Lat, Lon), .after = ADM2)
+
 
 ## Get admin levels in a dataframe format
 adminlvls <- data.frame(out) %>%
@@ -442,23 +458,49 @@ adminlvls <- data.frame(out) %>%
          country = COUNTRY) %>%
   unique(.)
 
-adminlvls <- rbind(adminlvls, missing_coords)
+centroid_adms <- rbind(adm1, adm2) %>%
+  unite("LatLon", c(Lat, Lon), sep = ", ")
 
 ## Check for missing admin levels!!
 # adminlvls %>%
 #   filter(is.na(ADM2)) # only one location missing (ADM2 in GBR).
 
-
+rm(out, points, polygon, adm1, adm1_centroids, adm2, adm2_centroids)
 ## Add ADM info back to main dataframe -----------------------------------------
-df <- df %>%
+test <- df %>%
+  filter(!(scientific == "Echinotriton maxiquadratus" |
+           scientific == "Hynobius leechii" & ADM1 == "Liaoning" & ADM2 == "Anshan" |
+           scientific == "Hypselotriton orientalis" & ADM1 == "Zhejiang" & ADM2 == "Hangzhou" |
+           scientific == "Paramesotriton deloustali" &  ADM1 == "Vĩnh Phúc" & ADM2 == "Tam Đảo" |
+           scientific == "Tylototriton ziegleri" & ADM2 == "Nguyên Bình")) %>%
+  rbind(., missing_coords) %>%
   dplyr::select(!("country":"ADM2")) %>%
   unite("LatLon", c(Lat, Lon), sep = ", ") %>%
-  left_join(., adminlvls, by = "LatLon", relationship = "many-to-one", keep = F) %>%
+  left_join(., rbind(adminlvls, centroid_adms), by = "LatLon", relationship = "many-to-one", keep = F) %>%
   relocate(c(country, ADM0, ADM1, ADM2), .before = LatLon) %>%
   separate(LatLon, c("Lat", "Lon"), sep = ", ")
 
+test %>% # missing data for two spp. in VNM
+  filter(is.na(country) | is.na(ADM1)) %>%
+  group_by(Lat, Lon, scientific) %>%
+  summarise(n = n())
 
-rm(out, points, polygon, chn_adm1, chn_adm1_centroids, chn_adm2, chn_adm2_centroids, missing_coords)
+df %>% # clear -- did not happen before running lines 460-469
+  filter(is.na(country)) %>%
+  group_by(Lat, Lon, scientific) %>%
+  summarise(n = n())
+
+df %>%
+  filter(scientific == "Paramesotriton deloustali" | scientific == "Tylototriton ziegleri") %>%
+  group_by(scientific, ADM0, ADM1, ADM2, Lat, Lon) %>%
+  summarise(n = n()) %>%
+  filter(scientific == "Paramesotriton deloustali" & n == 18 |
+           scientific == "Tylototriton ziegleri" & n == 8)
+
+
+
+
+rm(missing_coords)
 setwd(file.path(dir, csvpath))
 ## Generate Site #s ------------------------------------------------------------
 # Group sites by unique lat/long combos and assign site #s to them, for all countries
@@ -488,12 +530,25 @@ df$susceptibility <- s$susceptibility[base::match(df$scientific, s$scientific)]
 plyr::count(df, "susceptibility")
 
 ## close look at any missing data
-sus <- df %>% dplyr::filter(is.na(susceptibility)) %>%
-  group_by(scientific) %>%
-  summarise(n = n()) # 25 spp. total missing susceptibility scores
+# sus <- df %>% dplyr::filter(is.na(susceptibility)) %>%
+#   group_by(scientific) %>%
+#   summarise(n = n()) # 25 spp. total missing susceptibility scores
 # print(sum(sus$n)) # 732 observations total, missing
 
-## Add 'native status' of each species from each country (data derived from iucnredlist.org)
+## Add 'native status' of each species from each country -----------------------
+# (data derived from iucnredlist.org)
+sppPerCountry <- df %>%
+  subset(., select = c(country, scientific)) %>%
+  group_by(scientific, country) %>%
+  summarise(n = n())
+View(sppPerCountry)
+
+df %>%
+  filter(is.na(country)) %>%
+  group_by(scientific) %>%
+  summarise(n = n())
+
+
 nativeStatus <- read.csv("nativeStatus.csv", header = T, encoding = "UTF-8")
 
 df$nativeStatus <- nativeStatus$nativeStatus[base::match(paste(df$country, df$scientific),
