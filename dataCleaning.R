@@ -339,9 +339,9 @@ df <- df %>%
                                 scientific %in% "Paramesotriton sp" ~ "Paramesotriton sp.",
                                 scientific %in% "Tylototriton sp" ~ "Tylototriton sp.",
                                 TRUE ~ scientific),
-         genus = trimws(case_when(scientific %in% c("Cynops cyanurus", "Cynops fudingensis", "Cynops glaucus",
-                                             "Cynops orientalis", "Cynops orphicus") ~ "Hypselotriton",
-                           TRUE ~ genus), which = "right"),
+         genus = trimws(case_when(genus %in% "Cynops" ~ "Hypselotriton",
+                                  TRUE ~ genus),
+                        which = "right"),
          species = trimws(case_when(species %in% "guanxiensis" ~ "guangxiensis",
                              species %in% c("sp", "sp ") ~ "sp.",
                              TRUE ~ species), which = "right"))
@@ -385,7 +385,6 @@ out <- st_intersection(points, polygon) %>%
 
 # st_write(out, "adm_info.shp", append = F)
 
-
 ## Get centroids of these 3 that are missing lat/lon coordinates and convert lat/lon back to EPSG:4326
 missing_coords <- df %>%
   filter(is.na(Lat)) %>%
@@ -427,23 +426,11 @@ chn_adm2 <- data.frame(st_coordinates(st_cast(chn_adm2_centroids$geometry, "POIN
          country = COUNTRY,
          ADM1 = NAME_1,
          ADM2 = NAME_2) %>%
-  subset(., select = c(Lat, Lon, ADM0, country, ADM1, ADM2)) #%>%
+  subset(., select = c(Lat, Lon, ADM0, country, ADM1, ADM2)) %>%
   filter(ADM1 == "Liaoning" & ADM2 == "Anshan" | ADM1 == "Zhejiang" & ADM2 == "Hangzhou")
 
-
-
-#     e. Join lat/lon data to identifiers (ADM levels)
-centroid_df <- centroid_df %>%
-  left_join(., geometry, by = "L1") %>% # X = LON, Y = LAT
-  dplyr::select(ADM1_ES, ADM2_ES, Y, X) %>%
-  plyr::mutate(ADM1 = ADM1_ES,
-               ADM2 = ADM2_ES,
-               Lat = Y,
-               Lon = X) %>%
-  dplyr::select(-c(ADM1_ES, ADM2_ES, Y, X))
-## Check for missing lat/lon!!
-# centroid_df %>%
-
+missing_coords <- rbind(chn_adm1, chn_adm2) %>%
+  unite("LatLon", c(Lat, Lon), sep = ", ")
 
 ## Get admin levels in a dataframe format
 adminlvls <- data.frame(out) %>%
@@ -455,13 +442,14 @@ adminlvls <- data.frame(out) %>%
          country = COUNTRY) %>%
   unique(.)
 
+adminlvls <- rbind(adminlvls, missing_coords)
 
 ## Check for missing admin levels!!
 # adminlvls %>%
 #   filter(is.na(ADM2)) # only one location missing (ADM2 in GBR).
 
 
-## Add back to main dataframe --------------------------------------------------
+## Add ADM info back to main dataframe -----------------------------------------
 df <- df %>%
   dplyr::select(!("country":"ADM2")) %>%
   unite("LatLon", c(Lat, Lon), sep = ", ") %>%
@@ -470,9 +458,10 @@ df <- df %>%
   separate(LatLon, c("Lat", "Lon"), sep = ", ")
 
 
-rm(out, points, polygon)
-
-## Group sites by unique lat/long combos and assign site #s to them, for all countries
+rm(out, points, polygon, chn_adm1, chn_adm1_centroids, chn_adm2, chn_adm2_centroids, missing_coords)
+setwd(file.path(dir, csvpath))
+## Generate Site #s ------------------------------------------------------------
+# Group sites by unique lat/long combos and assign site #s to them, for all countries
 siteNumber <- df %>%
   dplyr::select(materialSampleID, Lat, Lon) %>%
   dplyr::group_by(Lat, Lon) %>%
@@ -484,25 +473,25 @@ df$Site <- siteNumber$Site[base::match(paste(df$materialSampleID),
 
 df <- relocate(df, Site, .after = "day")
 
-setwd(file.path(dir, csvpath))
-
-
-
-## Add data to the susceptibility column in df
-## Susceptibility codes (based on coding system from Bosch et al. 2021)
-## 1 = resistant
-## 2 = tolerant/susceptible
-## 3 = lethal
+## Add susceptibility data -----------------------------------------------------
+## Susceptibility codes (based on a combination of Martel et al. 2014 and Bosch et al. 2021)
+## 1 = resistant: no infection, no clinical signs of disease, no mortality
+## 2 = tolerant/susceptible: variable (no to low) infection, may or may *not* result in
+#                            disease, no to low mortality (animal recovers most of the time)
+## 3 = lethal: high infection loads that lead to clinical signs of disease and
+#              subsequent mortality >80% of the time in clinical trials
 s <- read.csv("susceptibility.csv", header = T, encoding = "UTF-8")
-data.frame(colnames(s))
-names(s) <- c("order", "family", "genus", "species", "scientific",
-              "susceptibility", "citation")
 
 df$susceptibility <- s$susceptibility[base::match(df$scientific, s$scientific)]
-## double check there are no NAs
+
+## double check for NAs
 plyr::count(df, "susceptibility")
-## check for any missing data
-#sus <- df %>% dplyr::filter(is.na(susceptibility))
+
+## close look at any missing data
+sus <- df %>% dplyr::filter(is.na(susceptibility)) %>%
+  group_by(scientific) %>%
+  summarise(n = n()) # 25 spp. total missing susceptibility scores
+# print(sum(sus$n)) # 732 observations total, missing
 
 ## Add 'native status' of each species from each country (data derived from iucnredlist.org)
 nativeStatus <- read.csv("nativeStatus.csv", header = T, encoding = "UTF-8")
@@ -515,6 +504,7 @@ native <- df %>%
   group_by(country, scientific, nativeStatus) %>%
   summarise()
 
+rm(siteNumber, s, native)
 #### Calculate abundance, richness, and diversity ####
 df <- unite(df, c("year", "month", "day"), sep = "-", col = "date", remove = F)
 
