@@ -1,89 +1,351 @@
-﻿scientific,country,nativeStatus,source
-Alytes obstetricans,Germany,native,iucn
-Alytes obstetricans,Spain,native,iucn
-Alytes obstetricans,Switzerland,native,iucn
-Alytes obstetricans,United Kingdom,introduced,iucn
-Bombina variegata,Germany,native,iucn
-Bombina variegata,Spain,not present,iucn
-Bombina variegata,Switzerland,native,iucn
-Bombina variegata,United Kingdom,introduced,iucn
-Bufo bufo,Germany,native,iucn
-Bufo bufo,Spain,native,iucn
-Bufo bufo,Switzerland,native,iucn
-Bufo bufo,United Kingdom,native,iucn
-Bufo spinosus,Germany,not present,iucn
-Bufo spinosus,Spain,native,iucn
-Bufo spinosus,Switzerland,not present,iucn
-Bufo spinosus,United Kingdom,not present,iucn
-Calotriton asper,Germany,not present,iucn
-Calotriton asper,Spain,native,iucn
-Calotriton asper,Switzerland,not present,iucn
-Calotriton asper,United Kingdom,not present,iucn
-Discoglossus pictus,Germany,not present,iucn
-Discoglossus pictus,Spain,introduced,iucn
-Discoglossus pictus,Switzerland,not present,iucn
-Discoglossus pictus,United Kingdom,not present,iucn
-Hyla meridionalis,Germany,not present,iucn
-Hyla meridionalis,Spain,native,iucn
-Hyla meridionalis,Switzerland,not present,iucn
-Hyla meridionalis,United Kingdom,not present,iucn
-Ichthyosaura alpestris,Germany,native,iucn
-Ichthyosaura alpestris,Spain,native,iucn
-Ichthyosaura alpestris,Switzerland,native,iucn
-Ichthyosaura alpestris,United Kingdom,introduced,iucn
-Lissotriton boscai,Germany,not present,iucn
-Lissotriton boscai,Spain,native,iucn
-Lissotriton boscai,Switzerland,not present,iucn
-Lissotriton boscai,United Kingdom,not present,iucn
-Lissotriton helveticus,Germany,native,iucn
-Lissotriton helveticus,Spain,native,iucn
-Lissotriton helveticus,Switzerland,native,iucn
-Lissotriton helveticus,United Kingdom,native,iucn
-Lissotriton vulgaris,Germany,native,iucn
-Lissotriton vulgaris,Spain,not present,iucn
-Lissotriton vulgaris,Switzerland,native,iucn
-Lissotriton vulgaris,United Kingdom,native,iucn
-Pelobates cultripes,Germany,not present,iucn
-Pelobates cultripes,Spain,native,iucn
-Pelobates cultripes,Switzerland,not present,iucn
-Pelobates cultripes,United Kingdom,not present,iucn
-Pelophylax perezi,Germany,not present,iucn
-Pelophylax perezi,Spain,native,iucn
-Pelophylax perezi,Switzerland,not present,iucn
-Pelophylax perezi,United Kingdom,introduced,iucn
-Pelophylax sp.,Germany,unknown,iucn
-Pelophylax sp.,Spain,unknown,iucn
-Pelophylax sp.,Switzerland,unknown,iucn
-Pelophylax sp.,United Kingdom,unknown,iucn
-Pleurodeles waltl,Germany,not present,iucn
-Pleurodeles waltl,Spain,native,iucn
-Pleurodeles waltl,Switzerland,not present,iucn
-Pleurodeles waltl,United Kingdom,not present,iucn
-Rana temporaria,Germany,native,iucn
-Rana temporaria,Spain,native,iucn
-Rana temporaria,Switzerland,native,iucn
-Rana temporaria,United Kingdom,native,iucn
-Salamandra salamandra,Germany,native,iucn
-Salamandra salamandra,Spain,native,iucn
-Salamandra salamandra,Switzerland,native,iucn
-Salamandra salamandra,United Kingdom,not present,iucn
-Triturus anatolicus,Germany,not present,iucn
-Triturus anatolicus,Spain,native,iucn
-Triturus anatolicus,Switzerland,not present,iucn
-Triturus anatolicus,United Kingdom,not present,iucn
-Triturus anatolicus x marmoratus,Germany,not present,iucn
-Triturus anatolicus x marmoratus,Spain,native,iucn
-Triturus anatolicus x marmoratus,Switzerland,not present,iucn
-Triturus anatolicus x marmoratus,United Kingdom,not present,iucn
-Triturus carnifex,Germany,native,iucn
-Triturus carnifex,Spain,not present,iucn
-Triturus carnifex,Switzerland,native,iucn
-Triturus carnifex,United Kingdom,introduced,iucn
-Triturus cristatus,Germany,native,iucn
-Triturus cristatus,Spain,not present,iucn
-Triturus cristatus,Switzerland,native,iucn
-Triturus cristatus,United Kingdom,native,iucn
-Triturus marmoratus,Germany,not present,iucn
-Triturus marmoratus,Spain,native,iucn
-Triturus marmoratus,Switzerland,not present,iucn
-Triturus marmoratus,United Kingdom,not present,iucn
+﻿scientific,country,nativeStatus,redListCat,popStatus,,,,,,,,
+Alytes obstetricans,Belgium,Extant,LC,Decreasing,,,,Alytes obstetricans,Germany,1,,Belgium
+Alytes obstetricans,China,NA,LC,Decreasing,,,,,,,,China
+Alytes obstetricans,France,Extant,LC,Decreasing,,,,Alytes obstetricans,Spain,56,,Germany
+Alytes obstetricans,Germany,Extant,LC,Decreasing,,,,Alytes obstetricans,United Kingdom,38,,Spain
+Alytes obstetricans,Luxembourg,Extant,LC,Decreasing,,,,Bombina variegata,Germany,109,,Switzerland
+Alytes obstetricans,Netherlands,Extant,LC,Decreasing,,,,Bufo bufo,Germany,129,,United Kingdom
+Alytes obstetricans,Portugal,Extant,LC,Decreasing,,,,Bufo spinosus,Spain,28,,Vietnam
+Alytes obstetricans,Spain,Extant,LC,Decreasing,,,,Calotriton asper,Spain,1,,
+Alytes obstetricans,Switzerland,Extant,LC,Decreasing,,,,Discoglossus pictus,Spain,11,,
+Alytes obstetricans,United Kingdom,Introduced,LC,Decreasing,,,,Echinotriton chinhaiensis,China,2,,
+Alytes obstetricans,Vietnam,NA,LC,Decreasing,,,,,,,,
+Bombina variegata,Albania,Extant,LC,Decreasing,,,,Echinotriton maxiquadratus,China,14,,
+Bombina variegata,Austria,Extant,LC,Decreasing,,,,Hyla meridionalis,Spain,1,,
+Bombina variegata,Belgium,NA,LC,Decreasing,,,,,,,,
+Bombina variegata,Bosnia and Herzegovina,Extant,LC,Decreasing,,,,Hynobius leechii,China,10,,
+Bombina variegata,Bulgaria,Extant,LC,Decreasing,,,,Hypselotriton cyanurus,China,60,,
+Bombina variegata,Croatia,Extant,LC,Decreasing,,,,Hypselotriton fudingensis,China,71,,
+Bombina variegata,Czechia,Extant,LC,Decreasing,,,,Hypselotriton glaucus,China,29,,
+Bombina variegata,France,Extant,LC,Decreasing,,,,Hypselotriton orientalis,China,95,,
+Bombina variegata,Germany,Extant,LC,Decreasing,,,,Hypselotriton orphicus,China,16,,
+Bombina variegata,Greece,Extant,LC,Decreasing,,,,Ichthyosaura alpestris,Germany,1336,,
+Bombina variegata,Hungary,Extant,LC,Decreasing,,,,Ichthyosaura alpestris,Spain,40,,
+Bombina variegata,Italy,Extant,LC,Decreasing,,,,Ichthyosaura alpestris,Switzerland,10,,
+Bombina variegata,Liechtenstein,Extant,LC,Decreasing,,,,Lissotriton boscai,Spain,3,,
+Bombina variegata,Luxembourg,Extant,LC,Decreasing,,,,Lissotriton helveticus,Germany,1310,,
+Bombina variegata,Montenegro,Extant,LC,Decreasing,,,,Lissotriton helveticus,Spain,10,,
+Bombina variegata,North Macedonia,Extant,LC,Decreasing,,,,Lissotriton vulgaris,Germany,329,,
+Bombina variegata,Poland,Extant,LC,Decreasing,,,,Lissotriton vulgaris,Switzerland,10,,
+Bombina variegata,Romania,Extant,LC,Decreasing,,,,Pachytriton archospotus,China,49,,
+Bombina variegata,Serbia,Extant,LC,Decreasing,,,,Pachytriton brevipes,China,18,,
+Bombina variegata,Slovakia,Extant,LC,Decreasing,,,,Pachytriton feii,China,4,,
+Bombina variegata,Slovenia,Extant,LC,Decreasing,,,,Pachytriton granulosus,China,9,,
+Bombina variegata,Switzerland,Extant,LC,Decreasing,,,,Pachytriton inexpectatus,China,62,,
+Bombina variegata,Türkiye,Extant,LC,Decreasing,,,,Pachytriton moi,China,50,,
+Bombina variegata,Ukraine,Extant,LC,Decreasing,,,,Pachytriton wuguanfui,China,25,,
+Bombina variegata,United Kingdom,Introduced,LC,Decreasing,,,,Paramesotriton aurantius,China,56,,
+Bufo bufo,Albania,Extant,LC,Stable,,,,Paramesotriton caudopunctatus,China,81,,
+Bufo bufo,Austria,Extant,LC,Stable,,,,Paramesotriton chinensis,China,39,,
+Bufo bufo,Belarus,Extant,LC,Stable,,,,Paramesotriton deloustali,China,13,,
+Bufo bufo,Belgium,Extant,LC,Stable,,,,Paramesotriton deloustali,Vietnam,80,,
+Bufo bufo,Bosnia and Herzegovina,Extant,LC,Stable,,,,Paramesotriton fuzhongensis,China,53,,
+Bufo bufo,Bulgaria,Extant,LC,Stable,,,,Paramesotriton guangxiensis,China,33,,
+Bufo bufo,China,Extant,LC,Stable,,,,Paramesotriton guangxiensis,Vietnam,54,,
+Bufo bufo,Croatia,Extant,LC,Stable,,,,Paramesotriton hongkongensis,China,42,,
+Bufo bufo,Czechia,Extant,LC,Stable,,,,Paramesotriton labiatus,China,2,,
+Bufo bufo,Denmark,Extant,LC,Stable,,,,Paramesotriton qixilingensis,China,41,,
+Bufo bufo,Estonia,Extant,LC,Stable,,,,Paramesotriton sp.,Vietnam,61,,
+Bufo bufo,Finland,Extant,LC,Stable,,,,Paramesotriton yunwuensis,China,24,,
+Bufo bufo,France,Extant,LC,Stable,,,,Paramesotriton zhijinensis,China,22,,
+Bufo bufo,Germany,Extant,LC,Stable,,,,Pelobates cultripes,Spain,13,,
+Bufo bufo,Gibraltar,Extant,LC,Stable,,,,Pelophylax perezi,Spain,5,,
+Bufo bufo,Greece,Extant,LC,Stable,,,,Pelophylax sp.,Germany,2,,
+Bufo bufo,Hungary,Extant,LC,Stable,,,,Pelophylax sp.,Spain,70,,
+Bufo bufo,Italy,Extant,LC,Stable,,,,Pleurodeles waltl,Spain,9,,
+Bufo bufo,Kazakhstan,Extant,LC,Stable,,,,Rana temporaria,Germany,130,,
+Bufo bufo,Latvia,Extant,LC,Stable,,,,Salamandra salamandra,Belgium,69,,
+Bufo bufo,Lebanon,Extant,LC,Stable,,,,Salamandra salamandra,Germany,2521,,
+Bufo bufo,Liechtenstein,Extant,LC,Stable,,,,Salamandra salamandra,Spain,58,,
+Bufo bufo,Lithuania,Extant,LC,Stable,,,,Salamandra salamandra,Switzerland,223,,
+Bufo bufo,Luxembourg,Extant,LC,Stable,,,,Triturus anatolicus,Spain,16,,
+Bufo bufo,Moldova,Extant,LC,Stable,,,,Triturus anatolicus x marmoratus,Spain,10,,
+Bufo bufo,Monaco,Extant,LC,Stable,,,,Triturus carnifex,Switzerland,22,,
+Bufo bufo,Montenegro,Extant,LC,Stable,,,,Triturus cristatus,Germany,106,,
+Bufo bufo,Netherlands,Extant,LC,Stable,,,,Triturus marmoratus,Spain,467,,
+Bufo bufo,North Macedonia,Extant,LC,Stable,,,,Tylototriton anguliceps,Vietnam,24,,
+Bufo bufo,Norway,Extant,LC,Stable,,,,Tylototriton asperrimus,China,23,,
+Bufo bufo,Poland,Extant,LC,Stable,,,,Tylototriton asperrimus,Vietnam,30,,
+Bufo bufo,Romania,Extant,LC,Stable,,,,Tylototriton broadoridgus,China,22,,
+Bufo bufo,Russian Federation,Extant,LC,Stable,,,,Tylototriton dabienicus,China,6,,
+Bufo bufo,San Marino,Extant,LC,Stable,,,,Tylototriton shanjing,China,16,,
+Bufo bufo,Serbia,Extant,LC,Stable,,,,Tylototriton sp.,Vietnam,17,,
+Bufo bufo,Slovakia,Extant,LC,Stable,,,,Tylototriton verrucosus,China,48,,
+Bufo bufo,Slovenia,Extant,LC,Stable,,,,Tylototriton vietnamensis,China,12,,
+Bufo bufo,Sweden,Extant,LC,Stable,,,,Tylototriton vietnamensis,Vietnam,195,,
+Bufo bufo,Switzerland,Extant,LC,Stable,,,,Tylototriton wenxianensis,China,42,,
+Bufo bufo,Syrian Arab Republic,Extant,LC,Stable,,,,Tylototriton yangi,China,9,,
+Bufo bufo,Türkiye,Extant,LC,Stable,,,,Tylototriton ziegleri,China,32,,
+Bufo bufo,Ukraine,Extant,LC,Stable,,,,Tylototriton ziegleri,Vietnam,78,,
+Bufo bufo,United Kingdom,Extant,LC,Stable,,,,,,,,
+Bufo spinosus,Algeria,Extant,LC,Decreasing,,,,,,,,
+Bufo spinosus,Andorra,Extant,LC,Decreasing,,,,,,,,
+Bufo spinosus,France,Extant,LC,Decreasing,,,,,,,,
+Bufo spinosus,Gibraltar,Extant,LC,Decreasing,,,,,,,,
+Bufo spinosus,Jersey,Extant,LC,Decreasing,,,,,,,,
+Bufo spinosus,Morocco,Extant,LC,Decreasing,,,,,,,,
+Bufo spinosus,Portugal,Extant,LC,Decreasing,,,,,,,,
+Bufo spinosus,Spain,Extant,LC,Decreasing,,,,,,,,
+Bufo spinosus,Tunisia,Extant,LC,Decreasing,,,,,,,,
+Calotriton asper,Andorra,Extant,LC,Decreasing,,,,,,,,
+Calotriton asper,France,Extant,LC,Decreasing,,,,,,,,
+Calotriton asper,Spain,Extant,LC,Decreasing,,,,,,,,
+Discoglossus pictus,Algeria,Extant,LC,Stable,,,,,,,,
+Discoglossus pictus,Italy,Extant,LC,Stable,,,,,,,,
+Discoglossus pictus,Malta,Extant,LC,Stable,,,,,,,,
+Discoglossus pictus,Morocco,Extant,LC,Stable,,,,,,,,
+Discoglossus pictus,Spain,Introduced,LC,Stable,,,,,,,,
+Discoglossus pictus,France,Introduced,LC,Stable,,,,,,,,
+Echinotriton chinhaiensis,China,Extant,CR,Decreasing,,,,,,,,
+Echinotriton maxiquadratus,China,Extant,CR,Decreasing,,,,,,,,
+Hyla meridionalis,Algeria,Extant,LC,Decreasing,,,,,,,,
+Hyla meridionalis,Morocco,Extant,LC,Decreasing,,,,,,,,
+Hyla meridionalis,Spain,Origin Uncertain,LC,Decreasing,,,,,,,,
+Hyla meridionalis,France,Introduced,LC,Decreasing,,,,,,,,
+Hyla meridionalis,Italy,Introduced,LC,Decreasing,,,,,,,,
+Hyla meridionalis,Monaco,Introduced,LC,Decreasing,,,,,,,,
+Hyla meridionalis,Portugal,Origin Uncertain,LC,Decreasing,,,,,,,,
+Hyla meridionalis,Gibraltar,Vagrant,LC,Decreasing,,,,,,,,
+Hynobius leechii,China,Extant,LC,Decreasing,,,,,,,,
+Hynobius leechii,North Korea,Extant,LC,Decreasing,,,,,,,,
+Hynobius leechii,South Korea,Extant,LC,Decreasing,,,,,,,,
+Hypselotriton cyanurus,China,Extant,VU,Decreasing,,,,,,,,
+Hypselotriton fudingensis,China,Extant,CR,Decreasing,,,,,,,,
+Hypselotriton glaucus,China,Extant,CR,Decreasing,,,,,,,,
+Hypselotriton orientalis,China,Extant,LC,Decreasing,,,,,,,,
+Hypselotriton orphicus,China,Extant,EN,Decreasing,,,,,,,,
+Ichthyosaura alpestris,Albania,Extant,LC,Decreasing,,,,,,,,
+Ichthyosaura alpestris,Austria,Extant,LC,Decreasing,,,,,,,,
+Ichthyosaura alpestris,Belgium,Extant,LC,Decreasing,,,,,,,,
+Ichthyosaura alpestris,Bosnia and Herzegovina,Extant,LC,Decreasing,,,,,,,,
+Ichthyosaura alpestris,Bulgaria,Extant,LC,Decreasing,,,,,,,,
+Ichthyosaura alpestris,Croatia,Extant,LC,Decreasing,,,,,,,,
+Ichthyosaura alpestris,Czechia,Extant,LC,Decreasing,,,,,,,,
+Ichthyosaura alpestris,Denmark,Extant,LC,Decreasing,,,,,,,,
+Ichthyosaura alpestris,France,Extant,LC,Decreasing,,,,,,,,
+Ichthyosaura alpestris,Germany,Extant,LC,Decreasing,,,,,,,,
+Ichthyosaura alpestris,Greece,Extant,LC,Decreasing,,,,,,,,
+Ichthyosaura alpestris,Hungary,Extant,LC,Decreasing,,,,,,,,
+Ichthyosaura alpestris,Italy,Extant,LC,Decreasing,,,,,,,,
+Ichthyosaura alpestris,Liechtenstein,Extant,LC,Decreasing,,,,,,,,
+Ichthyosaura alpestris,Luxembourg,Extant,LC,Decreasing,,,,,,,,
+Ichthyosaura alpestris,Montenegro,Extant,LC,Decreasing,,,,,,,,
+Ichthyosaura alpestris,Netherlands,Extant,LC,Decreasing,,,,,,,,
+Ichthyosaura alpestris,North Macedonia,Extant,LC,Decreasing,,,,,,,,
+Ichthyosaura alpestris,Poland,Extant,LC,Decreasing,,,,,,,,
+Ichthyosaura alpestris,Romania,Extant,LC,Decreasing,,,,,,,,
+Ichthyosaura alpestris,Serbia,Extant,LC,Decreasing,,,,,,,,
+Ichthyosaura alpestris,Slovakia,Extant,LC,Decreasing,,,,,,,,
+Ichthyosaura alpestris,Slovenia,Extant,LC,Decreasing,,,,,,,,
+Ichthyosaura alpestris,Spain,Extant,LC,Decreasing,,,,,,,,
+Ichthyosaura alpestris,Switzerland,Extant,LC,Decreasing,,,,,,,,
+Ichthyosaura alpestris,Ukraine,Extant,LC,Decreasing,,,,,,,,
+Ichthyosaura alpestris,New Zealand,Introduced,LC,Decreasing,,,,,,,,
+Ichthyosaura alpestris,United Kingdom,Introduced,LC,Decreasing,,,,,,,,
+Lissotriton boscai,Portugal,Extant,LC,Decreasing,,,,,,,,
+Lissotriton boscai,Spain,Extant,LC,Decreasing,,,,,,,,
+Lissotriton helveticus,Belgium,Extant,LC,Decreasing,,,,,,,,
+Lissotriton helveticus,Czechia,Extant,LC,Decreasing,,,,,,,,
+Lissotriton helveticus,France,Extant,LC,Decreasing,,,,,,,,
+Lissotriton helveticus,Germany,Extant,LC,Decreasing,,,,,,,,
+Lissotriton helveticus,Luxembourg,Extant,LC,Decreasing,,,,,,,,
+Lissotriton helveticus,Netherlands,Extant,LC,Decreasing,,,,,,,,
+Lissotriton helveticus,Portugal,Extant,LC,Decreasing,,,,,,,,
+Lissotriton helveticus,Spain,Extant,LC,Decreasing,,,,,,,,
+Lissotriton helveticus,Switzerland,Extant,LC,Decreasing,,,,,,,,
+Lissotriton helveticus,United Kingdom,Extant,LC,Decreasing,,,,,,,,
+Lissotriton vulgaris,Austria,Extant,LC,Decreasing,,,,,,,,
+Lissotriton vulgaris,Belarus,Extant,LC,Decreasing,,,,,,,,
+Lissotriton vulgaris,Belgium,Extant,LC,Decreasing,,,,,,,,
+Lissotriton vulgaris,Bosnia and Herzegovina,Extant,LC,Decreasing,,,,,,,,
+Lissotriton vulgaris,Bulgaria,Extant,LC,Decreasing,,,,,,,,
+Lissotriton vulgaris,Croatia,Extant,LC,Decreasing,,,,,,,,
+Lissotriton vulgaris,Czechia,Extant,LC,Decreasing,,,,,,,,
+Lissotriton vulgaris,Denmark,Extant,LC,Decreasing,,,,,,,,
+Lissotriton vulgaris,Estonia,Extant,LC,Decreasing,,,,,,,,
+Lissotriton vulgaris,Finland,Extant,LC,Decreasing,,,,,,,,
+Lissotriton vulgaris,France,Extant,LC,Decreasing,,,,,,,,
+Lissotriton vulgaris,Germany,Extant,LC,Decreasing,,,,,,,,
+Lissotriton vulgaris,Hungary,Extant,LC,Decreasing,,,,,,,,
+Lissotriton vulgaris,Ireland,Extant,LC,Decreasing,,,,,,,,
+Lissotriton vulgaris,Italy,Extant,LC,Decreasing,,,,,,,,
+Lissotriton vulgaris,Kazakhstan,Extant,LC,Decreasing,,,,,,,,
+Lissotriton vulgaris,Latvia,Extant,LC,Decreasing,,,,,,,,
+Lissotriton vulgaris,Lithuania,Extant,LC,Decreasing,,,,,,,,
+Lissotriton vulgaris,Luxembourg,Extant,LC,Decreasing,,,,,,,,
+Lissotriton vulgaris,Moldova,Extant,LC,Decreasing,,,,,,,,
+Lissotriton vulgaris,Montenegro,Extant,LC,Decreasing,,,,,,,,
+Lissotriton vulgaris,Netherlands,Extant,LC,Decreasing,,,,,,,,
+Lissotriton vulgaris,North Macedonia,Extant,LC,Decreasing,,,,,,,,
+Lissotriton vulgaris,Norway,Extant,LC,Decreasing,,,,,,,,
+Lissotriton vulgaris,Poland,Extant,LC,Decreasing,,,,,,,,
+Lissotriton vulgaris,Romania,Extant,LC,Decreasing,,,,,,,,
+Lissotriton vulgaris,Russia,Extant,LC,Decreasing,,,,,,,,
+Lissotriton vulgaris,Serbia,Extant,LC,Decreasing,,,,,,,,
+Lissotriton vulgaris,Slovakia,Extant,LC,Decreasing,,,,,,,,
+Lissotriton vulgaris,Slovenia,Extant,LC,Decreasing,,,,,,,,
+Lissotriton vulgaris,Sweden,Extant,LC,Decreasing,,,,,,,,
+Lissotriton vulgaris,Switzerland,Extant,LC,Decreasing,,,,,,,,
+Lissotriton vulgaris,Ukraine,Extant,LC,Decreasing,,,,,,,,
+Lissotriton vulgaris,United Kingdom,Extant,LC,Decreasing,,,,,,,,
+Pachytriton archospotus,China,Extant,NT,Decreasing,,,,,,,,
+Pachytriton brevipes,China,Extant,LC,Decreasing,,,,,,,,
+Pachytriton feii,China,Extant,VU,Decreasing,,,,,,,,
+Pachytriton granulosus,China,Extant,LC,Decreasing,,,,,,,,
+Pachytriton inexpectatus,China,Extant,LC,Stable,,,,,,,,
+Pachytriton moi,China,Extant,EN,Unknown,,,,,,,,
+Pachytriton wuguanfui,China,Extant,EN,Decreasing,,,,,,,,
+Paramesotriton aurantius,China,Extant,VU,Unknown,,,,,,,,
+Paramesotriton caudopunctatus,China,Extant,NT,Decreasing,,,,,,,,
+Paramesotriton chinensis,China,Extant,LC,Decreasing,,,,,,,,
+Paramesotriton deloustali,Vietnam,Extant,LC,Decreasing,,,,,,,,
+Paramesotriton fuzhongensis,China,Extant,VU,Decreasing,,,,,,,,
+Paramesotriton guangxiensis,China,Extant,VU,Decreasing,,,,,,,,
+Paramesotriton guangxiensis,Vietnam,Extant,VU,Decreasing,,,,,,,,
+Paramesotriton hongkongensis,China,Extant,NT,Decreasing,,,,,,,,
+Paramesotriton hongkongensis,Hong Kong,Extant,NT,Decreasing,,,,,,,,
+Paramesotriton labiatus,China,Extant,CR,Decreasing,,,,,,,,
+Paramesotriton qixilingensis,China,Extant,VU,Unknown,,,,,,,,
+Paramesotriton sp.,China,Extant,NA,NA,,,,,,,,
+Paramesotriton sp.,Vietnam,Extant,NA,NA,,,,,,,,
+Paramesotriton yunwuensis,China,Extant,EN,Decreasing,,,,,,,,
+Paramesotriton zhijinensis,China,Extant,EN,Decreasing,,,,,,,,
+Pelobates cultripes,France,Extant,VU,Decreasing,,,,,,,,
+Pelobates cultripes,Portugal,Extant,VU,Decreasing,,,,,,,,
+Pelobates cultripes,Spain,Extant,VU,Decreasing,,,,,,,,
+Pelobates cultripes,Gibraltar,Extinct,VU,Decreasing,,,,,,,,
+Pelophylax perezi,France,Extant,LC,Decreasing,,,,,,,,
+Pelophylax perezi,Portugal,Extant,LC,Decreasing,,,,,,,,
+Pelophylax perezi,Spain,Extant,LC,Decreasing,,,,,,,,
+Pelophylax perezi,United Kingdom,Introduced,LC,Decreasing,,,,,,,,
+Pelophylax sp.,NA,NA,NA,NA,,,,,,,,
+Pleurodeles waltl,Morocco,Extant,NT,Decreasing,,,,,,,,
+Pleurodeles waltl,Portugal,Extant,NT,Decreasing,,,,,,,,
+Pleurodeles waltl,Spain,Extant,NT,Decreasing,,,,,,,,
+Pleurodeles waltl,Gibraltar,Introduced,NT,Decreasing,,,,,,,,
+Rana temporaria,Albania,Extant,LC,Stable,,,,,,,,
+Rana temporaria,Andorra,Extant,LC,Stable,,,,,,,,
+Rana temporaria,Austria,Extant,LC,Stable,,,,,,,,
+Rana temporaria,Belarus,Extant,LC,Stable,,,,,,,,
+Rana temporaria,Belgium,Extant,LC,Stable,,,,,,,,
+Rana temporaria,Bulgaria,Extant,LC,Stable,,,,,,,,
+Rana temporaria,Croatia,Extant,LC,Stable,,,,,,,,
+Rana temporaria,Czechia,Extant,LC,Stable,,,,,,,,
+Rana temporaria,Denmark,Extant,LC,Stable,,,,,,,,
+Rana temporaria,Finland,Extant,LC,Stable,,,,,,,,
+Rana temporaria,France,Extant,LC,Stable,,,,,,,,
+Rana temporaria,Germany,Extant,LC,Stable,,,,,,,,
+Rana temporaria,Greece,Extant,LC,Stable,,,,,,,,
+Rana temporaria,Hungary,Extant,LC,Stable,,,,,,,,
+Rana temporaria,Ireland,Extant,LC,Stable,,,,,,,,
+Rana temporaria,Italy,Extant,LC,Stable,,,,,,,,
+Rana temporaria,Kazakhstan,Extant,LC,Stable,,,,,,,,
+Rana temporaria,Liechtenstein,Extant,LC,Stable,,,,,,,,
+Rana temporaria,Luxembourg,Extant,LC,Stable,,,,,,,,
+Rana temporaria,Montenegro,Extant,LC,Stable,,,,,,,,
+Rana temporaria,Netherlands,Extant,LC,Stable,,,,,,,,
+Rana temporaria,North Macedonia,Extant,LC,Stable,,,,,,,,
+Rana temporaria,Norway,Extant,LC,Stable,,,,,,,,
+Rana temporaria,Poland,Extant,LC,Stable,,,,,,,,
+Rana temporaria,Romania,Extant,LC,Stable,,,,,,,,
+Rana temporaria,Russian Federation,Extant,LC,Stable,,,,,,,,
+Rana temporaria,San Marino,Extant,LC,Stable,,,,,,,,
+Rana temporaria,Serbia,Extant,LC,Stable,,,,,,,,
+Rana temporaria,Slovakia,Extant,LC,Stable,,,,,,,,
+Rana temporaria,Slovenia,Extant,LC,Stable,,,,,,,,
+Rana temporaria,Spain,Extant,LC,Stable,,,,,,,,
+Rana temporaria,Sweden,Extant,LC,Stable,,,,,,,,
+Rana temporaria,Switzerland,Extant,LC,Stable,,,,,,,,
+Rana temporaria,United Kingdom,Extant,LC,Stable,,,,,,,,
+Salamandra salamandra,Albania,Extant,EN,Decreasing,,,,,,,,
+Salamandra salamandra,Andorra,Extant,EN,Decreasing,,,,,,,,
+Salamandra salamandra,Austria,Extant,EN,Decreasing,,,,,,,,
+Salamandra salamandra,Belgium,Extant,EN,Decreasing,,,,,,,,
+Salamandra salamandra,Bosnia and Herzegovina,Extant,EN,Decreasing,,,,,,,,
+Salamandra salamandra,Bulgaria,Extant,EN,Decreasing,,,,,,,,
+Salamandra salamandra,Croatia,Extant,EN,Decreasing,,,,,,,,
+Salamandra salamandra,Czechia,Extant,EN,Decreasing,,,,,,,,
+Salamandra salamandra,France,Extant,EN,Decreasing,,,,,,,,
+Salamandra salamandra,Germany,Extant,EN,Decreasing,,,,,,,,
+Salamandra salamandra,Greece,Extant,EN,Decreasing,,,,,,,,
+Salamandra salamandra,Hungary,Extant,EN,Decreasing,,,,,,,,
+Salamandra salamandra,Italy,Extant,EN,Decreasing,,,,,,,,
+Salamandra salamandra,Liechtenstein,Extant,EN,Decreasing,,,,,,,,
+Salamandra salamandra,Luxembourg,Extant,EN,Decreasing,,,,,,,,
+Salamandra salamandra,Montenegro,Extant,EN,Decreasing,,,,,,,,
+Salamandra salamandra,Netherlands,Extant,EN,Decreasing,,,,,,,,
+Salamandra salamandra,North Macedonia,Extant,EN,Decreasing,,,,,,,,
+Salamandra salamandra,Poland,Extant,EN,Decreasing,,,,,,,,
+Salamandra salamandra,Portugal,Extant,EN,Decreasing,,,,,,,,
+Salamandra salamandra,Romania,Extant,EN,Decreasing,,,,,,,,
+Salamandra salamandra,San Marino,Extant,EN,Decreasing,,,,,,,,
+Salamandra salamandra,Serbia,Extant,EN,Decreasing,,,,,,,,
+Salamandra salamandra,Slovakia,Extant,EN,Decreasing,,,,,,,,
+Salamandra salamandra,Slovenia,Extant,EN,Decreasing,,,,,,,,
+Salamandra salamandra,Spain,Extant,EN,Decreasing,,,,,,,,
+Salamandra salamandra,Switzerland,Extant,EN,Decreasing,,,,,,,,
+Salamandra salamandra,Türkiye (Türkiye,Extant,EN,Decreasing,,,,,,,,
+Salamandra salamandra,Ukraine,Extant,EN,Decreasing,,,,,,,,
+Triturus anatolicus,Türkiye,Extant,LC,Unknown,,,,,,,,
+Triturus anatolicus,Spain,Introduced,LC,Unknown,,,,,,,,
+Triturus anatolicus x marmoratus,Spain,Introduced,NA,NA,,,,,,,,
+Triturus carnifex,Austria,Extant,LC,Decreasing,,,,,,,,
+Triturus carnifex,Bosnia and Herzegovina,Extant,LC,Decreasing,,,,,,,,
+Triturus carnifex,Croatia,Extant,LC,Decreasing,,,,,,,,
+Triturus carnifex,Czechia,Extant,LC,Decreasing,,,,,,,,
+Triturus carnifex,Germany,Extant,LC,Decreasing,,,,,,,,
+Triturus carnifex,Hungary,Extant,LC,Decreasing,,,,,,,,
+Triturus carnifex,Italy,Extant,LC,Decreasing,,,,,,,,
+Triturus carnifex,Slovenia,Extant,LC,Decreasing,,,,,,,,
+Triturus carnifex,Switzerland,Extant,LC,Decreasing,,,,,,,,
+Triturus carnifex,France,Introduced,LC,Decreasing,,,,,,,,
+Triturus carnifex,Netherlands,Introduced,LC,Decreasing,,,,,,,,
+Triturus carnifex,United Kingdom,Introduced,LC,Decreasing,,,,,,,,
+Triturus cristatus,Austria,Extant,LC,Decreasing,,,,,,,,
+Triturus cristatus,Belarus,Extant,LC,Decreasing,,,,,,,,
+Triturus cristatus,Belgium,Extant,LC,Decreasing,,,,,,,,
+Triturus cristatus,Czechia,Extant,LC,Decreasing,,,,,,,,
+Triturus cristatus,Denmark,Extant,LC,Decreasing,,,,,,,,
+Triturus cristatus,Estonia,Extant,LC,Decreasing,,,,,,,,
+Triturus cristatus,France,Extant,LC,Decreasing,,,,,,,,
+Triturus cristatus,Germany,Extant,LC,Decreasing,,,,,,,,
+Triturus cristatus,Hungary,Extant,LC,Decreasing,,,,,,,,
+Triturus cristatus,Latvia,Extant,LC,Decreasing,,,,,,,,
+Triturus cristatus,Liechtenstein,Extant,LC,Decreasing,,,,,,,,
+Triturus cristatus,Lithuania,Extant,LC,Decreasing,,,,,,,,
+Triturus cristatus,Luxembourg,Extant,LC,Decreasing,,,,,,,,
+Triturus cristatus,Moldova,Extant,LC,Decreasing,,,,,,,,
+Triturus cristatus,Netherlands,Extant,LC,Decreasing,,,,,,,,
+Triturus cristatus,Norway,Extant,LC,Decreasing,,,,,,,,
+Triturus cristatus,Poland,Extant,LC,Decreasing,,,,,,,,
+Triturus cristatus,Romania,Extant,LC,Decreasing,,,,,,,,
+Triturus cristatus,Russia,Extant,LC,Decreasing,,,,,,,,
+Triturus cristatus,Serbia,Extant,LC,Decreasing,,,,,,,,
+Triturus cristatus,Slovakia,Extant,LC,Decreasing,,,,,,,,
+Triturus cristatus,Sweden,Extant,LC,Decreasing,,,,,,,,
+Triturus cristatus,Switzerland,Extant,LC,Decreasing,,,,,,,,
+Triturus cristatus,Ukraine,Extant,LC,Decreasing,,,,,,,,
+Triturus cristatus,United Kingdom,Extant,LC,Decreasing,,,,,,,,
+Triturus marmoratus,France,Extant,LC,Decreasing,,,,,,,,
+Triturus marmoratus,Portugal,Extant,LC,Decreasing,,,,,,,,
+Triturus marmoratus,Spain,Extant,LC,Decreasing,,,,,,,,
+Triturus marmoratus,Italy,Introduced,LC,Decreasing,,,,,,,,
+Tylototriton anguliceps,Laos,Extant,LC,Decreasing,,,,,,,,
+Tylototriton anguliceps,Thailand,Extant,LC,Decreasing,,,,,,,,
+Tylototriton anguliceps,Vietnam,Extant,LC,Decreasing,,,,,,,,
+Tylototriton anguliceps,China,Presence Uncertain,LC,Decreasing,,,,,,,,
+Tylototriton anguliceps,Myanmar,Presence Uncertain,LC,Decreasing,,,,,,,,
+Tylototriton asperrimus,China,Extant,NT,Decreasing,,,,,,,,
+Tylototriton broadoridgus,China,Extant,VU,Stable,,,,,,,,
+Tylototriton dabienicus,China,Extant,EN,Decreasing,,,,,,,,
+Tylototriton shanjing,China,Extant,VU,Decreasing,,,,,,,,
+Tylototriton sp.,Vietnam,Extant,NA,NA,,,,,,,,
+Tylototriton verrucosus,China,Extant,NT,Decreasing,,,,,,,,
+Tylototriton verrucosus,Myanmar,Presence Uncertain,NT,Decreasing,,,,,,,,
+Tylototriton vietnamensis,Vietnam,Extant,VU,Decreasing,,,,,,,,
+Tylototriton vietnamensis,China,Possibly Extant,VU,Decreasing,,,,,,,,
+Tylototriton wenxianensis,China,Extant,VU,Decreasing,,,,,,,,
+Tylototriton yangi,China,Extant,EN,Decreasing,,,,,,,,
+Tylototriton yangi,Vietnam,Presence Uncertain,EN,Decreasing,,,,,,,,
+Tylototriton ziegleri,Vietnam,Extant,VU,Decreasing,,,,,,,,
+Tylototriton ziegleri,China,Presence Uncertain,VU,Decreasing,,,,,,,,

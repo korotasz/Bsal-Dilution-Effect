@@ -81,7 +81,6 @@ assign_start_date <- function(df, timepoint, date, out_col){
 ## Read in .csv files-----------------------------------------------------------
 setwd(file.path(dir, csvpath))
 
-
 germany <- read.csv("germany.csv", header = T, encoding = "UTF-8")
 euram <- read.csv("euram.csv", header = T, encoding = "UTF-8")
 belgium <- read.csv("belgium.csv", header = T, encoding = "UTF-8")
@@ -219,12 +218,14 @@ vietnam <- vietnam %>%
                           ADM1 == "L?ng S?n" ~ "Lạng Sơn",
                           ADM1 == "B?c K?n " ~ "Bắc Kạn",
                           ADM1 == "Cao B?ng " ~ "Cao Bằng",
+                          ADM1 == "Cao B?ng" ~ "Cao Bằng",
                           ADM1 == "Hà Giang" ~ "Hà Giang",
                           ADM1 == "Hà Giang " ~ "Hà Giang",
                           ADM1 == "Lào Cai" ~ "Lào Cai",
                           ADM1 == "Lai Chau" ~ "Lai Châu",
                           ADM1 == "S?n La" ~ "Sơn La",
-                          ADM1 == "Hòa Bình " ~ "Hòa Bình"),
+                          ADM1 == "Hòa Bình " ~ "Hòa Bình",
+                          TRUE ~ ADM1),
          ADM2 = case_when(ADM2 == "S?n ??ng" ~ "Sơn Động",
                           ADM2 == "Tam ??o" ~ "Tam Đảo",
                           ADM2 == "L?c Nam" ~ "Lục Nam",
@@ -235,7 +236,8 @@ vietnam <- vietnam %>%
                           ADM2 == "B?c Quang" ~ "Bắc Quang",
                           ADM2 == "V?n Bàn" ~ "Văn Bàn",
                           ADM2 == "Sìn H?" ~ "Sìn Hồ",
-                          ADM2 == "Nguyên Bình" ~ "Nguyên Bình"),
+                          ADM2 == "Nguyên Bình" ~ "Nguyên Bình",
+                          TRUE ~ ADM2),
          scientific = trimws(scientific, which = "right"))
 
 
@@ -363,13 +365,13 @@ setwd(file.path(dir, shppath))
 #     that are presented in decimal degrees. EPSG:3035 (ETRS-89) was initially used. However, ETRS-89 and WGS 84 are both
 #     realizations of the International Terrestrial Reference System (ITRS) coincident to within 1 meter, meaning that the
 #     ETRS-89 transformation has an accuracy equal to that of WGS 84 (see:https://epsg.io/3035).
-polygon <- geodata::gadm(country = c('BEL', 'DEU', 'CHE', 'GBR', 'ESP', 'CHN', 'VNM'), level = 2,
+polygon <- geodata::gadm(country = c('BEL', 'CHE', 'CHN', 'DEU', 'ESP', 'GBR', 'VNM'), level = 2,
              path = file.path(dir, shppath), version = "latest", resolution = 1) %>%
   sf::st_as_sf(., crs = 4326) %>%
   st_cast(., "MULTIPOLYGON")
 
 ## Write multipolygon to .shp file for later use with WorldClim
-# st_write(polygon, "europe.shp", append = F)
+# st_write(polygon, "europe.shp", layer_options = "ENCODING=UTF-8", append = F)
 
 points <- df %>%
   dplyr::select(Lon, Lat) %>%
@@ -379,7 +381,7 @@ points <- df %>%
          Lon = sf::st_coordinates(.)[,1],
          Lat = sf::st_coordinates(.)[,2])
 
-# st_write(points, "locations.shp", append = F)
+# st_write(points, "locations.shp", layer_options = "ENCODING=UTF-8", append = F)
 
 ## Intersect lat/lon coordinates with each raster to get the correct admin levels associated with our data
 ## Compared this method with previous method of loading gadm.org shapefiles into QGIS fore ea. country &
@@ -388,7 +390,7 @@ out <- st_intersection(points, polygon) %>%
   mutate(Lon = sf::st_coordinates(.)[,1],
          Lat = sf::st_coordinates(.)[,2])
 
-# st_write(out, "adm_info.shp", append = F)
+# st_write(out, "adm_info.shp", layer_options = "ENCODING=UTF-8", append = F)
 
 ## Get centroids of these 5 that are missing lat/lon coordinates and convert lat/lon back to EPSG:4326
 missing_coords <- df %>%
@@ -442,13 +444,14 @@ missing_coords <- df %>%
            scientific == "Hynobius leechii" & ADM1 == "Liaoning" & ADM2 == "Anshan" |
            scientific == "Hypselotriton orientalis" & ADM1 == "Zhejiang" & ADM2 == "Hangzhou" |
            scientific == "Paramesotriton deloustali" &  ADM1 == "Vĩnh Phúc" & ADM2 == "Tam Đảo" |
-           scientific == "Tylototriton ziegleri" & ADM1 == is.na(ADM1) & ADM2 == "Nguyên Bình") #%>%
+           scientific == "Tylototriton ziegleri" & ADM1 == "Cao Bằng" & ADM2 == "Nguyên Bình") %>%
   dplyr::select(!("Lat":"Lon")) %>%
   left_join(., rbind(adm1, adm2), by = c("ADM0", "country", "ADM1", "ADM2"), keep = F) %>%
   relocate(c(Lat, Lon), .after = ADM2)
 
 
 ## Get admin levels in a dataframe format
+# out <- st_read("adm_info.shp")
 adminlvls <- data.frame(out) %>%
   dplyr::select(Lon, Lat, GID_0, COUNTRY, NAME_1, NAME_2) %>%
   unite("LatLon", c(Lat, Lon), sep = ", ") %>%
@@ -467,38 +470,18 @@ centroid_adms <- rbind(adm1, adm2) %>%
 
 rm(out, points, polygon, adm1, adm1_centroids, adm2, adm2_centroids)
 ## Add ADM info back to main dataframe -----------------------------------------
-test <- df %>%
+df <- df %>%
   filter(!(scientific == "Echinotriton maxiquadratus" |
            scientific == "Hynobius leechii" & ADM1 == "Liaoning" & ADM2 == "Anshan" |
            scientific == "Hypselotriton orientalis" & ADM1 == "Zhejiang" & ADM2 == "Hangzhou" |
            scientific == "Paramesotriton deloustali" &  ADM1 == "Vĩnh Phúc" & ADM2 == "Tam Đảo" |
-           scientific == "Tylototriton ziegleri" & ADM2 == "Nguyên Bình")) %>%
+           scientific == "Tylototriton ziegleri" & ADM1 == "Cao Bằng" & ADM2 == "Nguyên Bình"))%>%
   rbind(., missing_coords) %>%
   dplyr::select(!("country":"ADM2")) %>%
   unite("LatLon", c(Lat, Lon), sep = ", ") %>%
   left_join(., rbind(adminlvls, centroid_adms), by = "LatLon", relationship = "many-to-one", keep = F) %>%
   relocate(c(country, ADM0, ADM1, ADM2), .before = LatLon) %>%
   separate(LatLon, c("Lat", "Lon"), sep = ", ")
-
-test %>% # missing data for two spp. in VNM
-  filter(is.na(country) | is.na(ADM1)) %>%
-  group_by(Lat, Lon, scientific) %>%
-  summarise(n = n())
-
-df %>% # clear -- did not happen before running lines 460-469
-  filter(is.na(country)) %>%
-  group_by(Lat, Lon, scientific) %>%
-  summarise(n = n())
-
-df %>%
-  filter(scientific == "Paramesotriton deloustali" | scientific == "Tylototriton ziegleri") %>%
-  group_by(scientific, ADM0, ADM1, ADM2, Lat, Lon) %>%
-  summarise(n = n()) %>%
-  filter(scientific == "Paramesotriton deloustali" & n == 18 |
-           scientific == "Tylototriton ziegleri" & n == 8)
-
-
-
 
 rm(missing_coords)
 setwd(file.path(dir, csvpath))
@@ -514,7 +497,7 @@ df$Site <- siteNumber$Site[base::match(paste(df$materialSampleID),
                                       paste(siteNumber$materialSampleID))]
 
 df <- relocate(df, Site, .after = "day")
-
+rm(siteNumber)
 ## Add susceptibility data -----------------------------------------------------
 ## Susceptibility codes (based on a combination of Martel et al. 2014 and Bosch et al. 2021)
 ## 1 = resistant: no infection, no clinical signs of disease, no mortality
@@ -534,22 +517,24 @@ plyr::count(df, "susceptibility")
 #   group_by(scientific) %>%
 #   summarise(n = n()) # 25 spp. total missing susceptibility scores
 # print(sum(sus$n)) # 732 observations total, missing
-
+rm(s, sus)
 ## Add 'native status' of each species from each country -----------------------
 # (data derived from iucnredlist.org)
-sppPerCountry <- df %>%
-  subset(., select = c(country, scientific)) %>%
-  group_by(scientific, country) %>%
-  summarise(n = n())
-View(sppPerCountry)
-
-df %>%
-  filter(is.na(country)) %>%
-  group_by(scientific) %>%
-  summarise(n = n())
-
+# sppPerCountry <- df %>%
+#   subset(., select = c(country, scientific)) %>%
+#   group_by(scientific, country) %>%
+#   summarise(n = n())
+# sppPerCountry <- with(sppPerCountry, sppPerCountry[order(scientific, country), ])
+#
+# View(sppPerCountry)
 
 nativeStatus <- read.csv("nativeStatus.csv", header = T, encoding = "UTF-8")
+head(nativeStatus)
+
+test <- df %>%
+  subset(., select = -c(nativeStatus)) %>%
+  left_join(., nativeStatus, by = c("country", "scientific"), relationship = "many-to-many", unmatched = "error", keep = F)
+
 
 df$nativeStatus <- nativeStatus$nativeStatus[base::match(paste(df$country, df$scientific),
                                                paste(nativeStatus$country, nativeStatus$scientific))]
@@ -559,7 +544,7 @@ native <- df %>%
   group_by(country, scientific, nativeStatus) %>%
   summarise()
 
-rm(siteNumber, s, native)
+rm(sppPerCountry, nativeStatus)
 #### Calculate abundance, richness, and diversity ####
 df <- unite(df, c("year", "month", "day"), sep = "-", col = "date", remove = F)
 
