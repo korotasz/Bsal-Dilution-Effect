@@ -95,7 +95,8 @@ def build_url(sample: Sample, data_type: DataType) -> str:
 
     if data_type == DataType.GLDAS:
         # GLDAS GRACE satellites for temp and soil moisture data
-        return 'https://hydro1.gesdisc.eosdis.nasa.gov/daac-bin/OTF/HTTP_services.cgi?FILENAME=%2Fdata%2FGLDAS%2FGLDAS_CLSM025_DA1_D.2.2%2F' + sample.f_year + '%2F' + sample.f_month + '%2FGLDAS_CLSM025_DA1_D.A' + sample.f_year + sample.f_month + sample.f_day + '.022.nc4&SERVICE=L34RS_LDAS&LABEL=GLDAS_CLSM025_DA1_D.A' + sample.f_year + sample.f_month + sample.f_day + '.022.nc4.SUB.nc4&VERSION=1.02&FORMAT=bmM0Lw&DATASET_VERSION=2.2&SHORTNAME=GLDAS_CLSM025_DA1_D&BBOX=35.085%2C-11.602%2C71.823%2C42.363'
+#        return 'https://hydro1.gesdisc.eosdis.nasa.gov/daac-bin/OTF/HTTP_services.cgi?FILENAME=%2Fdata%2FGLDAS%2FGLDAS_CLSM025_DA1_D.2.2%2F' + sample.f_year + '%2F' + sample.f_month + '%2FGLDAS_CLSM025_DA1_D.A' + sample.f_year + sample.f_month + sample.f_day + '.022.nc4&SERVICE=L34RS_LDAS&LABEL=GLDAS_CLSM025_DA1_D.A' + sample.f_year + sample.f_month + sample.f_day + '.022.nc4.SUB.nc4&VERSION=1.02&FORMAT=bmM0Lw&DATASET_VERSION=2.2&SHORTNAME=GLDAS_CLSM025_DA1_D&BBOX=35.085%2C-11.602%2C71.823%2C42.363'
+         return 'https://hydro1.gesdisc.eosdis.nasa.gov/daac-bin/OTF/HTTP_services.cgi?FILENAME=%2Fdata%2FGLDAS%2FGLDAS_CLSM025_DA1_D.2.2%2F' + sample.f_year + '%2F' + sample.f_month + '%2FGLDAS_CLSM025_DA1_D.A' + sample.f_year + sample.f_month + sample.f_day + '.022.nc4&VARIABLES=AvgSurfT_tavg%2CSoilMoist_S_tavg&LABEL=GLDAS_CLSM025_DA1_D.A' + sample.f_year + sample.f_month + sample.f_day + '.022.nc4.SUB.nc4&DATASET_VERSION=2.2&FORMAT=bmM0Lw&SERVICE=L34RS_LDAS&VERSION=1.02&SHORTNAME=GLDAS_CLSM025_DA1_D&BBOX=-60%2C-180%2C90%2C180'
 #    elif data_type == DataType.IMERG:
 #        return <IMERG URL>
     else:    

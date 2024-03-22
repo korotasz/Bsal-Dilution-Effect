@@ -381,8 +381,6 @@ points <- df %>%
          Lon = sf::st_coordinates(.)[,1],
          Lat = sf::st_coordinates(.)[,2])
 
-# st_write(points, "locations.shp", layer_options = "ENCODING=UTF-8", append = F)
-
 ## Intersect lat/lon coordinates with each raster to get the correct admin levels associated with our data
 ## Compared this method with previous method of loading gadm.org shapefiles into QGIS fore ea. country &
 #  sampling locations, and it is just as accurate.
@@ -402,12 +400,12 @@ adm1_centroids <- geodata::gadm(country = c('CHN', 'VNM'), level = 1, path = fil
   st_as_sf(., crs = 4326) %>%
   st_centroid(.) %>%
   data.frame(.) %>%
-  mutate(row = row_number()) %>%
-  relocate(row, .before = GID_1)
+  mutate(L1 = row_number()) %>%
+  relocate(L1, .before = GID_1)
 
 adm1 <- data.frame(st_coordinates(st_cast(adm1_centroids$geometry, "POINT"))) %>%
-  mutate(row = row_number()) %>%
-  left_join(adm1_centroids, ., by = "row", keep = F) %>% # X = LON, Y = LAT
+  mutate(L1 = row_number()) %>%
+  left_join(adm1_centroids, ., by = "L1", keep = F) %>% # X = LON, Y = LAT
   mutate(Lat = Y,
          Lon = X,
          ADM0 = GID_0,
@@ -421,12 +419,12 @@ adm2_centroids <- geodata::gadm(country = c('CHN','VNM'), level = 2, path = file
   st_as_sf(., crs = 4326) %>%
   st_centroid(.) %>%
   data.frame(.) %>%
-  mutate(row = row_number()) %>%
-  relocate(row, .before = GID_2)
+  mutate(L1 = row_number()) %>%
+  relocate(L1, .before = GID_2)
 
 adm2 <- data.frame(st_coordinates(st_cast(adm2_centroids$geometry, "POINT"))) %>%
-  mutate(row = row_number()) %>%
-  left_join(adm2_centroids, ., by = "row", keep = F) %>% # X = LON, Y = LAT
+  mutate(L1 = row_number()) %>%
+  left_join(adm2_centroids, ., by = "L1", keep = F) %>% # X = LON, Y = LAT
   mutate(Lat = Y,
          Lon = X,
          ADM0 = GID_0,
@@ -448,6 +446,7 @@ missing_coords <- df %>%
   dplyr::select(!("Lat":"Lon")) %>%
   left_join(., rbind(adm1, adm2), by = c("ADM0", "country", "ADM1", "ADM2"), keep = F) %>%
   relocate(c(Lat, Lon), .after = ADM2)
+
 
 
 ## Get admin levels in a dataframe format
@@ -483,7 +482,17 @@ df <- df %>%
   relocate(c(country, ADM0, ADM1, ADM2), .before = LatLon) %>%
   separate(LatLon, c("Lat", "Lon"), sep = ", ")
 
-rm(missing_coords)
+# Save locations as .shp file for QGIS processing
+locs <- df %>%
+  subset(., select = c(Lat, Lon)) %>%
+  sf::st_as_sf(x = ., coords = c("Lon", "Lat"), crs = 4326, na.fail = F) %>%
+  mutate(Lon = sf::st_coordinates(.)[,1],
+         Lat = sf::st_coordinates(.)[,2])
+
+st_write(locs, "locations.shp", layer_options = "ENCODING=UTF-8", append = F)
+
+
+rm(missing_coords, locs)
 setwd(file.path(dir, csvpath))
 ## Generate Site #s ------------------------------------------------------------
 # Group sites by unique lat/long combos and assign site #s to them, for all countries
@@ -518,7 +527,7 @@ plyr::count(df, "susceptibility")
 #   summarise(n = n()) # 25 spp. total missing susceptibility scores
 # print(sum(sus$n)) # 732 observations total, missing
 rm(s, sus)
-## Add 'native status' of each species from each country -----------------------
+## NEED TO FIX** Add 'native status' of each species from each country -----------------------
 # (data derived from iucnredlist.org)
 # sppPerCountry <- df %>%
 #   subset(., select = c(country, scientific)) %>%
@@ -527,22 +536,36 @@ rm(s, sus)
 # sppPerCountry <- with(sppPerCountry, sppPerCountry[order(scientific, country), ])
 #
 # View(sppPerCountry)
+#
+# nativeStatus <- read.csv("nativeStatus.csv", header = T, encoding = "UTF-8")
+# head(nativeStatus)
+#
+# ## DELETE LATER ----------------------------------------------------------------
+# test <- df %>%
+#  filter(scientific == "Alytes obstetricans") %>%
+#   subset(., select = c(scientific, country))
+#
+#
+# nativeStatus_test <- nativeStatus %>%
+#   filter(country == "Belgium" | country == "China" | country == "Germany" | country == "Spain" |
+#            country == "Switzerland" | country == "United Kingdom" | country == "Vietnam")
+#
+#
+# tmp <- merge(as.data.table(test), nativeStatus_test,
+#              by = c("country", "scientific"), all = T)[UNIQUEID:- ifelse(is.na())]
 
-nativeStatus <- read.csv("nativeStatus.csv", header = T, encoding = "UTF-8")
-head(nativeStatus)
-
-test <- df %>%
-  subset(., select = -c(nativeStatus)) %>%
-  left_join(., nativeStatus, by = c("country", "scientific"), relationship = "many-to-many", unmatched = "error", keep = F)
-
-
-df$nativeStatus <- nativeStatus$nativeStatus[base::match(paste(df$country, df$scientific),
-                                               paste(nativeStatus$country, nativeStatus$scientific))]
-
-native <- df %>%
-  subset(., select = c(country, scientific, nativeStatus)) %>%
-  group_by(country, scientific, nativeStatus) %>%
-  summarise()
+  # full_join(test, nativeStatus_test, by = c("country", "scientific")) %>%
+  # mutate(UNIQUEID = if_else(is.na(UNIQUEID.x), UNIQUEID.y, UNIQUEID.x)) %>%
+  # select(-UNIQUEID.x, -UNIQUEID.y) %>%
+  # filter(!is.na(UNIQUEID))
+#
+# df$nativeStatus <- nativeStatus$nativeStatus[base::match(paste(df$country, df$scientific),
+#                                                paste(nativeStatus$country, nativeStatus$scientific))]
+#
+# native <- df %>%
+#   subset(., select = c(country, scientific, nativeStatus)) %>%
+#   group_by(country, scientific, nativeStatus) %>%
+#   summarise()
 
 rm(sppPerCountry, nativeStatus)
 #### Calculate abundance, richness, and diversity ####
@@ -552,6 +575,7 @@ df <- unite(df, c("year", "month", "day"), sep = "-", col = "date", remove = F)
 ## calculate relative spp richness (from our dataset)
 spr <- df %>%
   dplyr::select(Site, date, scientific) %>%
+  na.omit(.) %>%
   group_by(Site, date, scientific) %>%
   slice(1) %>% # remove duplicate rows
   ungroup() %>% # ungroup dataframe by aforementioned variables
@@ -563,9 +587,12 @@ spr <- df %>%
   ungroup() %>%
   mutate(richness = apply(.[,3:(ncol(.))] > 0, 1, sum))
 
+
+
 # Read in IUCN richness .csv (data processed in QGIS)
 iucn_rich <- read.csv("iucn_richness.csv", header = T, encoding = "UTF-8") %>%
-  rename(., iucn_rich = SAMPLE_1)
+  rename(., iucn_rich = iucn_sr1) %>%
+  dplyr::select(-(L1))
 
 df$iucn_rich <- iucn_rich$iucn_rich[base::match(paste(df$Lat, df$Lon),
                                                   paste(iucn_rich$Lat, iucn_rich$Lon))]
@@ -576,7 +603,9 @@ df$iucn_rich <- iucn_rich$iucn_rich[base::match(paste(df$Lat, df$Lon),
 #      The values are summed across all the species in the analysis to give the
 #      relative importance of each cell to the species found there.
 iucn_rwr <- read.csv("iucn_rwr.csv", header = T, encoding = "UTF-8") %>%
-  rename(., iucn_rwr = SAMPLE_1)
+  rename(., iucn_rwr = iucn_rwr1) %>%
+  dplyr::select(-(L1))
+
 
 df$iucn_rwr <- iucn_rwr$iucn_rwr[base::match(paste(df$Lat, df$Lon),
                                                            paste(iucn_rwr$Lat, iucn_rwr$Lon))]
@@ -591,55 +620,57 @@ names(spa)[names(spa) == 'individualCount'] <- 'sppAbun'
 SAb <- aggregate(sppAbun ~ Site + date, spa, sum)
 names(SAb)[names(SAb) == 'sppAbun'] <- 'siteAbun'
 
-## Get species occurrence data using gbif "Sampling Event Data" -- an alternate measure of abundance?
-## Citation: GBIF.org (07 February 2024) GBIF Occurrence Download  https://doi.org/10.15468/dl.fc6dp6
-setwd(file.path(dir, csvpath))
-
-gbif_amphib <- data.table::fread("gbif_amphibs.csv") %>%
-  rename(., Lat = decimalLatitude,
-            Lon = decimalLongitude,
-            scientific = verbatimScientificName) %>%
-  unite(c("year", "month", "day"), sep = "-", col = "date", remove = F) %>%
-  dplyr::filter(!(day == "NA"))
-
-## Create key to match dates in 'df' to dates in 'gbif_amphib'
-dates <- df %>%
-  dplyr::filter(!(day == "NA")) %>%
-  subset(., select = date) %>%
-  unique()
-
-## Only retain observations that occurred on our sampling dates
-gbif_amphib <- inner_join(dates, gbif_amphib) ## only 378 of 395 dates matched observations
-
-## Create buffer around points that correspond with their coordinate uncertainty
-gbif_coords <- gbif_amphib %>%
-  filter(!(is.na(coordinateUncertaintyInMeters))) %>%
-  st_as_sf(., coords = c("Lon", "Lat"), crs = 4326)
-gbif_buffer <- st_buffer(gbif_coords, (gbif_coords$coordinateUncertaintyInMeters*0.001))
-
-
-## Set aside points that do not have any coordinate uncertainty listed
-gbif_coordsNA <- gbif_amphib %>%
-  filter(is.na(coordinateUncertaintyInMeters)) %>%
-  st_as_sf(., coords = c("Lon", "Lat"), crs = 4326)
-
-## Set aside unique combos of lat/lon/date from our dataset
-points <- df %>%
-  dplyr::filter(!(day == "NA")) %>%
-  subset(., select = c(Lat, Lon, date)) %>%
-  unique() %>%
-  st_as_sf(x = ., coords = c("Lon", "Lat"), crs = 4326) %>%
-  mutate(Lon = sf::st_coordinates(.)[,1],
-         Lat = sf::st_coordinates(.)[,2])
-
-st_write(gbif_buffer, "gbif_buff_data.shp", append = F)
-st_write(gbif_coordsNA, "gbif_NA_data.shp", append = F)
-st_write(points, "datelatlon.shp", append = F)
+## ADD GBIF ABUNDANCE DATA -----------------------------------------------------
+## Need to subset/download new dataset
+# ## Get species occurrence data using gbif "Sampling Event Data" -- an alternate measure of abundance?
+# ## Citation: GBIF.org (07 February 2024) GBIF Occurrence Download  https://doi.org/10.15468/dl.fc6dp6
+# setwd(file.path(dir, csvpath))
+#
+# gbif_amphib <- data.table::fread("gbif_amphibs.csv") %>%
+#   rename(., Lat = decimalLatitude,
+#             Lon = decimalLongitude,
+#             scientific = verbatimScientificName) %>%
+#   unite(c("year", "month", "day"), sep = "-", col = "date", remove = F) %>%
+#   dplyr::filter(!(day == "NA"))
+#
+# ## Create key to match dates in 'df' to dates in 'gbif_amphib'
+# dates <- df %>%
+#   dplyr::filter(!(day == "NA")) %>%
+#   subset(., select = date) %>%
+#   unique()
+#
+# ## Only retain observations that occurred on our sampling dates
+# gbif_amphib <- inner_join(dates, gbif_amphib) ## only 378 of 395 dates matched observations
+#
+# ## Create buffer around points that correspond with their coordinate uncertainty
+# gbif_coords <- gbif_amphib %>%
+#   filter(!(is.na(coordinateUncertaintyInMeters))) %>%
+#   st_as_sf(., coords = c("Lon", "Lat"), crs = 4326)
+# gbif_buffer <- st_buffer(gbif_coords, (gbif_coords$coordinateUncertaintyInMeters*0.001))
+#
+#
+# ## Set aside points that do not have any coordinate uncertainty listed
+# gbif_coordsNA <- gbif_amphib %>%
+#   filter(is.na(coordinateUncertaintyInMeters)) %>%
+#   st_as_sf(., coords = c("Lon", "Lat"), crs = 4326)
+#
+# ## Set aside unique combos of lat/lon/date from our dataset
+# points <- df %>%
+#   dplyr::filter(!(day == "NA")) %>%
+#   subset(., select = c(Lat, Lon, date)) %>%
+#   unique() %>%
+#   st_as_sf(x = ., coords = c("Lon", "Lat"), crs = 4326) %>%
+#   mutate(Lon = sf::st_coordinates(.)[,1],
+#          Lat = sf::st_coordinates(.)[,2])
+#
+# st_write(gbif_buffer, "gbif_buff_data.shp", append = F)
+# st_write(gbif_coordsNA, "gbif_NA_data.shp", append = F)
+# st_write(points, "datelatlon.shp", append = F)
 
 ## Add abundance and richness back into df df
 df <- df %>%
   # species richness
-  left_join(spr[,c(1:2, 25)], by = c("Site", "date")) %>%
+  left_join(spr[,c(1:2, 63)], by = c("Site", "date")) %>%
   # species abundance
   left_join(spa, by = c("scientific", "Site", "date")) %>%
   # site abundance
@@ -648,11 +679,11 @@ df <- df %>%
 ## Make sure columns that have categorical data are uniform in coding
 df <- df %>%
   # code all NA values as 'False'
-  mutate(BdDetected = as.factor(BdDetected),
-         BsalDetected = as.factor(BsalDetected),
-         fatal = as.factor(fatal)) %>%
-  mutate(BdDetected = tidyr::replace_na(BdDetected, "FALSE"),
-         BsalDetected = tidyr::replace_na(BsalDetected, "FALSE"))
+  # mutate(BdDetected = as.factor(BdDetected),
+  #        BsalDetected = as.factor(BsalDetected),
+  #        fatal = as.factor(fatal)) %>%
+  mutate(BdDetected = tidyr::replace_na(BdDetected, 0),
+         BsalDetected = tidyr::replace_na(BsalDetected, 0))
 
 
 df$fatal <- toupper(df$fatal)
@@ -769,8 +800,10 @@ weather_d <- weather %>%
 weather_m <- weather %>%
   filter(timepoint == "t30" | timepoint == "t60")
 
+
+tmp <- weather %>%
+  unite(., "date", c("year", "month", "day"), sep = "-")
 ## Export to use in Python and PyQGIS to obtain weather data
-# setwd(file.path(dir, csvpath))
 # write.csv(weather_d, 'weather.csv', row.names = F, fileEncoding = "UTF-8")
 # write.csv(weather_m, 'weather_m.csv', row.names = F, fileEncoding = "UTF-8")
 # rm(weather)
