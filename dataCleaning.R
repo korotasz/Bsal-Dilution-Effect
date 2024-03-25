@@ -17,6 +17,7 @@ pckgs <- c("tidyverse", # data wrangling/manipulation
        "rnaturalearth", # obtain spatial polygons that can be used with sf
              "geodata", # get admin levels for each country
                "rgbif", # obtain species occurrence data
+   "CoordinateCleaner", # resolve geospatial issues
              "taxlist", # standardize/update taxonomic names
            "geosphere", # distGeo(); distm()
         "measurements", # convert coordinates from DMS to DD
@@ -76,6 +77,23 @@ assign_start_date <- function(df, timepoint, date, out_col){
     }
   }
   return(df)
+}
+
+assign_iucn_status <- function(df1, df2, country, scientific, nativeStatus, redListCat){
+  for(i in 1:nrow(df1)){
+    if(df1[[scientific]][i] == df2[[scientific]][i] & df1[[country]][i] == df2[[country]][i]){
+      df1[[nativeStatus]][i] <- paste(df2[[nativeStatus]][i])
+      df1[[redListCat]][i] <- paste(df2[[redListCat]][i])
+
+    }
+    else{
+      df1[[nativeStatus]][i] <- "Unk"
+      df1[[redListCat]][i] <- "Unk"
+    }
+
+    return(df1)
+  }
+
 }
 
 ## Read in .csv files-----------------------------------------------------------
@@ -537,10 +555,24 @@ rm(s, sus)
 #
 # View(sppPerCountry)
 #
-# nativeStatus <- read.csv("nativeStatus.csv", header = T, encoding = "UTF-8")
-# head(nativeStatus)
-#
+nativeStatus <- read.csv("nativeStatus.csv", header = T, encoding = "UTF-8")
+head(nativeStatus)
+
+test <- df
+
+df$nativeStatus <- nativeStatus$nativeStatus[base::match(paste(df$scientific, df$country),
+                                       paste(nativeStatus$scientific, nativeStatus$country), nomatch = 0)]
+
+
+test <- df %>%
+  mutate(testing = ifelse(scientific == nativeStatus$scientific & country == nativeStatus$country,
+                               paste(nativeStatus$nativeStatus),
+                               paste("unknown")))
+
+
 # ## DELETE LATER ----------------------------------------------------------------
+
+
 # test <- df %>%
 #  filter(scientific == "Alytes obstetricans") %>%
 #   subset(., select = c(scientific, country))
@@ -587,7 +619,10 @@ spr <- df %>%
   ungroup() %>%
   mutate(richness = apply(.[,3:(ncol(.))] > 0, 1, sum))
 
-
+df <- df %>%
+  # species richness
+  left_join(spr[,c(1:2, 63)], by = c("Site", "date")) %>%
+  rename(relativeRichness = richness)
 
 # Read in IUCN richness .csv (data processed in QGIS)
 iucn_rich <- read.csv("iucn_richness.csv", header = T, encoding = "UTF-8") %>%
@@ -610,6 +645,9 @@ iucn_rwr <- read.csv("iucn_rwr.csv", header = T, encoding = "UTF-8") %>%
 df$iucn_rwr <- iucn_rwr$iucn_rwr[base::match(paste(df$Lat, df$Lon),
                                                            paste(iucn_rwr$Lat, iucn_rwr$Lon))]
 
+
+rm(iucn_rich, iucn_rwr, spr)
+
 ## Calculate abundance of individual spp at a site during each sampling event using ONLY our data
 spa <- df %>%
   dplyr::select(Site, date, scientific, individualCount) # subset relevant data
@@ -620,57 +658,76 @@ names(spa)[names(spa) == 'individualCount'] <- 'sppAbun'
 SAb <- aggregate(sppAbun ~ Site + date, spa, sum)
 names(SAb)[names(SAb) == 'sppAbun'] <- 'siteAbun'
 
-## ADD GBIF ABUNDANCE DATA -----------------------------------------------------
-## Need to subset/download new dataset
+## Add gbif.org data as an alternate measure of abundance (when applicable) ----
 # ## Get species occurrence data using gbif "Sampling Event Data" -- an alternate measure of abundance?
-# ## Citation: GBIF.org (07 February 2024) GBIF Occurrence Download  https://doi.org/10.15468/dl.fc6dp6
-# setwd(file.path(dir, csvpath))
-#
-# gbif_amphib <- data.table::fread("gbif_amphibs.csv") %>%
-#   rename(., Lat = decimalLatitude,
-#             Lon = decimalLongitude,
-#             scientific = verbatimScientificName) %>%
-#   unite(c("year", "month", "day"), sep = "-", col = "date", remove = F) %>%
-#   dplyr::filter(!(day == "NA"))
-#
-# ## Create key to match dates in 'df' to dates in 'gbif_amphib'
-# dates <- df %>%
-#   dplyr::filter(!(day == "NA")) %>%
-#   subset(., select = date) %>%
-#   unique()
-#
-# ## Only retain observations that occurred on our sampling dates
-# gbif_amphib <- inner_join(dates, gbif_amphib) ## only 378 of 395 dates matched observations
-#
-# ## Create buffer around points that correspond with their coordinate uncertainty
-# gbif_coords <- gbif_amphib %>%
-#   filter(!(is.na(coordinateUncertaintyInMeters))) %>%
-#   st_as_sf(., coords = c("Lon", "Lat"), crs = 4326)
-# gbif_buffer <- st_buffer(gbif_coords, (gbif_coords$coordinateUncertaintyInMeters*0.001))
-#
-#
-# ## Set aside points that do not have any coordinate uncertainty listed
-# gbif_coordsNA <- gbif_amphib %>%
-#   filter(is.na(coordinateUncertaintyInMeters)) %>%
-#   st_as_sf(., coords = c("Lon", "Lat"), crs = 4326)
-#
-# ## Set aside unique combos of lat/lon/date from our dataset
-# points <- df %>%
-#   dplyr::filter(!(day == "NA")) %>%
-#   subset(., select = c(Lat, Lon, date)) %>%
-#   unique() %>%
-#   st_as_sf(x = ., coords = c("Lon", "Lat"), crs = 4326) %>%
-#   mutate(Lon = sf::st_coordinates(.)[,1],
-#          Lat = sf::st_coordinates(.)[,2])
-#
-# st_write(gbif_buffer, "gbif_buff_data.shp", append = F)
-# st_write(gbif_coordsNA, "gbif_NA_data.shp", append = F)
-# st_write(points, "datelatlon.shp", append = F)
+# ## Citation: GBIF.org (25 March 2024) GBIF Occurrence Download https://doi.org/10.15468/dl.z3jcfu
+gbif_amphib <- data.table::fread("gbif_amphibs.csv") %>%
+  rename(.,
+         Lat = decimalLatitude,
+         Lon = decimalLongitude,
+         scientific = verbatimScientificName) %>%
+  unite(c("year", "month", "day"), sep = "-", col = "date", remove = F) %>%
+  dplyr::filter(!(day == "NA")) %>%
+  # setNames(tolower(names(.))) %>% # set lowercase column names to work with CoordinateCleaner
+  filter(occurrenceStatus  == "PRESENT") %>%
+  filter(coordinatePrecision < 0.01 | is.na(coordinatePrecision)) %>%
+  filter(coordinateUncertaintyInMeters < 400 | is.na(coordinateUncertaintyInMeters)) %>%
+  # Assume NA vals == 0
+  mutate(coordinateUncertaintyInMeters = tidyr::replace_na(coordinateUncertaintyInMeters, 0),
+         coordinatePrecision = tidyr::replace_na(coordinatePrecision, 0)) %>%
+  # mutate(coordinateUncertaintyInMeters = round(coordinateUncertaintyInMeters, 0)) %>%
+  glimpse() # look at results of pipeline
 
-## Add abundance and richness back into df df
-df <- df %>%
-  # species richness
-  left_join(spr[,c(1:2, 63)], by = c("Site", "date")) %>%
+tmp <- gbif_amphib %>%
+  group_by(coordinateUncertaintyInMeters) %>%
+  summarise(n = n())
+
+## Create key to match dates in 'df' to dates in 'gbif_amphib'
+dates <- df %>%
+  dplyr::filter(!(day == "NA")) %>%
+  subset(., select = date) %>%
+  unique()
+
+## Only retain observations that occurred on our sampling dates
+gbif_amphib <- inner_join(dates, gbif_amphib) ## 427 of 454 dates matched observations
+
+## Create buffer around points that correspond with their coordinate uncertainty
+gbif_coords <- gbif_amphib %>%
+  st_as_sf(., coords = c("Lon", "Lat"), crs = 4326)
+
+## Buffers ended up not being necessary -- most were too small to consider
+gbif_3035 <- gbif_coords %>%
+  filter(countryCode == "BE" | countryCode == "GB" | countryCode == "DE" | countryCode == "ES") %>%
+  st_transform(., 3035) %>%
+  st_buffer(., dist = gbif_coords$coordinateUncertaintyInMeters) %>%
+  st_cast(., "MULTIPOLYGON")
+
+gbif_32649 <- gbif_coords %>%
+  filter(countryCode == "CN" | countryCode == "VN" | countryCode == "HK" | countryCode == "MO") %>%
+  st_transform(., 32649) %>%
+  st_buffer(., dist = gbif_coords$coordinateUncertaintyInMeters) %>%
+  st_cast(., "MULTIPOLYGON")
+
+## Set aside unique combos of lat/lon/date from our dataset
+points <- df %>%
+  dplyr::filter(!(day == "NA")) %>%
+  subset(., select = c(Lat, Lon, date)) %>%
+  unique(.) %>%
+  st_as_sf(x = ., coords = c("Lon", "Lat"), crs = 4326) %>%
+  mutate(Lon = sf::st_coordinates(.)[,1],
+         Lat = sf::st_coordinates(.)[,2])
+
+  tmp <- sf::st_coordinates(points)
+
+
+st_write(gbif_3035, file.path(dir, shppath, "gbif_3035.shp"), append = F)
+st_write(gbif_32649, file.path(dir, shppath, "gbif_32649.shp"), append = F)
+st_write(gbif_coords, file.path(dir, shppath, "gbif_coords.shp"), append = F)
+# st_write(gbif_coordsNA, file.path(dir, shppath, "gbif_NA_data.shp"), append = F)
+# st_write(points, file.path(dir, shppath, "datelatlon.shp"), append = F)
+
+## Add abundance measures back into df
+df <-
   # species abundance
   left_join(spa, by = c("scientific", "Site", "date")) %>%
   # site abundance
@@ -813,7 +870,7 @@ tmp <- weather %>%
 
 ## Import DAILY temperature & soil moisture data from NASA's EarthData website (citation below) ----
 #  Li, B., H. Beaudoing, and M. Rodell, NASA/GSFC/HSL (2020), GLDAS Catchment Land Surface Model L4 daily 0.25 x 0.25 degree GRACE-DA1 V2.2,
-#     Greenbelt, Maryland, USA, Goddard Earth Sciences Data and Information Services Center (GES DISC), Accessed: 2023-10-11. doi:10.5067/TXBMLX370XX8.
+#     Greenbelt, Maryland, USA, Goddard Earth Sciences Data and Information Services Center (GES DISC), Last accessed: 2024-03-25. doi:10.5067/TXBMLX370XX8.
 #  Li, B., M. Rodell, S. Kumar, H. Beaudoing, A. Getirana, B. F. Zaitchik, et al. (2019) Global GRACE data assimilation for groundwater and drought
 #     monitoring: Advances and challenges. Water Resources Research, 55, 7564-7586. doi:10.1029/2018wr024618.
 gldas_daily <- read.csv("weather_merged.csv", header = T, encoding = "UTF-8")
