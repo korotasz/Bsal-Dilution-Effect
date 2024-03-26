@@ -79,22 +79,6 @@ assign_start_date <- function(df, timepoint, date, out_col){
   return(df)
 }
 
-assign_iucn_status <- function(df1, df2, country, scientific, nativeStatus, redListCat){
-  for(i in 1:nrow(df1)){
-    if(df1[[scientific]][i] == df2[[scientific]][i] & df1[[country]][i] == df2[[country]][i]){
-      df1[[nativeStatus]][i] <- paste(df2[[nativeStatus]][i])
-      df1[[redListCat]][i] <- paste(df2[[redListCat]][i])
-
-    }
-    else{
-      df1[[nativeStatus]][i] <- "Unk"
-      df1[[redListCat]][i] <- "Unk"
-    }
-
-    return(df1)
-  }
-
-}
 
 ## Read in .csv files-----------------------------------------------------------
 setwd(file.path(dir, csvpath))
@@ -507,7 +491,7 @@ locs <- df %>%
   mutate(Lon = sf::st_coordinates(.)[,1],
          Lat = sf::st_coordinates(.)[,2])
 
-st_write(locs, "locations.shp", layer_options = "ENCODING=UTF-8", append = F)
+# st_write(locs, "locations.shp", layer_options = "ENCODING=UTF-8", append = F)
 
 
 rm(missing_coords, locs)
@@ -544,37 +528,31 @@ plyr::count(df, "susceptibility")
 #   group_by(scientific) %>%
 #   summarise(n = n()) # 25 spp. total missing susceptibility scores
 # print(sum(sus$n)) # 732 observations total, missing
-rm(s, sus)
-## NEED TO FIX** Add 'native status' of each species from each country -----------------------
+
+
+rm(s)
+
+## Add IUCN Assessment Summary info for each species from each country ---------
 # (data derived from iucnredlist.org)
-sppPerCountry <- df %>%
-  subset(., select = c(country, scientific)) %>%
-  group_by(scientific, country) %>%
-  summarise(n = n())
-sppPerCountry <- with(sppPerCountry, sppPerCountry[order(scientific, country), ])
+iucn_info <- read.csv("iucn_info.csv", header = T)
 
-View(sppPerCountry)
+df <- df %>%
+  dplyr::select(-(nativeStatus)) %>%
+  left_join(., iucn_info, by = c("scientific", "country")) %>%
+  relocate(c(rangeStatus, redListCategory, populationTrend, assessmentScope), .after = "susceptibility") %>%
+  glimpse()
 
-nativeStatus <- read.csv("iucn_info.csv", header = T, encoding = "UTF-8")
-head(nativeStatus)
+## check for NA vals
+sum(is.na(df$rangeStatus))
 
-test <- df %>%
-  dplyr::select(-(nativeStatus))
+# geoRange <- df %>%
+#   subset(., select = c(country, scientific, rangeStatus)) %>%
+#   group_by(country, scientific, rangeStatus) %>%
+#   summarise(n = n())
 
-# test$nativeStatus <- nativeStatus$nativeStatus[base::match(paste(test$country, test$scientific),
-#                                                            paste(nativeStatus$country, nativeStatus$scientific))]
+rm(iucn_info, geoRange)
 
-sum(is.na(tmp$nativeStatus))
-
-tmp <- left_join(test, nativeStatus)
-
-# native <- df %>%
-#   subset(., select = c(country, scientific, nativeStatus)) %>%
-#   group_by(country, scientific, nativeStatus) %>%
-#   summarise()
-
-rm(sppPerCountry, nativeStatus)
-#### Calculate abundance, richness, and diversity ####
+## Add measures of richness ----------------------------------------------------
 df <- unite(df, c("year", "month", "day"), sep = "-", col = "date", remove = F)
 
 ## Richness calculations include fire salamanders
@@ -621,7 +599,7 @@ df$iucn_rwr <- iucn_rwr$iucn_rwr[base::match(paste(df$Lat, df$Lon),
 
 
 rm(iucn_rich, iucn_rwr, spr)
-
+## Add measures of abundance  --------------------------------------------------
 ## Calculate abundance of individual spp at a site during each sampling event using ONLY our data
 spa <- df %>%
   dplyr::select(Site, date, scientific, individualCount) # subset relevant data
@@ -694,9 +672,9 @@ points <- df %>%
   tmp <- sf::st_coordinates(points)
 
 
-st_write(gbif_3035, file.path(dir, shppath, "gbif_3035.shp"), append = F)
-st_write(gbif_32649, file.path(dir, shppath, "gbif_32649.shp"), append = F)
-st_write(gbif_coords, file.path(dir, shppath, "gbif_coords.shp"), append = F)
+# st_write(gbif_3035, file.path(dir, shppath, "gbif_3035.shp"), append = F)
+# st_write(gbif_32649, file.path(dir, shppath, "gbif_32649.shp"), append = F)
+# st_write(gbif_coords, file.path(dir, shppath, "gbif_coords.shp"), append = F)
 # st_write(gbif_coordsNA, file.path(dir, shppath, "gbif_NA_data.shp"), append = F)
 # st_write(points, file.path(dir, shppath, "datelatlon.shp"), append = F)
 
