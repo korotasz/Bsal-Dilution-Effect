@@ -547,53 +547,27 @@ plyr::count(df, "susceptibility")
 rm(s, sus)
 ## NEED TO FIX** Add 'native status' of each species from each country -----------------------
 # (data derived from iucnredlist.org)
-# sppPerCountry <- df %>%
-#   subset(., select = c(country, scientific)) %>%
-#   group_by(scientific, country) %>%
-#   summarise(n = n())
-# sppPerCountry <- with(sppPerCountry, sppPerCountry[order(scientific, country), ])
-#
-# View(sppPerCountry)
-#
-nativeStatus <- read.csv("nativeStatus.csv", header = T, encoding = "UTF-8")
+sppPerCountry <- df %>%
+  subset(., select = c(country, scientific)) %>%
+  group_by(scientific, country) %>%
+  summarise(n = n())
+sppPerCountry <- with(sppPerCountry, sppPerCountry[order(scientific, country), ])
+
+View(sppPerCountry)
+
+nativeStatus <- read.csv("iucn_info.csv", header = T, encoding = "UTF-8")
 head(nativeStatus)
 
-test <- df
-
-df$nativeStatus <- nativeStatus$nativeStatus[base::match(paste(df$scientific, df$country),
-                                       paste(nativeStatus$scientific, nativeStatus$country), nomatch = 0)]
-
-
 test <- df %>%
-  mutate(testing = ifelse(scientific == nativeStatus$scientific & country == nativeStatus$country,
-                               paste(nativeStatus$nativeStatus),
-                               paste("unknown")))
+  dplyr::select(-(nativeStatus))
 
+# test$nativeStatus <- nativeStatus$nativeStatus[base::match(paste(test$country, test$scientific),
+#                                                            paste(nativeStatus$country, nativeStatus$scientific))]
 
-# ## DELETE LATER ----------------------------------------------------------------
+sum(is.na(tmp$nativeStatus))
 
+tmp <- left_join(test, nativeStatus)
 
-# test <- df %>%
-#  filter(scientific == "Alytes obstetricans") %>%
-#   subset(., select = c(scientific, country))
-#
-#
-# nativeStatus_test <- nativeStatus %>%
-#   filter(country == "Belgium" | country == "China" | country == "Germany" | country == "Spain" |
-#            country == "Switzerland" | country == "United Kingdom" | country == "Vietnam")
-#
-#
-# tmp <- merge(as.data.table(test), nativeStatus_test,
-#              by = c("country", "scientific"), all = T)[UNIQUEID:- ifelse(is.na())]
-
-  # full_join(test, nativeStatus_test, by = c("country", "scientific")) %>%
-  # mutate(UNIQUEID = if_else(is.na(UNIQUEID.x), UNIQUEID.y, UNIQUEID.x)) %>%
-  # select(-UNIQUEID.x, -UNIQUEID.y) %>%
-  # filter(!is.na(UNIQUEID))
-#
-# df$nativeStatus <- nativeStatus$nativeStatus[base::match(paste(df$country, df$scientific),
-#                                                paste(nativeStatus$country, nativeStatus$scientific))]
-#
 # native <- df %>%
 #   subset(., select = c(country, scientific, nativeStatus)) %>%
 #   group_by(country, scientific, nativeStatus) %>%
