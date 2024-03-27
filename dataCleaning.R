@@ -372,16 +372,15 @@ polygon <- geodata::gadm(country = c('BEL', 'CHE', 'CHN', 'DEU', 'ESP', 'GBR', '
   sf::st_as_sf(., crs = 4326) %>%
   st_cast(., "MULTIPOLYGON")
 
-## Write multipolygon to .shp file for later use with WorldClim
-# st_write(polygon, "europe.shp", layer_options = "ENCODING=UTF-8", append = F)
-
 points <- df %>%
   dplyr::select(Lon, Lat) %>%
   na.omit(.) %>%
   sf::st_as_sf(x = ., coords = c("Lon", "Lat"), crs = 4326, na.fail = F) %>%
   mutate(L1 = row_number(),
          Lon = sf::st_coordinates(.)[,1],
-         Lat = sf::st_coordinates(.)[,2])
+         Lat = sf::st_coordinates(.)[,2]) %>%
+  glimpse()
+
 
 ## Intersect lat/lon coordinates with each raster to get the correct admin levels associated with our data
 ## Compared this method with previous method of loading gadm.org shapefiles into QGIS fore ea. country &
@@ -390,7 +389,6 @@ out <- st_intersection(points, polygon) %>%
   mutate(Lon = sf::st_coordinates(.)[,1],
          Lat = sf::st_coordinates(.)[,2])
 
-# st_write(out, "adm_info.shp", layer_options = "ENCODING=UTF-8", append = F)
 
 ## Get centroids of these 5 that are missing lat/lon coordinates and convert lat/lon back to EPSG:4326
 missing_coords <- df %>%
@@ -469,7 +467,11 @@ centroid_adms <- rbind(adm1, adm2) %>%
 # adminlvls %>%
 #   filter(is.na(ADM2)) # only one location missing (ADM2 in GBR).
 
+## Write 'polygon' to .gpckg layer for later use with WorldClim data
+# st_write(polygon, file.path(dir, shppath, "admData.gpkg"), layer = "countries", append = F, delete_layer = T)
+
 rm(out, points, polygon, adm1, adm1_centroids, adm2, adm2_centroids)
+
 ## Add ADM info back to main dataframe -----------------------------------------
 df <- df %>%
   filter(!(scientific == "Echinotriton maxiquadratus" |
@@ -484,19 +486,11 @@ df <- df %>%
   relocate(c(country, ADM0, ADM1, ADM2), .before = LatLon) %>%
   separate(LatLon, c("Lat", "Lon"), sep = ", ")
 
-# Save locations as .shp file for QGIS processing
-locs <- df %>%
-  subset(., select = c(Lat, Lon)) %>%
-  sf::st_as_sf(x = ., coords = c("Lon", "Lat"), crs = 4326, na.fail = F) %>%
-  mutate(Lon = sf::st_coordinates(.)[,1],
-         Lat = sf::st_coordinates(.)[,2])
 
-# st_write(locs, "locations.shp", layer_options = "ENCODING=UTF-8", append = F)
+rm(missing_coords)
 
-
-rm(missing_coords, locs)
-setwd(file.path(dir, csvpath))
 ## Generate Site #s ------------------------------------------------------------
+setwd(file.path(dir, csvpath))
 # Group sites by unique lat/long combos and assign site #s to them, for all countries
 siteNumber <- df %>%
   dplyr::select(materialSampleID, Lat, Lon) %>%
@@ -550,7 +544,19 @@ sum(is.na(df$rangeStatus))
 #   group_by(country, scientific, rangeStatus) %>%
 #   summarise(n = n())
 
-rm(iucn_info, geoRange)
+# Save locations with supplemental data as a layer in admData.gpkg
+locs <- df %>%
+  subset(., select = c(Lat, Lon, country, ADM0, ADM1, ADM2, date,
+                       materialSampleID, scientific, susceptibility, rangeStatus)) %>%
+  sf::st_as_sf(x = ., coords = c("Lon", "Lat"), crs = 4326, na.fail = F) %>%
+  mutate(Lon = sf::st_coordinates(.)[,1],
+         Lat = sf::st_coordinates(.)[,2]) %>%
+  relocate(c(Lon, Lat), .before = country)
+
+st_write(locs, file.path(dir, shppath, "admData.gpkg"), append = F, delete_layer = T, layer = "adm_info")
+
+
+rm(locs, iucn_info, geoRange)
 
 ## Add measures of richness ----------------------------------------------------
 df <- unite(df, c("year", "month", "day"), sep = "-", col = "date", remove = F)
@@ -600,17 +606,26 @@ df$iucn_rwr <- iucn_rwr$iucn_rwr[base::match(paste(df$Lat, df$Lon),
 
 rm(iucn_rich, iucn_rwr, spr)
 ## Add measures of abundance  --------------------------------------------------
-## Calculate abundance of individual spp at a site during each sampling event using ONLY our data
+## Relative species abundance (# individuals/spp at a site during each sampling event) -- calculated using ONLY our data
 spa <- df %>%
   dplyr::select(Site, date, scientific, individualCount) # subset relevant data
 spa <- aggregate(individualCount ~ scientific+Site+date, spa, sum) # aggregate by Site, date, spp. & summarise
 names(spa)[names(spa) == 'individualCount'] <- 'sppAbun'
 
-## Calculate abundance of total spp at a site during each sampling event using ONLY our data
+## Relative site abundance (total # individuals at a site during each sampling event) -- calculated using ONLY our data
 SAb <- aggregate(sppAbun ~ Site + date, spa, sum)
 names(SAb)[names(SAb) == 'sppAbun'] <- 'siteAbun'
 
-## Add gbif.org data as an alternate measure of abundance (when applicable) ----
+## Add relative abundance measures back into df
+df <- df %>%
+  # species abundance
+  left_join(spa, by = c("scientific", "Site", "date")) %>%
+  # site abundance
+  left_join(SAb, by = c("Site", "date"))
+
+rm(spa, SAb)
+
+## Subset gbif.org data to supplement our calculations of relative abundance (when applicable) ----
 # ## Get species occurrence data using gbif "Sampling Event Data" -- an alternate measure of abundance?
 # ## Citation: GBIF.org (25 March 2024) GBIF Occurrence Download https://doi.org/10.15468/dl.z3jcfu
 gbif_amphib <- data.table::fread("gbif_amphibs.csv") %>%
@@ -623,16 +638,12 @@ gbif_amphib <- data.table::fread("gbif_amphibs.csv") %>%
   # setNames(tolower(names(.))) %>% # set lowercase column names to work with CoordinateCleaner
   filter(occurrenceStatus  == "PRESENT") %>%
   filter(coordinatePrecision < 0.01 | is.na(coordinatePrecision)) %>%
-  filter(coordinateUncertaintyInMeters < 400 | is.na(coordinateUncertaintyInMeters)) %>%
+  filter(coordinateUncertaintyInMeters < 1000 | is.na(coordinateUncertaintyInMeters)) %>%
   # Assume NA vals == 0
   mutate(coordinateUncertaintyInMeters = tidyr::replace_na(coordinateUncertaintyInMeters, 0),
          coordinatePrecision = tidyr::replace_na(coordinatePrecision, 0)) %>%
-  # mutate(coordinateUncertaintyInMeters = round(coordinateUncertaintyInMeters, 0)) %>%
   glimpse() # look at results of pipeline
 
-tmp <- gbif_amphib %>%
-  group_by(coordinateUncertaintyInMeters) %>%
-  summarise(n = n())
 
 ## Create key to match dates in 'df' to dates in 'gbif_amphib'
 dates <- df %>%
@@ -641,49 +652,122 @@ dates <- df %>%
   unique()
 
 ## Only retain observations that occurred on our sampling dates
-gbif_amphib <- inner_join(dates, gbif_amphib) ## 427 of 454 dates matched observations
+gbif_amphib <- inner_join(dates, gbif_amphib) ## 423 of 454 dates matched observations
 
 ## Create buffer around points that correspond with their coordinate uncertainty
 gbif_coords <- gbif_amphib %>%
   st_as_sf(., coords = c("Lon", "Lat"), crs = 4326)
 
-## Buffers ended up not being necessary -- most were too small to consider
+## First, separate out points that *have* no buffer
+gbif_noBuff <- gbif_coords %>%
+  filter(coordinateUncertaintyInMeters == 0) %>%
+  mutate(row = as.character(paste0("0", row_number())),
+         dummy = "noBuff") %>%
+  unite(col = "ID", c(dummy, row), remove = T) %>%
+  glimpse()
+
+## Need to use two different CRS for Europe (EPSG:3035) and Asia (EPSG:32649)
+## EUROPE:
+# Subset Europe data from gbif (gbif_3035) and from our dataset (points_3035)
 gbif_3035 <- gbif_coords %>%
+  filter(coordinateUncertaintyInMeters > 0) %>%
   filter(countryCode == "BE" | countryCode == "GB" | countryCode == "DE" | countryCode == "ES") %>%
   st_transform(., 3035) %>%
   st_buffer(., dist = gbif_coords$coordinateUncertaintyInMeters) %>%
+  # transform buffered pts back to EPSG 4326
+  st_transform(., 4326) %>%
   st_cast(., "MULTIPOLYGON")
 
+## ASIA:
 gbif_32649 <- gbif_coords %>%
+  filter(coordinateUncertaintyInMeters > 0) %>%
   filter(countryCode == "CN" | countryCode == "VN" | countryCode == "HK" | countryCode == "MO") %>%
   st_transform(., 32649) %>%
   st_buffer(., dist = gbif_coords$coordinateUncertaintyInMeters) %>%
+  # transform buffered pts back to EPSG 4326
+  st_transform(., 4326) %>%
   st_cast(., "MULTIPOLYGON")
 
-## Set aside unique combos of lat/lon/date from our dataset
+
+# rbind buffered gbif coordinates and intersect them with distinct date/lat/lon points from dataset
+gbif_all <- rbind(gbif_3035, gbif_32649) %>%
+  mutate(row = as.character(paste0("0", row_number())),
+         dummy = "buff") %>%
+  unite(col = "ID", c(dummy, row), remove = T) %>%
+  glimpse()
+
 points <- df %>%
   dplyr::filter(!(day == "NA")) %>%
   subset(., select = c(Lat, Lon, date)) %>%
-  unique(.) %>%
+  unique() %>%
   st_as_sf(x = ., coords = c("Lon", "Lat"), crs = 4326) %>%
   mutate(Lon = sf::st_coordinates(.)[,1],
          Lat = sf::st_coordinates(.)[,2])
 
-  tmp <- sf::st_coordinates(points)
+## Save all data to 'gbif.gpkg' to deal with in QGIS (3.28.3-Firenze)
+# st_write(gbif_all, file.path(dir, shppath, "gbif.gpkg"), layer = "gbif_buffered", append = F, delete_layer = T)
+# st_write(gbif_noBuff, file.path(dir, shppath, "gbif.gpkg"), layer = "gbif_noBuffer", append = F, delete_layer = T)
+# st_write(points, file.path(dir, shppath, "gbif.gpkg"), layer = "all_points", append = F, delete_layer = T)
+
+## Save colnames from gbif_all to rename columns in gbif_intersectedPts
+names <- c(colnames(gbif_all), "Lon", "Lat")
+
+rm(dates, gbif_amphib, gbif_3035, gbif_32649, gbif_coords, gbif_noBuff, gbif_all, points)
+## Process gbif data and add to main df ----------------------------------------
+## Load in layer of gbif.gpkg containing all points from gbif that intersected with our data
+gbif_intersectedPts <- st_read(file.path(dir, shppath, "gbif.gpkg"), layer = "intersected_pts") %>%
+  subset(., select = -c(date:gbif_fid)) %>%
+  mutate(Lon = sf::st_coordinates(.)[,1],
+         Lat = sf::st_coordinates(.)[,2]) %>%
+  data.frame(.)
+
+colnames(gbif_intersectedPts) <- names
+
+## Add site numbers from our data set to gbif_intersectedPts
+Sites <- df %>%
+  subset(., select = c(Lat, Lon, Site)) %>%
+  mutate(Lat = as.numeric(Lat),
+         Lon = as.numeric(Lon)) %>%
+  unique()
+
+## join back to df
+gbif_intersectedPts <- gbif_intersectedPts %>%
+  subset(., select = c(gbifID, date, scientific, individualCount, Lat, Lon)) %>%
+  mutate(individualCount = case_when(is.na(individualCount) ~ 1, # Assume NA = one individual
+                                     TRUE ~ individualCount)) %>%
+  left_join(., Sites, by = c("Lat", "Lon")) %>%
+  relocate(c(Lat, Lon, Site), .after = gbifID) # kept gbifID for QA/QC
+rm(Sites)
+
+gbif_intersectedPts <- gbif_intersectedPts %>%
+  ## gbif species abundance (# spp at a site during each sampling event)
+  group_by(scientific, Site, date) %>%
+  mutate(gbif_sppAbun = sum(individualCount)) %>%
+  ungroup() %>%
+  ## gbif site abundance (# total individuals at a site during each sampling event, regardless of species)
+  group_by(Site, date) %>%
+  mutate(gbif_siteAbun = sum(individualCount)) %>%
+  ungroup()
+
+## Join back to main df
+### MAYBE ADD THIS BEFORE RICHNESS EST. ----------------------------------------
+tmp <- gbif_intersectedPts %>%
+  subset(., select = c(Site, date, scientific, gbif_sppAbun, gbif_siteAbun)) %>%
+  unique() %>%
+  left_join(., df, by = c("Site", "date", "scientific"))
 
 
-# st_write(gbif_3035, file.path(dir, shppath, "gbif_3035.shp"), append = F)
-# st_write(gbif_32649, file.path(dir, shppath, "gbif_32649.shp"), append = F)
-# st_write(gbif_coords, file.path(dir, shppath, "gbif_coords.shp"), append = F)
-# st_write(gbif_coordsNA, file.path(dir, shppath, "gbif_NA_data.shp"), append = F)
-# st_write(points, file.path(dir, shppath, "datelatlon.shp"), append = F)
 
-## Add abundance measures back into df
-df <-
-  # species abundance
-  left_join(spa, by = c("scientific", "Site", "date")) %>%
-  # site abundance
-  left_join(SAb, by = c("Site", "date"))
+
+
+
+
+
+
+
+
+
+
 
 ## Make sure columns that have categorical data are uniform in coding
 df <- df %>%
