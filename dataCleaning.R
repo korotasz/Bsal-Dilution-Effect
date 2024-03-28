@@ -307,7 +307,9 @@ vietnam %>% ## Need centroids for these locs
 
 rm(vietnam_coords, VNM_btwn, x, y)
 ## Join Spain, China, & Vietnam to main df -------------------------------------
-df <- rbind(df, spain, china, vietnam)
+df <- rbind(df, spain, china, vietnam) %>%
+  glimpse()
+
 # df %>%
 #   group_by(country, BsalDetected) %>%
 #   summarise(n = n())
@@ -372,6 +374,9 @@ polygon <- geodata::gadm(country = c('BEL', 'CHE', 'CHN', 'DEU', 'ESP', 'GBR', '
   sf::st_as_sf(., crs = 4326) %>%
   st_cast(., "MULTIPOLYGON")
 
+## Write 'polygon' to .gpckg layer for later use with WorldClim data
+# st_write(polygon, file.path(dir, shppath, "admData.gpkg"), layer = "countries", append = F, delete_layer = T)
+
 points <- df %>%
   dplyr::select(Lon, Lat) %>%
   na.omit(.) %>%
@@ -385,10 +390,29 @@ points <- df %>%
 ## Intersect lat/lon coordinates with each raster to get the correct admin levels associated with our data
 ## Compared this method with previous method of loading gadm.org shapefiles into QGIS fore ea. country &
 #  sampling locations, and it is just as accurate.
-out <- st_intersection(points, polygon) %>%
-  mutate(Lon = sf::st_coordinates(.)[,1],
-         Lat = sf::st_coordinates(.)[,2])
 
+## This section is commented out because it is too computationally intensive. Data has been saved as both a .shp and .csv
+# out <- st_intersection(points, polygon) %>%
+#   mutate(Lon = sf::st_coordinates(.)[,1],
+#          Lat = sf::st_coordinates(.)[,2])
+# st_write(out, file.path(dir, shppath, "out.shp"), append = F, delete_layer = T, layer_options = "ENCODING=UTF-8")
+# out <- data.frame(out) %>%
+#   dplyr::select(-(geometry))
+# write.csv(out, file.path(dir, csvpath, "adminlevels.csv"), row.names = F, fileEncoding = "UTF-8")
+
+## Get admin levels in a dataframe format
+adminlvls <- read.csv(file = file.path(dir, csvpath, "adminlevels.csv"), header = T, fileEncoding = "UTF-8") %>%
+  dplyr::select(Lon, Lat, GID_0, COUNTRY, NAME_1, NAME_2) %>%
+  unite("LatLon", c(Lat, Lon), sep = ", ") %>%
+  rename(ADM0 = GID_0,
+         ADM1 = NAME_1,
+         ADM2 = NAME_2,
+         country = COUNTRY) %>%
+  unique(.)
+
+## Check for missing admin levels!!
+# adminlvls %>%
+#   filter(is.na(ADM2)) # only one location missing (ADM2 in GBR).
 
 ## Get centroids of these 5 that are missing lat/lon coordinates and convert lat/lon back to EPSG:4326
 missing_coords <- df %>%
@@ -447,44 +471,33 @@ missing_coords <- df %>%
   left_join(., rbind(adm1, adm2), by = c("ADM0", "country", "ADM1", "ADM2"), keep = F) %>%
   relocate(c(Lat, Lon), .after = ADM2)
 
-
-
-## Get admin levels in a dataframe format
-# out <- st_read("adm_info.shp")
-adminlvls <- data.frame(out) %>%
-  dplyr::select(Lon, Lat, GID_0, COUNTRY, NAME_1, NAME_2) %>%
-  unite("LatLon", c(Lat, Lon), sep = ", ") %>%
-  rename(ADM0 = GID_0,
-         ADM1 = NAME_1,
-         ADM2 = NAME_2,
-         country = COUNTRY) %>%
-  unique(.)
-
 centroid_adms <- rbind(adm1, adm2) %>%
   unite("LatLon", c(Lat, Lon), sep = ", ")
+adminlvls <- rbind(adminlvls, centroid_adms)
 
-## Check for missing admin levels!!
-# adminlvls %>%
-#   filter(is.na(ADM2)) # only one location missing (ADM2 in GBR).
-
-## Write 'polygon' to .gpckg layer for later use with WorldClim data
-# st_write(polygon, file.path(dir, shppath, "admData.gpkg"), layer = "countries", append = F, delete_layer = T)
-
-rm(out, points, polygon, adm1, adm1_centroids, adm2, adm2_centroids)
+rm(points, polygon, adm1, adm1_centroids, adm2, adm2_centroids, centroid_adms)
 
 ## Add ADM info back to main dataframe -----------------------------------------
 df <- df %>%
-  filter(!(scientific == "Echinotriton maxiquadratus" |
-           scientific == "Hynobius leechii" & ADM1 == "Liaoning" & ADM2 == "Anshan" |
-           scientific == "Hypselotriton orientalis" & ADM1 == "Zhejiang" & ADM2 == "Hangzhou" |
-           scientific == "Paramesotriton deloustali" &  ADM1 == "Vĩnh Phúc" & ADM2 == "Tam Đảo" |
-           scientific == "Tylototriton ziegleri" & ADM1 == "Cao Bằng" & ADM2 == "Nguyên Bình"))%>%
+    filter(!(scientific == "Echinotriton maxiquadratus" |
+    scientific == "Hynobius leechii" & ADM1 == "Liaoning" & ADM2 == "Anshan" |
+    scientific == "Hypselotriton orientalis" & ADM1 == "Zhejiang" & ADM2 == "Hangzhou" |
+    scientific == "Paramesotriton deloustali" &  ADM1 == "Vĩnh Phúc" & ADM2 == "Tam Đảo" |
+    scientific == "Tylototriton ziegleri" & ADM1 == "Cao Bằng" & ADM2 == "Nguyên Bình")) %>%
   rbind(., missing_coords) %>%
   dplyr::select(!("country":"ADM2")) %>%
   unite("LatLon", c(Lat, Lon), sep = ", ") %>%
-  left_join(., rbind(adminlvls, centroid_adms), by = "LatLon", relationship = "many-to-one", keep = F) %>%
+  left_join(., adminlvls, by = "LatLon", relationship = "many-to-one", keep = F) %>%
   relocate(c(country, ADM0, ADM1, ADM2), .before = LatLon) %>%
-  separate(LatLon, c("Lat", "Lon"), sep = ", ")
+  separate(LatLon, c("Lat", "Lon"), sep = ", ") %>%
+  glimpse()
+
+
+adminlvls <- adminlvls %>%
+  separate("LatLon", into = c("Lat", "Lon"), sep = ", ") %>%
+  mutate(Lat = as.numeric(Lat),
+         Lon = as.numeric(Lon)) %>%
+  glimpse()
 
 
 rm(missing_coords)
@@ -503,127 +516,6 @@ df$Site <- siteNumber$Site[base::match(paste(df$materialSampleID),
 
 df <- relocate(df, Site, .after = "day")
 rm(siteNumber)
-## Add susceptibility data -----------------------------------------------------
-## Susceptibility codes (based on a combination of Martel et al. 2014 and Bosch et al. 2021)
-## 1 = resistant: no infection, no clinical signs of disease, no mortality
-## 2 = tolerant/susceptible: variable (no to low) infection, may or may *not* result in
-#                            disease, no to low mortality (animal recovers most of the time)
-## 3 = lethal: high infection loads that lead to clinical signs of disease and
-#              subsequent mortality >80% of the time in clinical trials
-s <- read.csv("susceptibility.csv", header = T, encoding = "UTF-8")
-
-df$susceptibility <- s$susceptibility[base::match(df$scientific, s$scientific)]
-
-## double check for NAs
-plyr::count(df, "susceptibility")
-
-## close look at any missing data
-# sus <- df %>% dplyr::filter(is.na(susceptibility)) %>%
-#   group_by(scientific) %>%
-#   summarise(n = n()) # 25 spp. total missing susceptibility scores
-# print(sum(sus$n)) # 732 observations total, missing
-
-
-rm(s)
-
-## Add IUCN Assessment Summary info for each species from each country ---------
-# (data derived from iucnredlist.org)
-iucn_info <- read.csv("iucn_info.csv", header = T)
-
-df <- df %>%
-  dplyr::select(-(nativeStatus)) %>%
-  left_join(., iucn_info, by = c("scientific", "country")) %>%
-  relocate(c(rangeStatus, redListCategory, populationTrend, assessmentScope), .after = "susceptibility") %>%
-  glimpse()
-
-## check for NA vals
-sum(is.na(df$rangeStatus))
-
-# geoRange <- df %>%
-#   subset(., select = c(country, scientific, rangeStatus)) %>%
-#   group_by(country, scientific, rangeStatus) %>%
-#   summarise(n = n())
-
-# Save locations with supplemental data as a layer in admData.gpkg
-locs <- df %>%
-  subset(., select = c(Lat, Lon, country, ADM0, ADM1, ADM2, date,
-                       materialSampleID, scientific, susceptibility, rangeStatus)) %>%
-  sf::st_as_sf(x = ., coords = c("Lon", "Lat"), crs = 4326, na.fail = F) %>%
-  mutate(Lon = sf::st_coordinates(.)[,1],
-         Lat = sf::st_coordinates(.)[,2]) %>%
-  relocate(c(Lon, Lat), .before = country)
-
-st_write(locs, file.path(dir, shppath, "admData.gpkg"), append = F, delete_layer = T, layer = "adm_info")
-
-
-rm(locs, iucn_info, geoRange)
-
-## Add measures of richness ----------------------------------------------------
-df <- unite(df, c("year", "month", "day"), sep = "-", col = "date", remove = F)
-
-## Richness calculations include fire salamanders
-## calculate relative spp richness (from our dataset)
-spr <- df %>%
-  dplyr::select(Site, date, scientific) %>%
-  na.omit(.) %>%
-  group_by(Site, date, scientific) %>%
-  slice(1) %>% # remove duplicate rows
-  ungroup() %>% # ungroup dataframe by aforementioned variables
-  mutate(presence = 1) %>% # insert a 1 for presence, 0 for absence
-  pivot_wider(names_from = scientific, # convert df to matrix
-              values_from = presence, values_fill = 0) %>%
-  group_by(Site, date) %>%
-  summarise_all(sum) %>%
-  ungroup() %>%
-  mutate(richness = apply(.[,3:(ncol(.))] > 0, 1, sum))
-
-df <- df %>%
-  # species richness
-  left_join(spr[,c(1:2, 63)], by = c("Site", "date")) %>%
-  rename(relativeRichness = richness)
-
-# Read in IUCN richness .csv (data processed in QGIS)
-iucn_rich <- read.csv("iucn_richness.csv", header = T, encoding = "UTF-8") %>%
-  rename(., iucn_rich = iucn_sr1) %>%
-  dplyr::select(-(L1))
-
-df$iucn_rich <- iucn_rich$iucn_rich[base::match(paste(df$Lat, df$Lon),
-                                                  paste(iucn_rich$Lat, iucn_rich$Lon))]
-
-# Read in IUCN rarity-weighted richness (RWR) score .csv (data processed in QGIS)
-# RWR: The proportion of the species' range contained within a cell.
-#      For this raster, it is 1/the total number of cells overlapped by that species' range.
-#      The values are summed across all the species in the analysis to give the
-#      relative importance of each cell to the species found there.
-iucn_rwr <- read.csv("iucn_rwr.csv", header = T, encoding = "UTF-8") %>%
-  rename(., iucn_rwr = iucn_rwr1) %>%
-  dplyr::select(-(L1))
-
-
-df$iucn_rwr <- iucn_rwr$iucn_rwr[base::match(paste(df$Lat, df$Lon),
-                                                           paste(iucn_rwr$Lat, iucn_rwr$Lon))]
-
-
-rm(iucn_rich, iucn_rwr, spr)
-## Add measures of abundance  --------------------------------------------------
-## Relative species abundance (# individuals/spp at a site during each sampling event) -- calculated using ONLY our data
-spa <- df %>%
-  dplyr::select(Site, date, scientific, individualCount) # subset relevant data
-spa <- aggregate(individualCount ~ scientific+Site+date, spa, sum) # aggregate by Site, date, spp. & summarise
-names(spa)[names(spa) == 'individualCount'] <- 'sppAbun'
-
-## Relative site abundance (total # individuals at a site during each sampling event) -- calculated using ONLY our data
-SAb <- aggregate(sppAbun ~ Site + date, spa, sum)
-names(SAb)[names(SAb) == 'sppAbun'] <- 'siteAbun'
-
-## Add relative abundance measures back into df
-df <- df %>%
-  # species abundance
-  left_join(spa, by = c("scientific", "Site", "date")) %>%
-  # site abundance
-  left_join(SAb, by = c("Site", "date"))
-
-rm(spa, SAb)
 
 ## Subset gbif.org data to supplement our calculations of relative abundance (when applicable) ----
 # ## Get species occurrence data using gbif "Sampling Event Data" -- an alternate measure of abundance?
@@ -646,10 +538,14 @@ gbif_amphib <- data.table::fread("gbif_amphibs.csv") %>%
 
 
 ## Create key to match dates in 'df' to dates in 'gbif_amphib'
+df <- df %>%
+  unite(c("year", "month", "day"), sep = "-", col = "date", remove = F) %>%
+  relocate(date, .before = year)
+
 dates <- df %>%
-  dplyr::filter(!(day == "NA")) %>%
+  filter(!(day == "NA")) %>%
   subset(., select = date) %>%
-  unique()
+  unique(.)
 
 ## Only retain observations that occurred on our sampling dates
 gbif_amphib <- inner_join(dates, gbif_amphib) ## 423 of 454 dates matched observations
@@ -728,18 +624,36 @@ Sites <- df %>%
   subset(., select = c(Lat, Lon, Site)) %>%
   mutate(Lat = as.numeric(Lat),
          Lon = as.numeric(Lon)) %>%
-  unique()
+  unique() %>%
+  left_join(., adminlvls, by = c("Lat", "Lon")) %>%
+  relocate(c(country, ADM0, ADM1, ADM2), .before = "Lat")
 
-## join back to df
+
+## prep gbif df to join back to main df
 gbif_intersectedPts <- gbif_intersectedPts %>%
-  subset(., select = c(gbifID, date, scientific, individualCount, Lat, Lon)) %>%
+  subset(., select = c(Lat, Lon, date, year, month, day, gbifID, scientific, individualCount,
+                       basisOfRecord, collectionCode, issue, publishingOrgKey,recordedBy,
+                       occurrenceID, catalogNumber, datasetKey)) %>%
+  separate(scientific, into = c("genus", "species"), sep = " ", remove = F) %>%
   mutate(individualCount = case_when(is.na(individualCount) ~ 1, # Assume NA = one individual
-                                     TRUE ~ individualCount)) %>%
+                                     TRUE ~ individualCount),
+         scientific = case_when(scientific == "Pelophylax spec." ~ "Pelophylax sp.",
+                                TRUE ~ scientific),
+         gbifID = as.character(gbifID),
+         datasetKey = as.character(datasetKey)) %>%
+  rename(materialSampleID = gbifID,
+         sampleType = collectionCode,
+         sampleRemarks = issue,
+         principalInvestigator = publishingOrgKey,
+         collectorList = recordedBy,
+         Sample_bcid = occurrenceID,
+         expeditionCode = catalogNumber,
+         projectId = datasetKey) %>%
   left_join(., Sites, by = c("Lat", "Lon")) %>%
-  relocate(c(Lat, Lon, Site), .after = gbifID) # kept gbifID for QA/QC
-rm(Sites)
-
-gbif_intersectedPts <- gbif_intersectedPts %>%
+  relocate(c(country, ADM0, ADM1, ADM2, Lat, Lon), .before = date) %>%  # kept gbifID for QA/QC
+  relocate(c(Site, materialSampleID, genus, species, scientific, individualCount,
+             basisOfRecord, sampleType, sampleRemarks, principalInvestigator,
+             collectorList, Sample_bcid, expeditionCode, projectId), .after = day) %>%
   ## gbif species abundance (# spp at a site during each sampling event)
   group_by(scientific, Site, date) %>%
   mutate(gbif_sppAbun = sum(individualCount)) %>%
@@ -747,14 +661,174 @@ gbif_intersectedPts <- gbif_intersectedPts %>%
   ## gbif site abundance (# total individuals at a site during each sampling event, regardless of species)
   group_by(Site, date) %>%
   mutate(gbif_siteAbun = sum(individualCount)) %>%
-  ungroup()
+  ungroup() %>%
+  mutate(materialSampleID = as.character(materialSampleID))
 
-## Join back to main df
-### MAYBE ADD THIS BEFORE RICHNESS EST. ----------------------------------------
-tmp <- gbif_intersectedPts %>%
-  subset(., select = c(Site, date, scientific, gbif_sppAbun, gbif_siteAbun)) %>%
-  unique() %>%
-  left_join(., df, by = c("Site", "date", "scientific"))
+
+
+rm(Sites)
+## Add measures of abundance  --------------------------------------------------
+test <- df %>%
+  ## Relative species abundance (# individuals/spp at a site during each sampling event) -- calculated using ONLY our data
+  group_by(scientific, Site, date) %>%
+  mutate(sppAbun = sum(individualCount)) %>%
+  ungroup() %>%
+  ## Relative site abundance (total # individuals at a site during each sampling event) -- calculated using ONLY our data
+  group_by(Site, date) %>%
+  mutate(siteAbun = sum(individualCount),
+         projectId = as.character(projectId)) %>%
+  ungroup() %>%
+## Add in gbif data and recalculate combining both our data and gbif data
+  mutate(Lat = as.numeric(Lat),
+         Lon = as.numeric(Lon)) %>%
+  bind_rows(., gbif_intersectedPts) %>%
+  mutate(gbif_sppAbun = case_when(is.na(gbif_sppAbun) ~ 0,
+                                           TRUE ~ gbif_sppAbun),
+         gbif_siteAbun = case_when(is.na(gbif_siteAbun) ~ 0,
+                                  TRUE ~ gbif_siteAbun),
+         sppAbun = case_when(is.na(sppAbun) ~ 0,
+                             TRUE ~ sppAbun),
+         siteAbun = case_when(is.na(siteAbun) ~ 0,
+                             TRUE ~ siteAbun)) %>%
+  group_by(scientific, Site, date) %>%
+  mutate(combined_sppAbun = sum(individualCount)) %>%
+  ungroup() %>%
+  group_by(Site, date) %>%
+  mutate(combined_siteAbun = sum(individualCount),
+         projectId = as.character(projectId)) %>%
+  ungroup() %>%
+  glimpse()
+
+
+uniqueSites <- unique(gbif_intersectedPts$Site)
+tmp <- test %>%
+  filter(Site %in% uniqueSites) %>%
+  subset(., select = c(Site, date, scientific, sppAbun:combined_siteAbun)) %>%
+  group_by(Site, date)
+tmp <- as.data.frame(tmp[order(tmp$Site, tmp$date), ])
+
+spa <- df %>%
+  dplyr::select(Site, date, scientific, individualCount) # subset relevant data
+spa <- aggregate(individualCount ~ scientific+Site+date, spa, sum) # aggregate by Site, date, spp. & summarise
+names(spa)[names(spa) == 'individualCount'] <- 'sppAbun'
+
+
+SAb <- aggregate(sppAbun ~ Site + date, spa, sum)
+names(SAb)[names(SAb) == 'sppAbun'] <- 'siteAbun'
+
+## Add relative abundance measures back into df
+df <- df %>%
+  # species abundance
+  left_join(spa, by = c("scientific", "Site", "date")) %>%
+  # site abundance
+  left_join(SAb, by = c("Site", "date"))
+
+rm(spa, SAb)
+
+## Add measures of richness ----------------------------------------------------
+## Richness calculations include fire salamanders
+## calculate relative spp richness (from our dataset)
+spr <- df %>%
+  dplyr::select(Site, date, scientific) %>%
+  na.omit(.) %>%
+  group_by(Site, date, scientific) %>%
+  slice(1) %>% # remove duplicate rows
+  ungroup() %>% # ungroup dataframe by aforementioned variables
+  mutate(presence = 1) %>% # insert a 1 for presence, 0 for absence
+  pivot_wider(names_from = scientific, # convert df to matrix
+              values_from = presence, values_fill = 0) %>%
+  group_by(Site, date) %>%
+  summarise_all(sum) %>%
+  ungroup() %>%
+  mutate(richness = apply(.[,3:(ncol(.))] > 0, 1, sum))
+
+df <- df %>%
+  # species richness
+  left_join(spr[,c(1:2, 63)], by = c("Site", "date")) %>%
+  rename(relativeRichness = richness)
+
+# Read in IUCN richness .csv (data processed in QGIS)
+iucn_rich <- read.csv("iucn_richness.csv", header = T, encoding = "UTF-8") %>%
+  rename(., iucn_rich = iucn_sr1) %>%
+  dplyr::select(-(L1))
+
+df$iucn_rich <- iucn_rich$iucn_rich[base::match(paste(df$Lat, df$Lon),
+                                                paste(iucn_rich$Lat, iucn_rich$Lon))]
+
+# Read in IUCN rarity-weighted richness (RWR) score .csv (data processed in QGIS)
+# RWR: The proportion of the species' range contained within a cell.
+#      For this raster, it is 1/the total number of cells overlapped by that species' range.
+#      The values are summed across all the species in the analysis to give the
+#      relative importance of each cell to the species found there.
+iucn_rwr <- read.csv("iucn_rwr.csv", header = T, encoding = "UTF-8") %>%
+  rename(., iucn_rwr = iucn_rwr1) %>%
+  dplyr::select(-(L1))
+
+
+df$iucn_rwr <- iucn_rwr$iucn_rwr[base::match(paste(df$Lat, df$Lon),
+                                             paste(iucn_rwr$Lat, iucn_rwr$Lon))]
+df <- df %>%
+  mutate(Lat =  as.numeric(Lat),
+         Lon = as.numeric(Lon))
+
+rm(iucn_rich, iucn_rwr, spr)
+
+## Add susceptibility data -----------------------------------------------------
+## Susceptibility codes (based on a combination of Martel et al. 2014 and Bosch et al. 2021)
+## 1 = resistant: no infection, no clinical signs of disease, no mortality
+## 2 = tolerant/susceptible: variable (no to low) infection, may or may *not* result in
+#                            disease, no to low mortality (animal recovers most of the time)
+## 3 = lethal: high infection loads that lead to clinical signs of disease and
+#              subsequent mortality >80% of the time in clinical trials
+s <- read.csv("susceptibility.csv", header = T, encoding = "UTF-8")
+
+df$susceptibility <- s$susceptibility[base::match(df$scientific, s$scientific)]
+
+## double check for NAs
+plyr::count(df, "susceptibility")
+
+## close look at any missing data
+# sus <- df %>% dplyr::filter(is.na(susceptibility)) %>%
+#   group_by(scientific) %>%
+#   summarise(n = n()) # 25 spp. total missing susceptibility scores
+# print(sum(sus$n)) # 732 observations total, missing
+
+
+rm(s)
+
+## Add IUCN Assessment Summary info for each species from each country ---------
+# (data derived from iucnredlist.org)
+iucn_info <- read.csv("iucn_info.csv", header = T)
+
+df <- df %>%
+  dplyr::select(-(nativeStatus)) %>%
+  left_join(., iucn_info, by = c("scientific", "country")) %>%
+  relocate(c(rangeStatus, redListCategory, populationTrend, assessmentScope), .after = "susceptibility") %>%
+  glimpse()
+
+## check for NA vals
+sum(is.na(df$rangeStatus))
+
+# geoRange <- df %>%
+#   subset(., select = c(country, scientific, rangeStatus)) %>%
+#   group_by(country, scientific, rangeStatus) %>%
+#   summarise(n = n())
+
+# Save locations with supplemental data as a layer in admData.gpkg
+locs <- df %>%
+  subset(., select = c(Lat, Lon, country, ADM0, ADM1, ADM2, date,
+                       materialSampleID, scientific, susceptibility, rangeStatus)) %>%
+  sf::st_as_sf(x = ., coords = c("Lon", "Lat"), crs = 4326, na.fail = F) %>%
+  mutate(Lon = sf::st_coordinates(.)[,1],
+         Lat = sf::st_coordinates(.)[,2]) %>%
+  relocate(c(Lon, Lat), .before = country)
+
+st_write(locs, file.path(dir, shppath, "admData.gpkg"), append = F, delete_layer = T, layer = "adm_info")
+
+
+rm(locs, iucn_info, geoRange)
+
+
 
 
 
@@ -793,7 +867,7 @@ levels(df$fatal) <- c(0,1) #0 = F, 1 = T
 rm(s, SAb, siteNumber, spa, spr)
 
 
-## Obtain unique lat/long/date combinations to extract weather data
+## Obtain unique lat/long/date combinations to extract weather data ------------
 Sys.setenv(TZ = "UTC")
 weather <- df %>%
   dplyr::select(Lat, Lon, year, month, day, date) %>%
@@ -894,8 +968,8 @@ weather_m <- weather %>%
   filter(timepoint == "t30" | timepoint == "t60")
 
 
-tmp <- weather %>%
-  unite(., "date", c("year", "month", "day"), sep = "-")
+# tmp <- weather %>%
+#   unite(., "date", c("year", "month", "day"), sep = "-")
 ## Export to use in Python and PyQGIS to obtain weather data
 # write.csv(weather_d, 'weather.csv', row.names = F, fileEncoding = "UTF-8")
 # write.csv(weather_m, 'weather_m.csv', row.names = F, fileEncoding = "UTF-8")
