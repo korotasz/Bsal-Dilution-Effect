@@ -42,11 +42,6 @@ pacman::p_load(pckgs, character.only = T)
 ## Edit .Renviron to be able to access gbif data
 # usethis::edit_r_environ() # need to restart R for changes to take effect
 
-## Create file paths for each wd
-dir <- dirname(rstudioapi::getActiveDocumentContext()$path)
-csvpath <- (path.expand("/csvFiles"))
-shppath <- (path.expand("/csvFiles/shapefiles"))
-
 ## Functions -------------------------------------------------------------------
 assign_week <- function(df, timepoint, out_col){
   for(i in 1:nrow(df)){
@@ -79,6 +74,10 @@ assign_start_date <- function(df, timepoint, date, out_col){
   return(df)
 }
 
+## File paths ------------------------------------------------------------------
+dir <- dirname(rstudioapi::getActiveDocumentContext()$path)
+csvpath <- (path.expand("/csvFiles"))
+shppath <- (path.expand("/csvFiles/shapefiles"))
 
 ## Read in .csv files-----------------------------------------------------------
 setwd(file.path(dir, csvpath))
@@ -479,11 +478,11 @@ rm(points, polygon, adm1, adm1_centroids, adm2, adm2_centroids, centroid_adms)
 
 ## Add ADM info back to main dataframe -----------------------------------------
 df <- df %>%
-    filter(!(scientific == "Echinotriton maxiquadratus" |
-    scientific == "Hynobius leechii" & ADM1 == "Liaoning" & ADM2 == "Anshan" |
-    scientific == "Hypselotriton orientalis" & ADM1 == "Zhejiang" & ADM2 == "Hangzhou" |
-    scientific == "Paramesotriton deloustali" &  ADM1 == "Vĩnh Phúc" & ADM2 == "Tam Đảo" |
-    scientific == "Tylototriton ziegleri" & ADM1 == "Cao Bằng" & ADM2 == "Nguyên Bình")) %>%
+  filter(!(scientific == "Echinotriton maxiquadratus" |
+           scientific == "Hynobius leechii" & ADM1 == "Liaoning" & ADM2 == "Anshan" |
+           scientific == "Hypselotriton orientalis" & ADM1 == "Zhejiang" & ADM2 == "Hangzhou" |
+           scientific == "Paramesotriton deloustali" &  ADM1 == "Vĩnh Phúc" & ADM2 == "Tam Đảo" |
+           scientific == "Tylototriton ziegleri" & ADM1 == "Cao Bằng" & ADM2 == "Nguyên Bình")) %>%
   rbind(., missing_coords) %>%
   dplyr::select(!("country":"ADM2")) %>%
   unite("LatLon", c(Lat, Lon), sep = ", ") %>%
@@ -668,7 +667,7 @@ gbif_intersectedPts <- gbif_intersectedPts %>%
 
 rm(Sites)
 ## Add measures of abundance  --------------------------------------------------
-test <- df %>%
+df <- df %>%
   ## Relative species abundance (# individuals/spp at a site during each sampling event) -- calculated using ONLY our data
   group_by(scientific, Site, date) %>%
   mutate(sppAbun = sum(individualCount)) %>%
@@ -681,7 +680,7 @@ test <- df %>%
 ## Add in gbif data and recalculate combining both our data and gbif data
   mutate(Lat = as.numeric(Lat),
          Lon = as.numeric(Lon)) %>%
-  bind_rows(., gbif_intersectedPts) %>%
+bind_rows(., gbif_intersectedPts) %>%
   mutate(gbif_sppAbun = case_when(is.na(gbif_sppAbun) ~ 0,
                                            TRUE ~ gbif_sppAbun),
          gbif_siteAbun = case_when(is.na(gbif_siteAbun) ~ 0,
@@ -699,36 +698,13 @@ test <- df %>%
   ungroup() %>%
   glimpse()
 
-
-uniqueSites <- unique(gbif_intersectedPts$Site)
-tmp <- test %>%
-  filter(Site %in% uniqueSites) %>%
-  subset(., select = c(Site, date, scientific, sppAbun:combined_siteAbun)) %>%
-  group_by(Site, date)
-tmp <- as.data.frame(tmp[order(tmp$Site, tmp$date), ])
-
-spa <- df %>%
-  dplyr::select(Site, date, scientific, individualCount) # subset relevant data
-spa <- aggregate(individualCount ~ scientific+Site+date, spa, sum) # aggregate by Site, date, spp. & summarise
-names(spa)[names(spa) == 'individualCount'] <- 'sppAbun'
-
-
-SAb <- aggregate(sppAbun ~ Site + date, spa, sum)
-names(SAb)[names(SAb) == 'sppAbun'] <- 'siteAbun'
-
-## Add relative abundance measures back into df
-df <- df %>%
-  # species abundance
-  left_join(spa, by = c("scientific", "Site", "date")) %>%
-  # site abundance
-  left_join(SAb, by = c("Site", "date"))
-
-rm(spa, SAb)
+rm(gbif_intersectedPts)
 
 ## Add measures of richness ----------------------------------------------------
 ## Richness calculations include fire salamanders
 ## calculate relative spp richness (from our dataset)
 spr <- df %>%
+  filter(!row_number() %in% c(8813:9817)) %>% # remove all gbif rows -- cannot use them in overall analyses
   dplyr::select(Site, date, scientific) %>%
   na.omit(.) %>%
   group_by(Site, date, scientific) %>%
@@ -742,10 +718,10 @@ spr <- df %>%
   ungroup() %>%
   mutate(richness = apply(.[,3:(ncol(.))] > 0, 1, sum))
 
+
 df <- df %>%
   # species richness
-  left_join(spr[,c(1:2, 63)], by = c("Site", "date")) %>%
-  rename(relativeRichness = richness)
+  left_join(spr[,c(1:2, 63)], by = c("Site", "date"))
 
 # Read in IUCN richness .csv (data processed in QGIS)
 iucn_rich <- read.csv("iucn_richness.csv", header = T, encoding = "UTF-8") %>%
@@ -830,31 +806,13 @@ rm(locs, iucn_info, geoRange)
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
 ## Make sure columns that have categorical data are uniform in coding
 df <- df %>%
   # code all NA values as 'False'
-  # mutate(BdDetected = as.factor(BdDetected),
-  #        BsalDetected = as.factor(BsalDetected),
-  #        fatal = as.factor(fatal)) %>%
   mutate(BdDetected = tidyr::replace_na(BdDetected, 0),
-         BsalDetected = tidyr::replace_na(BsalDetected, 0))
-
-
-df$fatal <- toupper(df$fatal)
-df$specimenFate <- toupper(df$specimenFate)
+         BsalDetected = tidyr::replace_na(BsalDetected, 0),
+         fatal = toupper(fatal),
+         specimenFate = toupper(specimenFate))
 
 ## Convert factors with two levels to binary integers
 df$BdDetected <- as.factor(df$BdDetected)
@@ -863,8 +821,6 @@ df$BsalDetected <- as.factor(df$BsalDetected)
 levels(df$BsalDetected) <- c(0,1) #0 = F, 1 = T
 df$fatal <- as.factor(df$fatal)
 levels(df$fatal) <- c(0,1) #0 = F, 1 = T
-
-rm(s, SAb, siteNumber, spa, spr)
 
 
 ## Obtain unique lat/long/date combinations to extract weather data ------------
@@ -968,8 +924,6 @@ weather_m <- weather %>%
   filter(timepoint == "t30" | timepoint == "t60")
 
 
-# tmp <- weather %>%
-#   unite(., "date", c("year", "month", "day"), sep = "-")
 ## Export to use in Python and PyQGIS to obtain weather data
 # write.csv(weather_d, 'weather.csv', row.names = F, fileEncoding = "UTF-8")
 # write.csv(weather_m, 'weather_m.csv', row.names = F, fileEncoding = "UTF-8")
@@ -1088,163 +1042,117 @@ df <- df %>%
   relocate(c(temp_wk3, temp_wk2, temp_wk1, temp_d4, temp_d,
              sMoist_wk3, sMoist_wk2, sMoist_wk1, sMoist_d4, sMoist_d), .after = sampleRemarks)
 
-## Import MONTHLY temperature, precip, & soil moisture data from NASA's EarthData website (citation below)
-## Beaudoing, H. and M. Rodell, NASA/GSFC/HSL (2020), GLDAS Noah Land Surface Model L4 monthly 0.25 x 0.25 degree V2.1,
-## Greenbelt, Maryland, USA,Goddard Earth Sciences Data and Information Services Center (GES DISC), Accessed: [Data Access Date], 10.5067/SXAVCZFAQLNO
+rm(avg_soilMoist, avg_temp, daily_SM, daily_temp, gldas_daily, soilMoisture, start_dates, temperature, weather, weather_d, weatherData)
+## Import MONTHLY temperature, precip, & soil moisture data from NASA's EarthData website (citation below) ----
+# Li, B., H. Beaudoing, and M. Rodell, NASA/GSFC/HSL (2020), GLDAS Catchment Land Surface Model L4 monthly 1.0 x 1.0 degree V2.1, Greenbelt, Maryland, USA,
+#   Goddard Earth Sciences Data and Information Services Center (GES DISC), Accessed: [2024-04-01], 10.5067/FOUXNLXFAZNY
+# Rodell, M., P.R. Houser, U. Jambor, J. Gottschalck, K. Mitchell, C. Meng, K. Arsenault, B. Cosgrove, J. Radakovich, M. Bosilovich, J.K. Entin,
+#   J.P. Walker, D. Lohmann, and D. Toll, 2004: The Global Land Data Assimilation System, Bull. Amer. Meteor. Soc., 85, 381-394, doi:10.1175/BAMS-85-3-381
 gldas_monthly <- read.csv("monthly_weather.csv", header = T, encoding = "UTF-8")
 
 gldas_monthly <- gldas_monthly %>%
-  mutate(monthCollected = as.numeric(dplyr::recode(monthCollected,
-                                                   "true" = "1")),
-         dayCollected = as.numeric(dplyr::recode(dayCollected,
-                                                 "true" = "1"))) %>%
-  unite(c("yearCollected", "monthCollected", "dayCollected"), sep = "-", col = "date", remove = F) %>%
+  mutate(day = as.integer(case_match(day, "true" ~ "1", .default = day)),
+         month = as.integer(case_match(month, "true" ~ "1", .default = month))) %>%
+  unite(c("year", "month", "day"), sep = "-", col = "date", remove = F) %>%
   rename(soilMoisture = "SOILMOIST_kgm.21",
-         temp = "SURFTEMP_K1",
-         precip = "PRECIP_kgm.2s.11")
-
-# Convert precipitation rate kg/m^2/s to mm/month
-for(i in 1:nrow(gldas_monthly)){
-  if(gldas_monthly[i, 8] == 31){
-    gldas_monthly[i, 9] <- gldas_monthly[i, 9] * (31*24*60*60)}
-
-  else if(gldas_monthly[i, 8] == 30){
-    gldas_monthly[i, 9] <- gldas_monthly[i, 9] * (30*24*60*60)}
-
-  else if(gldas_monthly[i, 8] == 28){
-    gldas_monthly[i, 9] <- gldas_monthly[i, 9] * (28*24*60*60)}
-
-  else if(gldas_monthly[i, 8] == 29){
-    gldas_monthly[i, 9] <- gldas_monthly[i, 9] * (29*24*60*60)}
-
-  else if(is.na(gldas_monthly[i, 8]) == TRUE){
-    gldas_monthly[i, 9] <- NA}
-}
+         # precip = "PRECIP_kgm.2s.11",
+         temp = "SURFTEMP_K1")
 
 
-# Copy separate temp from precip and soilMoisture
+## Separate and process temperature data ---------------------------------------
 temp_m <- gldas_monthly %>%
-  dplyr::select(decimalLatitude, decimalLongitude, date, timepoint, temp) %>%
+  dplyr::select(Lat, Lon, date, timepoint, temp) %>%
   # exclude rows with sM and precip data, as well as any NAs in the temp data
   drop_na() %>%
-  group_by(decimalLatitude, decimalLongitude, timepoint) %>%
+  group_by(Lat, Lon, timepoint) %>%
   distinct_all() %>%
   # assign row # for matching purposes
   mutate(row = row_number(),
          date = as.Date(date, format = "%Y-%m-%d"),
          # Convert temp from K to C
          temp = as.numeric(temp - 273.15)) %>%
-  dplyr::group_by(decimalLatitude, decimalLongitude, timepoint) %>%
+  dplyr::group_by(Lat, Lon, timepoint) %>%
   pivot_wider(names_from = timepoint, values_from = c(date, temp)) %>%
-  rename(date_m2 = "date_date_t2",
-         date_m1 = "date_date_t1",
-         date = "date_date",
-         temp_m2 = "temp_date_t2",
-         temp_m1 = "temp_date_t1",
-         temp_m = "temp_date",
-         Lat = decimalLatitude,
-         Lon = decimalLongitude)
+  rename(date_m2 = "date_t60",
+         date_m1 = "date_t30",
+         temp_m2 = "temp_t60",
+         temp_m1 = "temp_t30")
 
-precip_m <- gldas_monthly %>%
-  dplyr::select(decimalLatitude, decimalLongitude, date, timepoint, precip) %>%
-  drop_na() %>%
-  group_by(decimalLatitude, decimalLongitude, timepoint) %>%
-  distinct_all() %>%
-  mutate(row = row_number(),
-         date = as.Date(date, format = "%Y-%m-%d")) %>%
-  dplyr::group_by(decimalLatitude, decimalLongitude, timepoint) %>%
-  pivot_wider(names_from = timepoint, values_from = c(date, precip)) %>%
-  rename(date_m2 = "date_date_t2",
-         date_m1 = "date_date_t1",
-         date = "date_date",
-         precip_m2 = "precip_date_t2",
-         precip_m1 = "precip_date_t1",
-         precip_m = "precip_date",
-         Lat = decimalLatitude,
-         Lon = decimalLongitude) %>%
-  # convert mm to cm to match precip climate data
-  mutate(precip_m2 = precip_m2*0.1,
-         precip_m1 = precip_m1*0.1,
-         precip_m = precip_m*0.1)
-
-
+## Separate and process soil moisture data -------------------------------------
 gldas_monthly <- gldas_monthly %>%
-  dplyr::select(decimalLatitude, decimalLongitude, date, timepoint, soilMoisture) %>%
+  dplyr::select(Lat, Lon, date, timepoint, soilMoisture) %>%
   drop_na() %>%
-  group_by(decimalLatitude, decimalLongitude, timepoint) %>%
+  group_by(Lat, Lon, timepoint) %>%
   distinct_all() %>%
   mutate(row = row_number(),
          date = as.Date(date, format = "%Y-%m-%d")) %>%
-  dplyr::group_by(decimalLatitude, decimalLongitude, timepoint) %>%
+  dplyr::group_by(Lat, Lon, timepoint) %>%
   pivot_wider(names_from = timepoint, values_from = c(date, soilMoisture)) %>%
-  rename(date_m2 = "date_date_t2",
-         date_m1 = "date_date_t1",
-         date = "date_date",
-         sMoist_m2 = "soilMoisture_date_t2",
-         sMoist_m1 = "soilMoisture_date_t1",
-         sMoist_m = "soilMoisture_date",
-         Lat = decimalLatitude,
-         Lon = decimalLongitude)
+  rename(date_m2 = "date_t60",
+         date_m1 = "date_t30",
+         sMoist_m2 = "soilMoisture_t60",
+         sMoist_m1 = "soilMoisture_t30")
+
+# # Convert precipitation rate kg/m^2/s to mm/month
+# for(i in 1:nrow(gldas_monthly)){
+#   if(gldas_monthly[i, 8] == 31){
+#     gldas_monthly[i, 9] <- gldas_monthly[i, 9] * (31*24*60*60)}
+#
+#   else if(gldas_monthly[i, 8] == 30){
+#     gldas_monthly[i, 9] <- gldas_monthly[i, 9] * (30*24*60*60)}
+#
+#   else if(gldas_monthly[i, 8] == 28){
+#     gldas_monthly[i, 9] <- gldas_monthly[i, 9] * (28*24*60*60)}
+#
+#   else if(gldas_monthly[i, 8] == 29){
+#     gldas_monthly[i, 9] <- gldas_monthly[i, 9] * (29*24*60*60)}
+#
+#   else if(is.na(gldas_monthly[i, 8]) == TRUE){
+#     gldas_monthly[i, 9] <- NA}
+# }
+#
+# precip_m <- gldas_monthly %>%
+#   dplyr::select(decimalLatitude, decimalLongitude, date, timepoint, precip) %>%
+#   drop_na() %>%
+#   group_by(decimalLatitude, decimalLongitude, timepoint) %>%
+#   distinct_all() %>%
+#   mutate(row = row_number(),
+#          date = as.Date(date, format = "%Y-%m-%d")) %>%
+#   dplyr::group_by(decimalLatitude, decimalLongitude, timepoint) %>%
+#   pivot_wider(names_from = timepoint, values_from = c(date, precip)) %>%
+#   rename(date_m2 = "date_date_t2",
+#          date_m1 = "date_date_t1",
+#          date = "date_date",
+#          precip_m2 = "precip_date_t2",
+#          precip_m1 = "precip_date_t1",
+#          precip_m = "precip_date",
+#          Lat = decimalLatitude,
+#          Lon = decimalLongitude) %>%
+#   # convert mm to cm to match precip climate data
+#   mutate(precip_m2 = precip_m2*0.1,
+#          precip_m1 = precip_m1*0.1,
+#          precip_m = precip_m*0.1)
 
 
 # Add temp and precip data back into gldas_monthly df in preparation to add it back to the main df.
 gldas_monthly <- gldas_monthly %>%
-  left_join(., precip_m, by = c("Lat", "Lon", "date", "date_m1", "date_m2", "row")) %>%
-  left_join(., temp_m, by = c("Lat", "Lon", "date", "date_m1", "date_m2", "row")) %>%
+  # left_join(., precip_m, by = c("Lat", "Lon", "date", "date_m1", "date_m2", "row")) %>%
+  left_join(., temp_m, by = c("Lat", "Lon", "date_m1", "date_m2", "row")) %>%
   subset(., select = -c(row))
-
-# Add temp and precip data back into gldas_monthly df in preparation to add it back to the main df.
-# monthlyWeather <- sMoist_m %>%
-#   left_join(., precip_m, by = c("Lat", "Lon", "date", "date_m1", "date_m2", "row")) %>%
-#   left_join(., temp_m, by = c("Lat", "Lon", "date", "date_m1", "date_m2", "row")) %>%
-#   subset(., select = -c(row, date_m1, date_m2, temp_m2, sMoist_m2, precip_m2)) %>%
-#   mutate(Lat = round(Lat, 6),
-#          Lon = round(Lon, 6))
-
 
 ## Add monthly weather data to main dataframe ----------------------------------
 df <- df %>%
-  left_join(., gldas_monthly, by = c("Lat", "Lon", "date", "date_m1", "date_m2")) %>%
-  relocate(c(temp_m2, temp_m1, temp_m), .before = temp_wk3) %>%
-  relocate(c(sMoist_m2, sMoist_m1, sMoist_m), .before = sMoist_wk3) %>%
-  relocate(c(temp_m2, temp_m1, temp_m, temp_wk3, temp_wk2, temp_wk1, temp_d4, temp_d,
-             sMoist_m2, sMoist_m1, sMoist_m, sMoist_wk3, sMoist_wk2, sMoist_wk1, sMoist_d4, sMoist_d,
-             precip_m2, precip_m1, precip_m), .after = sampleRemarks)
+  left_join(., gldas_monthly, by = c("Lat", "Lon", "date_m1", "date_m2")) %>%
+  relocate(c(temp_m2, temp_m1), .before = temp_wk3) %>%
+  relocate(c(sMoist_m2, sMoist_m1), .before = sMoist_wk3) %>%
+  relocate(c(temp_m2, temp_m1, temp_wk3, temp_wk2, temp_wk1, temp_d4, temp_d,
+             sMoist_m2, sMoist_m1, sMoist_wk3, sMoist_wk2, sMoist_wk1, sMoist_d4, sMoist_d),
+           .after = sampleRemarks)
+
+rm(weather_m, temp_m, gldas_monthly)
 
 
-temp_prev <- df ## in case I need to come back to this point
-#df <- temp_prev
-rm(temp_m, precip_m, avg_soilMoist, daily_SM, avg_temp, daily_temp, gldas_daily, soilMoisture, temperature)
-
-
-## Sampling elevation with polygons instead of points --------------------------
-#     a. First, we need to obtain elevation as a raster layer (elevatr package)
-#        zoom 5 = 2.5 arc minutes; same resolution as our other data
-setwd(file.path(dir, csvpath))
-elevation <- get_elev_raster(col_adm2, prj = "EPSG:4326", src = "aws", z = 5)
-
-#     b. Use ADM geometries to sample elevation raster
-elev_crop <- crop(elev_COL, col_adm2)
-elev_mask <- mask(elev_crop, col_adm2)
-elev_extract <- as.data.frame(raster::extract(x = elev_mask, y = col_adm2, fun = mean, df = T, sp = T))
-elev_df <- elev_extract %>%
-  dplyr::select(8, 3, 15)
-# Elevation column name subject to change if code is ran at a later date.
-names(elev_df) <- c("ADM1", "ADM2", "elev_m")
-
-#     c. Add back to main dataframe
-colombia <- left_join(colombia, elev_df, by = c("ADM1", "ADM2")) %>%
-  relocate(., elev_m, .before = tmin)
-
-## The following was used to check for missing vals -- retaining just in case
-# missing <- colombia %>%
-#   dplyr::select(ADM0, ADM1, ADM2, Lat, Lon, EpiYear, EpiWeek, Disease, Incidence) %>%
-#   filter(is.na("elev_m")) %>%
-#   dplyr::select(ADM1, ADM2) %>%
-#   unique()
-
-
-# Combine BdDetected and BsalDetected into one "diseaseDetected" column
+# Combine BdDetected and BsalDetected into one "diseaseDetected" column --------
 df <- df %>%
   unite(., col = "diseaseDetected", c("BdDetected", "BsalDetected"),
         sep = "/", remove = FALSE, na.rm = TRUE) %>%
@@ -1269,33 +1177,36 @@ df <- df %>%
 df$diseaseDetected <- as.factor(df$diseaseDetected)
 levels(df$diseaseDetected) <- c(0,1) #0 = F, 1 = T
 
-
+tmp_df <- df
 ## Climate data from geodata package
 ## Construct file path to store WorldClim data
 dir.create(file.path(dir, shppath, "/WorldClim")) # Will give warning if path already exists
 wclim_path <- path.expand("csvFiles/shapefiles/WorldClim")
 setwd(file.path(dir, wclim_path))
 
-## Create bounding box for Europe extent to crop WorldClim rasters
-euro_ext <- c(-15, 45, 35, 72)
+## Create bounding box for European AND Asian countries' extent to crop WorldClim rasters
+extent <- c(-18.105469, 135.351563, 7.362467, 60.239811) # xmin, xmax, ymin, ymax
 
 ## add id column to adminlvls df
-adminlvls <- adminlvls %>%
-  separate(., LatLon, into = c("Lat", "Lon"), sep = ", ", remove = T) %>%
-  plyr::mutate(Lat = as.numeric(Lat),
-               Lon = as.numeric(Lon))
-
 latlon_id <- adminlvls %>%
   mutate(id = row_number()) %>%
   relocate(id, .before = Lat)
 
+## get unique locations to extract data
+points <- latlon_id %>%
+  dplyr::select(Lon, Lat) %>%
+  na.omit(.) %>%
+  sf::st_as_sf(x = ., coords = c("Lon", "Lat"), crs = 4326, na.fail = F) %>%
+  mutate(Lon = sf::st_coordinates(.)[,1],
+         Lat = sf::st_coordinates(.)[,2])
 
-## Obtain WorldClim data as SpatRasters and extract data using lat/lon from adminlvls df
+
+## Obtain WorldClim data as SpatRasters and extract data using lat/lon from adminlvls df ----
 ## WorldClim resolution of 2.5 arc minutes is approximately equivalent to 0.0417 degrees (finer scale than needed, but that's ok)
 #     a. tmin | temporal scale: monthly (30yr avg)
 tmin <- geodata::worldclim_global(var = 'tmin', path = file.path(dir, wclim_path), res = 2.5, version = "2.1")
 
-tmin_cropped <- terra::crop(tmin, euro_ext)
+tmin_cropped <- terra::crop(tmin, extent)
 names(tmin_cropped) <- c("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12")
 tmin_extract <- terra::extract(tmin_cropped, points[,1], ID = F)
 tmin_df <- as.data.frame(tmin_extract) %>%
@@ -1314,7 +1225,7 @@ rm(tmin, tmin_extract)
 #     b. tmax | temporal scale: monthly (30yr avg)
 tmax <- geodata::worldclim_global(var = 'tmax', path = file.path(dir, wclim_path), res = 2.5, version = "2.1")
 
-tmax_cropped <- terra::crop(tmax, euro_ext)
+tmax_cropped <- terra::crop(tmax, extent)
 names(tmax_cropped) <- c("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12")
 tmax_extract <- terra::extract(tmax_cropped, points[,1], ID = F)
 tmax_df <- as.data.frame(tmax_extract) %>%
@@ -1333,7 +1244,7 @@ rm(tmax, tmax_extract)
 #     c. tavg | temporal scale: monthly (30yr avg)
 tavg <- geodata::worldclim_global(var = 'tavg', path = file.path(dir, wclim_path), res = 2.5, version = "2.1")
 
-tavg_cropped <- terra::crop(tavg, euro_ext)
+tavg_cropped <- terra::crop(tavg, extent)
 names(tavg_cropped) <- c("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12")
 tavg_extract <- terra::extract(tavg_cropped, points[,1], ID = F)
 tavg_df <- as.data.frame(tavg_extract) %>%
@@ -1351,7 +1262,7 @@ rm(tavg, tavg_extract)
 #     d. prec | temporal scale: monthly (30yr avg)
 prec <- geodata::worldclim_global(var = 'prec', path = file.path(dir, wclim_path), res = 2.5, version = "2.1")
 
-prec_cropped <- terra::crop(prec, euro_ext)
+prec_cropped <- terra::crop(prec, extent)
 names(prec_cropped) <- c("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12")
 prec_extract <- terra::extract(prec_cropped, points[,1], ID = F)
 prec_df <- as.data.frame(prec_extract) %>%
@@ -1370,7 +1281,7 @@ rm(prec, prec_extract)
 #     e. bio | temporal scale: annual (30yr avg)
 bio <- geodata::worldclim_global(var = 'bio', path = file.path(dir, wclim_path), res = 2.5, version = "2.1")
 
-bio_cropped <- terra::crop(bio, euro_ext)
+bio_cropped <- terra::crop(bio, extent)
 names(bio_cropped) <- c("bio1", "bio2", "bio3", "bio4", "bio5", "bio6", "bio7", "bio8", "bio9", "bio10", "bio11", "bio12",
                         "bio13", "bio14", "bio15", "bio16", "bio17", "bio18", "bio19")
 bio_extract <- terra::extract(bio_cropped, points[,1], ID = F)
@@ -1391,7 +1302,7 @@ bio_df <- as.data.frame(bio_extract) %>%
 rm(bio, bio_extract)
 
 
-## 6. Merge WorldClim data with main data frame
+## 6. Merge WorldClim data to one dataframe
 wclim <- tmin_df %>%
   left_join(., tavg_df, by = c("id", "Lat", "Lon", "month", "country", "ADM0", "ADM1", "ADM2"), keep = F) %>%
   left_join(., tmax_df, by = c("id", "Lat", "Lon", "month", "country", "ADM0", "ADM1", "ADM2"), keep = F) %>%
@@ -1403,75 +1314,56 @@ rm(tmin_cropped, tmin_df, tavg_cropped, tavg_df, tmax_cropped, tmax_df, bio_crop
 
 df <- df %>%
   left_join(., wclim, by = c("Lat", "Lon", "month", "country", "ADM0", "ADM1", "ADM2"), keep = F) %>%
-  relocate(c(tmin, tavg, tmax, prec, bio1:bio19), .after = precip_m)
+  relocate(c(tmin, tavg, tmax, prec, bio1:bio19), .after = sMoist_d)
 
+rm(wclim, points, adminlvls)
+## Subset/reorganize data for cbind models -------------------------------------
+# Determine which spp have <10 observations
+df %>%
+  tidyr::drop_na(., any_of(c("BsalDetected", "date", "sMoist_d", "temp_d"))) %>%
+  subset(., select = c(scientific, individualCount)) %>%
+  group_by(scientific) %>%
+  summarise(n = n()) %>%
+  filter(n < 10)
 
-df$genus <- gsub("[[:space:]]", "", df$genus) # get rid of weird spaces in this column
-
-
-#### cbind model df ####
 # Classify which sites are Bsal positive, i.e., if that site has ever had any Bsal+ cases
 Bsalpos <- df %>%
-  tidyr::drop_na(., any_of(c("BsalDetected", "date", "sMoist_d", "temp_d"))) %>%
+  filter(!row_number() %in% c(8813:9817)) %>% # remove all gbif rows -- cannot use them in overall analyses
+  tidyr::drop_na(., any_of(c("BsalDetected", "susceptibility", "date", "sMoist_d", "temp_d"))) %>%
   # Drop species that have <10 observations
-  subset(scientific != "Calotriton asper" & # Only one observation with NA vals for date
-         scientific != "Lissotriton boscai" &
-         scientific != "Hyla meridionalis" &
-         scientific != "Pleurodeles waltl") %>%
-  mutate(scientific = gsub(pattern = "Pelophylax perezi", replacement = "Pelophylax sp.", scientific))
-  subset(scientific != "Pelophylax sp.") %>% # now has 2 obs. need to drop.
+  subset(scientific != "Echinotriton chinhaiensis" &    # 2 obs
+         scientific != "Hyla meridionalis" &            # 1 obs
+         scientific != "Lissotriton boscai" &           # 2 obs
+         scientific != "Pachytriton feii" &             # 4 obs
+         scientific != "Pachytriton granulosus" &       # 9 obs
+         scientific != "Paramesotriton labiatus" &      # 2 obs
+         scientific != "Pelophylax perezi" &            # 5 obs
+         scientific != "Pleurodeles waltl" &            # 4 obs
+         scientific != "Tylototriton dabienicus" &      # 6 obs
+         scientific != "Tylototriton yangi") %>%        # 9 obs
     group_by(Site) %>%
-    mutate(posSite = ifelse(sum(BsalDetected) != 0, 1, 0)) # bool; The site associated with this observation has tested positive (1) for Bsal at some point, or has never (0) tested positive for Bsal
-
+  # The site associated with this observation has tested positive (1) for Bsal at some point, or has never (0) tested positive for Bsal
+    mutate(posSite = ifelse(sum(as.numeric(BsalDetected)) != 0, 1, 0))
 
 ## Double checking #s
 nBsalPos <- aggregate(individualCount ~ BsalDetected+scientific, data = Bsalpos, sum) %>%
   pivot_wider(names_from = BsalDetected, values_from = individualCount)
 View(nBsalPos)
 
-
+rm(nBsalPos)
 # Add all data back into 'df' data frame, even sites that are negative
 df <- Bsalpos %>%
   relocate(c(posSite), .after = Site) %>%
-  subset(., select = -c(date_m1, date_m2, wk1_start, t4, year, month, day)) %>%
+  # subset(., select = -c(date_m1, date_m2, wk1_start, t4, year, month, day)) %>%
   rename(tmin_wc = tmin, tmax_wc = tmax, tavg_wc = tavg, prec_wc = prec, bio1_wc = bio1, bio2_wc = bio2, bio3_wc = bio3, bio4_wc = bio4, bio5_wc = bio5, bio6_wc = bio6,
          bio7_wc = bio7, bio8_wc = bio8, bio9_wc = bio9, bio10_wc = bio10, bio11_wc = bio11, bio12_wc = bio12, bio13_wc = bio13, bio14_wc = bio14, bio15_wc = bio15, bio16_wc = bio16,
-         bio17_wc = bio17, bio18_wc = bio18, bio19_wc = bio19)
-
+         bio17_wc = bio17, bio18_wc = bio18, bio19_wc = bio19) %>%
+  relocate(c(iucn_rich, iucn_rwr), .after = richness) %>%
+  relocate(c(gbif_sppAbun, gbif_siteAbun, combined_sppAbun, combined_siteAbun), .after = siteAbun)
 
 # Return data frame containing all observations from countries that had confirmed Bsal positive sites (will separate out Bsal+ and Bsal- sites later)
-# Bsalpos_cbind <- df %>%
-#   relocate(c(posSite), .after = Site) %>%
-#   filter(posSite == 1)  %>%
-#   group_by(Site, date, scientific) %>%
-#   mutate(nPos_FS = sum(BsalDetected != 0 & scientific == "Salamandra salamandra"),
-#          nNeg_FS = sum(BsalDetected == 0 & scientific == "Salamandra salamandra"),
-#          nDead_FS = sum(fatal != 0 & scientific == "Salamandra salamandra", na.rm = T),
-#          nAlive_FS = sum(fatal == 0 & scientific == "Salamandra salamandra", na.rm = T),
-#          nFatalUnk_FS = sum(is.na(fatal) & scientific == "Salamandra salamandra"),
-#          nPos_all = sum(BsalDetected != 0),
-#          nNeg_all = sum(BsalDetected == 0),
-#          nDead_all = sum(fatal != 0, na.rm = T),
-#          nAlive_all = sum(fatal == 0, na.rm = T),
-#          nFatalUnk_all = sum(is.na(fatal)),
-#          nPos_all_noFS = sum(BsalDetected != 0 & scientific != "Salamandra salamandra"),
-#          nNeg_all_noFS = sum(BsalDetected == 0 & scientific != "Salamandra salamandra"),
-#          nDead_all_noFS = sum(fatal != 0 & scientific != "Salamandra salamandra", na.rm = T),
-#          nAlive_all_noFS = sum(fatal == 0 & scientific != "Salamandra salamandra", na.rm = T),
-#          nFatalUnk_all_noFS = sum(is.na(fatal)),
-#          posSite = as.factor(posSite)) %>%
-#   slice(1) %>%
-#   ungroup() %>%
-#   relocate(c(nPos_FS, nNeg_FS, nDead_FS, nAlive_FS, nFatalUnk_FS, nPos_all, nNeg_all, nDead_all, nAlive_all, nFatalUnk_all,
-#              nPos_all_noFS, nNeg_all_noFS, nDead_all_noFS, nAlive_all_noFS, nFatalUnk_all_noFS), .after = nativeStatus) %>%
-#   dplyr::select(country, Lat, Lon, Site, posSite, date, genus, scientific:nFatalUnk_all_noFS, richness, sppAbun, siteAbun,
-#                 temp_m2:bio19_wc, diagnosticLab, principalInvestigator, Sample_bcid, collectorList, sMoist_m2:temp_m2)
-#
-# Bsalpos_cbind <- with(Bsalpos_cbind, Bsalpos_cbind[order(Site, scientific), ])
-
-
-Bsal_all <- df %>%
-  relocate(c(posSite), .after = Site) %>%
+Bsalpos_cbind <- df %>%
+  # filter(posSite == 1)  %>%
   group_by(Site, date, scientific) %>%
   mutate(nPos_FS = sum(BsalDetected != 0 & scientific == "Salamandra salamandra"),
          nNeg_FS = sum(BsalDetected == 0 & scientific == "Salamandra salamandra"),
@@ -1492,9 +1384,38 @@ Bsal_all <- df %>%
   slice(1) %>%
   ungroup() %>%
   relocate(c(nPos_FS, nNeg_FS, nDead_FS, nAlive_FS, nFatalUnk_FS, nPos_all, nNeg_all, nDead_all, nAlive_all, nFatalUnk_all,
-             nPos_all_noFS, nNeg_all_noFS, nDead_all_noFS, nAlive_all_noFS, nFatalUnk_all_noFS), .after = nativeStatus) %>%
-  dplyr::select(ADM0:ADM2, Lat, Lon, Site, posSite, date, genus, scientific:nFatalUnk_all_noFS, richness, sppAbun, siteAbun,
-                temp_m2:bio19_wc, diagnosticLab, principalInvestigator, Sample_bcid, collectorList, sMoist_m2:temp_m2)
+             nPos_all_noFS, nNeg_all_noFS, nDead_all_noFS, nAlive_all_noFS, nFatalUnk_all_noFS), .after = rangeStatus) %>%
+  dplyr::select(country, Lat, Lon, Site, posSite, date, genus, scientific:rangeStatus, redListCategory, nPos_FS:nFatalUnk_all_noFS,
+                richness:iucn_rwr, sppAbun:siteAbun, combined_sppAbun:combined_siteAbun, temp_m2:bio19_wc,
+                diagnosticLab, principalInvestigator, Sample_bcid, collectorList)
+
+Bsalpos_cbind <- with(Bsalpos_cbind, Bsalpos_cbind[order(Site, scientific), ])
+
+
+Bsal_all <- df %>%
+  group_by(Site, date, scientific) %>%
+  mutate(nPos_FS = sum(BsalDetected != 0 & scientific == "Salamandra salamandra"),
+         nNeg_FS = sum(BsalDetected == 0 & scientific == "Salamandra salamandra"),
+         nDead_FS = sum(fatal != 0 & scientific == "Salamandra salamandra", na.rm = T),
+         nAlive_FS = sum(fatal == 0 & scientific == "Salamandra salamandra", na.rm = T),
+         nFatalUnk_FS = sum(is.na(fatal) & scientific == "Salamandra salamandra"),
+         nPos_all = sum(BsalDetected != 0),
+         nNeg_all = sum(BsalDetected == 0),
+         nDead_all = sum(fatal != 0, na.rm = T),
+         nAlive_all = sum(fatal == 0, na.rm = T),
+         nFatalUnk_all = sum(is.na(fatal)),
+         nPos_all_noFS = sum(BsalDetected != 0 & scientific != "Salamandra salamandra"),
+         nNeg_all_noFS = sum(BsalDetected == 0 & scientific != "Salamandra salamandra"),
+         nDead_all_noFS = sum(fatal != 0 & scientific != "Salamandra salamandra", na.rm = T),
+         nAlive_all_noFS = sum(fatal == 0 & scientific != "Salamandra salamandra", na.rm = T),
+         nFatalUnk_all_noFS = sum(is.na(fatal)),
+         posSite = as.factor(posSite)) %>%
+  ungroup() %>%
+  relocate(c(nPos_FS, nNeg_FS, nDead_FS, nAlive_FS, nFatalUnk_FS, nPos_all, nNeg_all, nDead_all, nAlive_all, nFatalUnk_all,
+             nPos_all_noFS, nNeg_all_noFS, nDead_all_noFS, nAlive_all_noFS, nFatalUnk_all_noFS), .after = rangeStatus) %>%
+  dplyr::select(country, Lat, Lon, Site, posSite, date, genus, scientific:rangeStatus, redListCategory, nPos_FS:nFatalUnk_all_noFS,
+                richness:iucn_rwr, sppAbun:siteAbun, combined_sppAbun:combined_siteAbun, temp_m2:bio19_wc,
+                diagnosticLab, principalInvestigator, Sample_bcid, collectorList)
 
 
 # check_dcbind <- dcbind %>%
