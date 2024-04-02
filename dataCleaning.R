@@ -1141,7 +1141,7 @@ gldas_monthly <- gldas_monthly %>%
   subset(., select = -c(row))
 
 ## Add monthly weather data to main dataframe ----------------------------------
-test <- df %>%
+df <- df %>%
   left_join(., gldas_monthly, by = c("Lat", "Lon", "date_m1", "date_m2")) %>%
   relocate(c(temp_m2, temp_m1), .before = temp_wk3) %>%
   relocate(c(sMoist_m2, sMoist_m1), .before = sMoist_wk3) %>%
@@ -1177,7 +1177,6 @@ df <- df %>%
 df$diseaseDetected <- as.factor(df$diseaseDetected)
 levels(df$diseaseDetected) <- c(0,1) #0 = F, 1 = T
 
-tmp_df <- df
 ## Climate data from geodata package
 ## Construct file path to store WorldClim data
 dir.create(file.path(dir, shppath, "/WorldClim")) # Will give warning if path already exists
@@ -1361,9 +1360,11 @@ df <- Bsalpos %>%
   relocate(c(iucn_rich, iucn_rwr), .after = richness) %>%
   relocate(c(gbif_sppAbun, gbif_siteAbun, combined_sppAbun, combined_siteAbun), .after = siteAbun)
 
+rm(Bsalpos, names, extent, i)
+## Create 'cbind' dataset ------------------------------------------------------
 # Return data frame containing all observations from countries that had confirmed Bsal positive sites (will separate out Bsal+ and Bsal- sites later)
-Bsalpos_cbind <- df %>%
-  # filter(posSite == 1)  %>%
+BsalData_cbind <- df %>%
+  filter(!(country == "Switzerland" | country == "United Kingdom")) %>%
   group_by(Site, date, scientific) %>%
   mutate(nPos_FS = sum(BsalDetected != 0 & scientific == "Salamandra salamandra"),
          nNeg_FS = sum(BsalDetected == 0 & scientific == "Salamandra salamandra"),
@@ -1385,132 +1386,151 @@ Bsalpos_cbind <- df %>%
   ungroup() %>%
   relocate(c(nPos_FS, nNeg_FS, nDead_FS, nAlive_FS, nFatalUnk_FS, nPos_all, nNeg_all, nDead_all, nAlive_all, nFatalUnk_all,
              nPos_all_noFS, nNeg_all_noFS, nDead_all_noFS, nAlive_all_noFS, nFatalUnk_all_noFS), .after = rangeStatus) %>%
-  dplyr::select(country, Lat, Lon, Site, posSite, date, genus, scientific:rangeStatus, redListCategory, nPos_FS:nFatalUnk_all_noFS,
-                richness:iucn_rwr, sppAbun:siteAbun, combined_sppAbun:combined_siteAbun, temp_m2:bio19_wc,
-                diagnosticLab, principalInvestigator, Sample_bcid, collectorList)
-
-Bsalpos_cbind <- with(Bsalpos_cbind, Bsalpos_cbind[order(Site, scientific), ])
-
-
-Bsal_all <- df %>%
-  group_by(Site, date, scientific) %>%
-  mutate(nPos_FS = sum(BsalDetected != 0 & scientific == "Salamandra salamandra"),
-         nNeg_FS = sum(BsalDetected == 0 & scientific == "Salamandra salamandra"),
-         nDead_FS = sum(fatal != 0 & scientific == "Salamandra salamandra", na.rm = T),
-         nAlive_FS = sum(fatal == 0 & scientific == "Salamandra salamandra", na.rm = T),
-         nFatalUnk_FS = sum(is.na(fatal) & scientific == "Salamandra salamandra"),
-         nPos_all = sum(BsalDetected != 0),
-         nNeg_all = sum(BsalDetected == 0),
-         nDead_all = sum(fatal != 0, na.rm = T),
-         nAlive_all = sum(fatal == 0, na.rm = T),
-         nFatalUnk_all = sum(is.na(fatal)),
-         nPos_all_noFS = sum(BsalDetected != 0 & scientific != "Salamandra salamandra"),
-         nNeg_all_noFS = sum(BsalDetected == 0 & scientific != "Salamandra salamandra"),
-         nDead_all_noFS = sum(fatal != 0 & scientific != "Salamandra salamandra", na.rm = T),
-         nAlive_all_noFS = sum(fatal == 0 & scientific != "Salamandra salamandra", na.rm = T),
-         nFatalUnk_all_noFS = sum(is.na(fatal)),
-         posSite = as.factor(posSite)) %>%
-  ungroup() %>%
-  relocate(c(nPos_FS, nNeg_FS, nDead_FS, nAlive_FS, nFatalUnk_FS, nPos_all, nNeg_all, nDead_all, nAlive_all, nFatalUnk_all,
-             nPos_all_noFS, nNeg_all_noFS, nDead_all_noFS, nAlive_all_noFS, nFatalUnk_all_noFS), .after = rangeStatus) %>%
-  dplyr::select(country, Lat, Lon, Site, posSite, date, genus, scientific:rangeStatus, redListCategory, nPos_FS:nFatalUnk_all_noFS,
-                richness:iucn_rwr, sppAbun:siteAbun, combined_sppAbun:combined_siteAbun, temp_m2:bio19_wc,
-                diagnosticLab, principalInvestigator, Sample_bcid, collectorList)
+  dplyr::select(country, Lat, Lon, Site, posSite, date, richness:iucn_rwr, sppAbun:siteAbun, combined_sppAbun:combined_siteAbun,
+                genus, scientific:rangeStatus, redListCategory, nPos_FS:nFatalUnk_all_noFS,temp_m2:bio19_wc,
+                diagnosticLab, principalInvestigator, collectorList, expeditionCode) %>%
+#         In the absence of a listed 'diagnosticLab', the diagnostic lab is assumed
+#          to belong to the PI of the paper associated with the data.
+  mutate(diagnosticLab = case_when(country == "Switzerland" ~ "Catenazzi",
+                                   country == "Spain" & collectorList == "Jaime Bosch" ~ "An Martel",
+                                   country == "Vietnam" ~ "Nguyen/Pasmans",
+                                   country == "China" ~ "Nguyen",
+                                   TRUE ~ diagnosticLab),
+#         In the absence of a sample 'collectorList', the 'collector' is assumed to be
+#          the first author of the paper associated with the data.
+         collectorList = case_when(country == "China" ~ "Z. Yuan; J. Zhou; J. Wang; S. Hou; Y. Duan; X. Liu;
+                                                         X. Chen; P. Wei; Y. Zhang; K. Wang; J. Shi",
+                                   country == "Vietnam" ~ "A. Laking; H.N. Ngo; T.T. Nguyen",
+                                   TRUE ~ collectorList),
+#         In the absence of an 'expeditionCode', the expedition was assigned one with the
+#          format [first author's last name]_[year(s) collected]
+         expeditionCode = case_when(collectorList == "Jaime Bosch" ~ "Bosch_2021",
+                                    country == "China" ~ "Yuan_2016-2017",
+                                    country == "Vietnam" ~ "Laking_2016",
+                                    TRUE ~ expeditionCode))
 
 
-# check_dcbind <- dcbind %>%
-#   tidyr::drop_na(., any_of(c(24:42))) %>%
-#   filter(country == "Germany" | country == "Spain")
-# filtered_dcbind <- dcbind %>%
-#   filter(country == "Germany" | country == "Spain")
-#
-#
-# missing <- anti_join(check_dcbind, filtered_dcbind)
+BsalData_cbind <- with(BsalData_cbind, BsalData_cbind[order(Site, scientific), ])
+
+
+## Create dataset with all samples listed as individual rows -------------------
+# (thought this might be good to have just as a 'catch-all' for what we've done)
+BsalData_all <- df %>%
+  filter(!(country == "Switzerland" | country == "United Kingdom")) %>%
+  mutate(posSite = as.factor(posSite)) %>%
+  dplyr::select(country:Lon, Site:posSite, date_m2:date, richness:iucn_rwr, sppAbun:siteAbun,
+                combined_sppAbun:combined_siteAbun, materialSampleID, genus:rangeStatus,
+                redListCategory, lifeStage, sex, individualCount, diseaseTested:BsalDetected,
+                fatal:sampleRemarks, temp_m2:projectId) %>%
+#         In the absence of a listed 'diagnosticLab', the diagnostic lab is assumed
+#          to belong to the PI of the paper associated with the data.
+  mutate(diagnosticLab = case_when(country == "Switzerland" ~ "Catenazzi",
+                                   country == "Spain" & collectorList == "Jaime Bosch" ~ "An Martel",
+                                   country == "Vietnam" ~ "Nguyen/Pasmans",
+                                   country == "China" ~ "Nguyen",
+                                   TRUE ~ diagnosticLab),
+#         In the absence of a sample 'collectorList', the 'collector' is assumed to be
+#          the first author of the paper associated with the data.
+         collectorList = case_when(country == "China" ~ "Z. Yuan; J. Zhou; J. Wang; S. Hou; Y. Duan; X. Liu;
+                                                         X. Chen; P. Wei; Y. Zhang; K. Wang; J. Shi",
+                                   country == "Vietnam" ~ "A. Laking; H.N. Ngo; T.T. Nguyen",
+                                   TRUE ~ collectorList),
+#         In the absence of an 'expeditionCode', the expedition was assigned one with the
+#          format [first author's last name]_[year(s) collected]
+         expeditionCode = case_when(collectorList == "Jaime Bosch" ~ "Bosch_2021",
+                                    country == "China" ~ "Yuan_2016-2017",
+                                    country == "Vietnam" ~ "Laking_2016",
+                                    TRUE ~ expeditionCode))
+
 
 ## Double check everything matches
-Bsal_all %>% dplyr::select(scientific, nPos_all, nNeg_all) %>%
-  group_by(scientific) %>%
+BsalData_cbind %>% dplyr::select(country, scientific, susceptibility, nPos_all, nNeg_all) %>%
+  group_by(country, susceptibility, scientific) %>%
   summarise(nPos = sum(nPos_all), nNeg = sum(nNeg_all),
-            n = sum(nPos_all, nNeg_all))
+            n = sum(nPos_all, nNeg_all)) %>%
+  print(n = 38)
 
-df %>% dplyr::select(scientific, individualCount, BsalDetected) %>%
-  group_by(scientific) %>%
-  summarise(nPos = sum(BsalDetected != 0), nNeg = sum(BsalDetected != 1),
-            n = n())
 
+BsalData_all %>% dplyr::select(country, scientific, susceptibility, individualCount, BsalDetected) %>%
+  filter(!(country == "Switzerland" | country == "United Kingdom")) %>%
+  group_by(country, susceptibility, scientific) %>%
+  summarise(nPos = sum(BsalDetected != 0), nNeg = sum(BsalDetected == 0),
+            n = n()) %>%
+  print(n = 38)
+
+
+## Export 'cleaned' datasets for data analysis ---------------------------------
 setwd(file.path(dir, csvpath))
-## File for final df dataframe:
-write.csv(df, file = "Bsal_all.csv", row.names = FALSE)
+## File for all* data -- samples listed as individual rows; nothing is summarized:
+#     *Bsal positive countries only
+write.csv(BsalData_all, file = "BsalData_all.csv", row.names = FALSE)
 
-# ## File for cbind model -- only Bsal positive sites:
-# write.csv(Bsalpos_cbind, file = "cbind_posSites.csv", row.names = FALSE)
-
-## File for cbind model -- only Bsal positive countries:
-write.csv(Bsal_all, file = "cbind_allSites.csv", row.names = FALSE)
+## File for cbind dataset (organized for binomial models):
+write.csv(BsalData_cbind, file = "BsalData_cbind.csv", row.names = FALSE)
 
 
 ## Export data for collaborators to xlsx sheet:
-options(java.parameters = "-Xmx8000m")
-library(openxlsx)
-library(rJava)
-setwd(file.path(dir, csvpath))
-df <- read.csv("Bsal_all.csv", header = TRUE, encoding = "UTF-8")
-
-all_data <- df %>%
-  filter(country == "Germany") %>%
-  dplyr::select(country, ADM0, ADM1, ADM2, Lat, Lon, date, Site, posSite,
-                richness, siteAbun, materialSampleID, genus, species,
-                scientific, susceptibility,  nativeStatus, sex, individualCount,
-                BsalDetected, BsalLoad, fatal, specimenFate, basisOfRecord,
-                sampleType, testMethod, diagnosticLab, sampleRemarks, principalInvestigator,
-                collectorList, Sample_bcid, expeditionCode, projectId) %>%
-  group_by(Site) %>%
-  mutate(total_pos = ave(BsalDetected == 1, FUN = sum)) %>%
-  relocate(total_pos, .after = posSite)
-
-
-repeated_sampling <- all_data %>%
-  dplyr::select(c(Site, date)) %>%
-  unique() %>%
-  group_by(Site) %>%
-  summarise(samplingEvents = n())
-
-
-all_data <- left_join(all_data, repeated_sampling, by = "Site") %>%
-  relocate(samplingEvents, .after = Site)
-all_data <- all_data[order(all_data$Site),]
-data.frame(colnames(all_data))
-
-
-site_summary <- all_data %>%
-  subset(., select = c(country:Lon, Site:posSite, BsalDetected, total_pos,
-                       diagnosticLab, principalInvestigator,
-                       collectorList, expeditionCode, projectId)) %>%
-  unique()
-
-#site_summary <- site_summary[order(site_summary$Site),]
-
-repeated_sampling <- site_summary %>%
-  filter(samplingEvents > 1)
-
-positive_sites <- site_summary %>%
-  subset(., select = -(BsalDetected)) %>%
-  filter(posSite != 0) %>%
-  unique()
-
-
-# Create workbook to store all 'sheets'
-Germany_wb <- createWorkbook()
-
-addWorksheet(Germany_wb, "germany_all")
-addWorksheet(Germany_wb, "site_summary")
-addWorksheet(Germany_wb, "repeated_sampling")
-addWorksheet(Germany_wb, "positive_sites")
-
-writeData(Germany_wb, "germany_all", all_data, colNames = T)
-writeData(Germany_wb, "site_summary", site_summary, colNames = T)
-writeData(Germany_wb, "repeated_sampling", repeated_sampling, colNames = T)
-writeData(Germany_wb, "positive_sites", positive_sites, colNames = T)
-
-## Save workbook
-saveWorkbook(Germany_wb, "Germany_data.xlsx", overwrite = TRUE)
+# options(java.parameters = "-Xmx8000m")
+# library(openxlsx)
+# library(rJava)
+# setwd(file.path(dir, csvpath))
+# df <- read.csv("Bsal_all.csv", header = TRUE, encoding = "UTF-8")
+#
+# all_data <- df %>%
+#   filter(country == "Germany") %>%
+#   dplyr::select(country, ADM0, ADM1, ADM2, Lat, Lon, date, Site, posSite,
+#                 richness, siteAbun, materialSampleID, genus, species,
+#                 scientific, susceptibility,  nativeStatus, sex, individualCount,
+#                 BsalDetected, BsalLoad, fatal, specimenFate, basisOfRecord,
+#                 sampleType, testMethod, diagnosticLab, sampleRemarks, principalInvestigator,
+#                 collectorList, Sample_bcid, expeditionCode, projectId) %>%
+#   group_by(Site) %>%
+#   mutate(total_pos = ave(BsalDetected == 1, FUN = sum)) %>%
+#   relocate(total_pos, .after = posSite)
+#
+#
+# repeated_sampling <- all_data %>%
+#   dplyr::select(c(Site, date)) %>%
+#   unique() %>%
+#   group_by(Site) %>%
+#   summarise(samplingEvents = n())
+#
+#
+# all_data <- left_join(all_data, repeated_sampling, by = "Site") %>%
+#   relocate(samplingEvents, .after = Site)
+# all_data <- all_data[order(all_data$Site),]
+# data.frame(colnames(all_data))
+#
+#
+# site_summary <- all_data %>%
+#   subset(., select = c(country:Lon, Site:posSite, BsalDetected, total_pos,
+#                        diagnosticLab, principalInvestigator,
+#                        collectorList, expeditionCode, projectId)) %>%
+#   unique()
+#
+# #site_summary <- site_summary[order(site_summary$Site),]
+#
+# repeated_sampling <- site_summary %>%
+#   filter(samplingEvents > 1)
+#
+# positive_sites <- site_summary %>%
+#   subset(., select = -(BsalDetected)) %>%
+#   filter(posSite != 0) %>%
+#   unique()
+#
+#
+# # Create workbook to store all 'sheets'
+# Germany_wb <- createWorkbook()
+#
+# addWorksheet(Germany_wb, "germany_all")
+# addWorksheet(Germany_wb, "site_summary")
+# addWorksheet(Germany_wb, "repeated_sampling")
+# addWorksheet(Germany_wb, "positive_sites")
+#
+# writeData(Germany_wb, "germany_all", all_data, colNames = T)
+# writeData(Germany_wb, "site_summary", site_summary, colNames = T)
+# writeData(Germany_wb, "repeated_sampling", repeated_sampling, colNames = T)
+# writeData(Germany_wb, "positive_sites", positive_sites, colNames = T)
+#
+# ## Save workbook
+# saveWorkbook(Germany_wb, "Germany_data.xlsx", overwrite = TRUE)
