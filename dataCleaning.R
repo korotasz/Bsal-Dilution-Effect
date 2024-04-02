@@ -1141,7 +1141,7 @@ gldas_monthly <- gldas_monthly %>%
   subset(., select = -c(row))
 
 ## Add monthly weather data to main dataframe ----------------------------------
-df <- df %>%
+test <- df %>%
   left_join(., gldas_monthly, by = c("Lat", "Lon", "date_m1", "date_m2")) %>%
   relocate(c(temp_m2, temp_m1), .before = temp_wk3) %>%
   relocate(c(sMoist_m2, sMoist_m1), .before = sMoist_wk3) %>%
