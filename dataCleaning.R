@@ -31,16 +31,12 @@ pckgs <- c("tidyverse", # data wrangling/manipulation
 )
 
 ## Load packages
+pacman::p_load(pckgs, character.only = T)
 #### IF RENV CANNOT INSTALL/LOAD PACKAGES, USE CODE BELOW TO NAVIGATE TO OTHER .libPaths() OUTSIDE OF PROJECT.
 ## Home computer:
 # renv::hydrate(packages = c(pckgs, "pacman"), sources = c("C:/Users/alexi/AppData/Local/R/win-library/4.3", "C:/Program Files/R/R-4.3.1/library"))
 ## Work computer
 # renv::hydrate(packages = c(pckgs, "pacman"), sources = c("C:/Users/Alexis/AppData/Local/R/win-library/4.3", "C:/Program Files/R/R-4.3.1/library"))
-
-pacman::p_load(pckgs, character.only = T)
-
-## Edit .Renviron to be able to access gbif data
-# usethis::edit_r_environ() # need to restart R for changes to take effect
 
 ## Functions -------------------------------------------------------------------
 assign_week <- function(df, timepoint, out_col){
