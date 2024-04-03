@@ -361,9 +361,7 @@ dir.create(file.path(dir, shppath)) # Will give warning if path already exists
 setwd(file.path(dir, shppath))
 
 ## 1. Use 'raster' pckg to get shapefiles for each country. We are using EPSG:4326 (WGS 84), as these are lat/lon data
-#     that are presented in decimal degrees. EPSG:3035 (ETRS-89) was initially used. However, ETRS-89 and WGS 84 are both
-#     realizations of the International Terrestrial Reference System (ITRS) coincident to within 1 meter, meaning that the
-#     ETRS-89 transformation has an accuracy equal to that of WGS 84 (see:https://epsg.io/3035).
+#     that are presented in decimal degrees.
 polygon <- geodata::gadm(country = c('BEL', 'CHE', 'CHN', 'DEU', 'ESP', 'GBR', 'VNM'), level = 2,
              path = file.path(dir, shppath), version = "latest", resolution = 1) %>%
   sf::st_as_sf(., crs = 4326) %>%
@@ -557,23 +555,26 @@ gbif_noBuff <- gbif_coords %>%
   unite(col = "ID", c(dummy, row), remove = T) %>%
   glimpse()
 
-## Need to use two different CRS for Europe (EPSG:3035) and Asia (EPSG:32649)
+## Need to use two different CRS for Europe (EPSG:27704) and Asia (EPSG:27703)
+epsg27703 <- crs('+proj=aeqd +lat_0=47 +lon_0=94 +x_0=4340913.84808 +y_0=4812712.92347 +datum=WGS84 +units=m +no_defs')
+epsg27704 <- crs('+proj=aeqd +lat_0=53 +lon_0=24 +x_0=5837287.81977 +y_0=2121415.69617 +datum=WGS84 +units=m +no_defs')
+
 ## EUROPE:
-# Subset Europe data from gbif (gbif_3035) and from our dataset (points_3035)
-gbif_3035 <- gbif_coords %>%
+# Subset Europe data from gbif (gbif_27704) and from our dataset
+gbif_27704 <- gbif_coords %>%
   filter(coordinateUncertaintyInMeters > 0) %>%
   filter(countryCode == "BE" | countryCode == "GB" | countryCode == "DE" | countryCode == "ES") %>%
-  st_transform(., 3035) %>%
+  st_transform(., epsg27704) %>%
   st_buffer(., dist = gbif_coords$coordinateUncertaintyInMeters) %>%
   # transform buffered pts back to EPSG 4326
   st_transform(., 4326) %>%
   st_cast(., "MULTIPOLYGON")
 
 ## ASIA:
-gbif_32649 <- gbif_coords %>%
+gbif_27703 <- gbif_coords %>%
   filter(coordinateUncertaintyInMeters > 0) %>%
   filter(countryCode == "CN" | countryCode == "VN" | countryCode == "HK" | countryCode == "MO") %>%
-  st_transform(., 32649) %>%
+  st_transform(., crs = epsg27703) %>%
   st_buffer(., dist = gbif_coords$coordinateUncertaintyInMeters) %>%
   # transform buffered pts back to EPSG 4326
   st_transform(., 4326) %>%
@@ -581,7 +582,7 @@ gbif_32649 <- gbif_coords %>%
 
 
 # rbind buffered gbif coordinates and intersect them with distinct date/lat/lon points from dataset
-gbif_all <- rbind(gbif_3035, gbif_32649) %>%
+gbif_all <- rbind(gbif_27704, gbif_27703) %>%
   mutate(row = as.character(paste0("0", row_number())),
          dummy = "buff") %>%
   unite(col = "ID", c(dummy, row), remove = T) %>%
@@ -603,7 +604,7 @@ points <- df %>%
 ## Save colnames from gbif_all to rename columns in gbif_intersectedPts
 names <- c(colnames(gbif_all), "Lon", "Lat")
 
-rm(dates, gbif_amphib, gbif_3035, gbif_32649, gbif_coords, gbif_noBuff, gbif_all, points)
+rm(dates, gbif_amphib, gbif_27704, gbif_27703, gbif_coords, gbif_noBuff, gbif_all, points)
 ## Process gbif data and add to main df ----------------------------------------
 ## Load in layer of gbif.gpkg containing all points from gbif that intersected with our data
 gbif_intersectedPts <- st_read(file.path(dir, shppath, "gbif.gpkg"), layer = "intersected_pts") %>%
