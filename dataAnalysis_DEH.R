@@ -1,11 +1,9 @@
-require(pacman)
-require(renv)
+## Project utilized the 'renv' package for better code reproducibility
 
-## Initialize project with 'renv' package --------------------------------------
 #  *** ONLY NEED TO DO THIS ONCE; I HAVE ALREADY DONE THIS FOR THIS PROJ. ***
-
 ## Create a project-local environment to ensure code reproducibility
 # setwd(file.path(dir))
+## Initialize the project
 # renv::init() # this also activates the project
 
 
@@ -15,7 +13,8 @@ require(renv)
 
 
 ## IF THIS IS YOUR FIRST TIME RUNNING THIS PROJECT: ----------------------------
-## Run the following two lines:
+## Run the following lines:
+# require(renv)
 # setwd(dirname(rstudioapi::getActiveDocumentContext()$path)) # set working directory to activate project
 # renv::activate() # activate project
 
@@ -23,9 +22,15 @@ require(renv)
 # remotes::install_version("Rttf2pt1", version = "1.3.8") # install this version, latest ver. not compatible
 # remotes::install_github("gorkang/html2latex") # convert sjPlot::tab_model() hmtl table to tex and pdf in .Rmd docs
 # extrafont::font_import("C:/Windows/Fonts") # load fonts before ggplot2; only need to do this once
+require(pacman)
+require(renv)
 require(extrafontdb)
 require(extrafont)
 extrafont::loadfonts(device = "all", quiet = T) # plot fonts
+
+## As of 2024-04-04, there are issues with patchwork and ggplot2 that require specific pull requests to resolve:
+# remotes::install_github("thomasp85/patchwork")
+# remotes::install_github("tidyverse/ggplot2", ref = remotes::github_pull("5592"))
 
 ## Packages --------------------------------------------------------------------
 ### > Visualization Packages----------------------------------------------------
@@ -82,11 +87,11 @@ pacman::p_load(pckgs, character.only = T)
 
 
 ## Functions -------------------------------------------------------------------
-map_bounds <- function(x1, x2, y1, y2){
+map_bounds <- function(x1, x2, y1, y2, crs){
   df <- data.frame(Lon = c(x1, x2),
                    Lat = c(y1, y2)) %>%
     st_as_sf(., coords = c("Lon", "Lat"), crs = 4326) %>%
-    st_transform(., epsg27704)
+    st_transform(., crs)
 
   out_df <- data.frame(x1 = sf::st_coordinates(df)[1,1],
                        x2 = sf::st_coordinates(df)[2,1],
@@ -167,7 +172,7 @@ nicelabs <- c(`(Intercept)` = "Intercept",
 
 
 ## I. Generate descriptive figures ---------------------------------------------
-# Asian polygons were re-projected to EPSG:27703 (WGS84/Equi7 Asia) and European polygons were
+# Asia polygons were re-projected to EPSG:27703 (WGS84/Equi7 Asia) and Europe polygons were
 # re-projected to EPSG:27704 (WGS84/Equi7 Europe) for mapping purposes. These projections were
 # made as a part of a larger project to optimize handling remote-sensing data, with each
 # continent having their own centroid. doi: https://doi.org/10.1016/j.cageo.2014.07.005
@@ -181,6 +186,7 @@ obs <- d %>%
                                                       "1" = "Bsal positive",
                                                       "0" = "Bsal negative"))) %>%
   st_as_sf(., coords = c("Lon", "Lat"), crs = 4326) %>%
+  mutate(jittered = sf::st_jitter(geometry, 0.25)) %>%
   arrange(BsalDetected)
 
 # summarise data
@@ -235,17 +241,19 @@ asiaCountries <- worldmap %>%
   filter(geounit %in% c("China", "Vietnam")) %>%
   st_transform(., crs = epsg27703)
 
-#### Fig 1a. Europe data overview ----------------------------------------------
+#### a. Data overview: Europe --------------------------------------------------
+map_bounds(-8, 15, 34, 56, crs = epsg27704)
+
 europe_map <- ggplot() +
   geom_sf(data = europe, col = "gray40", fill = "#ECECEC", show.legend = F) +
   geom_sf(data = euroCountries, aes(fill = sovereignt), col = "gray40", fill = "#B2BEB5", show.legend = F) +
-  geom_sf(data = euro_obs, aes(geometry = geometry, fill = BsalDetected, shape = BsalDetected),
+  geom_sf(data = euro_obs, aes(geometry = jittered, fill = BsalDetected, shape = BsalDetected),
           alpha = 0.3, size = 4, stroke = 1, color = "gray30", show.legend = "point") +
-  geom_sf_text(data = euroCountries, aes(label = name), position = "identity", size = 5) +
+  geom_sf_text(data = euroCountries, aes(label = name), position = "identity", size = 12) +
   scale_fill_manual(values = c("gray40", "#b30000"), guide = "none") +
   scale_shape_manual(values = c(21, 24), guide = "none") +
-  coord_sf(xlim = c(3031021, 5277030), # c(-7, 15)
-           ylim = c(693356.1, 2380453)) + # c(35, 55)
+  coord_sf(xlim = c(2903943, 5277030), # c(-9, 15)
+           ylim = c(625595.8, 2491036)) + # c(34, 56)
   annotation_scale(location = "br", width_hint = 0.5, text_cex = 2, text_face = "plain",
                    pad_y = unit(0.5, "cm")) +
   annotation_north_arrow(location = "bl", which_north = "true",
@@ -257,7 +265,7 @@ europe_map <- ggplot() +
                    legend.spacing = unit(1, "cm"), # Space legend labels
                    legend.key.size = unit(1,"cm"),
                    legend.text = element_text(size = 28, hjust = 0),
-                   axis.text.x = element_text(size = 28),
+                   axis.text.x = element_text(size = 28, angle = 45, vjust = 0.5),
                    axis.title.x = element_blank(),
                    axis.text.y = element_text(size = 28, face = "plain"),
                    axis.title.y = element_blank()) +
@@ -270,18 +278,21 @@ europe_map <- ggplot() +
 
 europe_map
 
-#### Fig 1b. Data distribution map for Germany ---------------------------------
+# ggsave("EuropeData.pdf", europe_map, device = cairo_pdf, path = file.path(dir, figpath),
+#        width = 4000, height = 2000, scale = 2, units = "px", dpi = 300, limitsize = F)
+
+#### b. Germany data distribution map ------------------------------------------
 g <- mapLabels %>% filter(country == "Germany") %>%
   plyr::mutate(label = paste(country, " (n = ", n, ")", sep = ""))
 
-map_bounds(7.5, 14.5, 46, 55.5)
+map_bounds(7.5, 14.5, 46, 55.5, crs = epsg27704)
 
 deu_map <- ggplot() +
   geom_sf(data = europe, col = "gray40", fill = "#ECECEC", show.legend = F) +
   geom_sf(data = euroCountries, aes(fill = sovereignt), col = "gray40", fill = "#B2BEB5", show.legend = F) +
-  geom_sf_label(data = g, aes(label = paste(label)),  nudge_x = 150000,  nudge_y = 400000,
-                size = 7, fontface = "bold", label.size = NA, alpha = 0.5) +
-  geom_sf(data = euro_obs, aes(geometry = geometry, fill = BsalDetected, shape = BsalDetected),
+  # geom_sf_label(data = g, aes(label = paste(label)),  nudge_x = -40000,  nudge_y = 430000,
+  #               size = 7, fontface = "bold", label.size = NA, alpha = 0.5) +
+  geom_sf(data = euro_obs, aes(geometry = jittered, fill = BsalDetected, shape = BsalDetected),
           alpha = 0.3, size = 4, stroke = 1, color = "gray30", show.legend = "point") +
   scale_fill_manual(values = c("gray40", "#b30000"), guide = "none") +
   scale_shape_manual(values = c(21, 24), guide = "none") +
@@ -297,9 +308,8 @@ deu_map <- ggplot() +
                    legend.position = "top",
                    legend.spacing = unit(1, "cm"), # Space legend labels
                    legend.key.size = unit(1,"cm"),
-                   legend.text.align = 0,
                    legend.text = element_text(size = 28, hjust = 0),
-                   axis.text.x = element_text(size = 24),
+                   axis.text.x = element_text(size = 24, angle = 45, vjust = 0.5),
                    axis.title.x = element_blank(),
                    axis.text.y = element_text(size = 24, face = "plain"),
                    axis.title.y = element_blank()) +
@@ -310,19 +320,21 @@ deu_map <- ggplot() +
 
 deu_map
 
-#### Fig 1c. Data distribution map for Spain -----------------------------------
+# ggsave("GermanyData.pdf", deu_map, device = cairo_pdf, path = file.path(dir, figpath),
+#        width = 2000, height = 2000, scale = 2, units = "px", dpi = 300, limitsize = F)
+
+#### c. Spain data distribution map --------------------------------------------
 s <- mapLabels %>% filter(country == "Spain") %>%
   plyr::mutate(label = paste(country, " (n = ", n, ")", sep = ""))
 
-map_bounds(-9, 4.5, 34, 47)
-
+map_bounds(-9, 4.5, 34, 47, crs = epsg27704)
 
 esp_map <- ggplot() +
   geom_sf(data = europe, col = "gray40", fill = "#ECECEC", show.legend = F) +
   geom_sf(data = euroCountries, aes(fill = sovereignt), col = "gray40", fill = "#B2BEB5", show.legend = F) +
-  geom_sf_label(data = s, aes(label = paste(label)), nudge_x = -700000, nudge_y = 250000,
-                size = 7, fontface = "bold", label.size = NA, alpha = 0.5) +
-  geom_sf(data = euro_obs, aes(geometry = geometry, fill = BsalDetected, shape = BsalDetected),
+  # geom_sf_label(data = s, aes(label = paste(label)), nudge_x = -700000, nudge_y = 250000,
+  #               size = 7, fontface = "bold", label.size = NA, alpha = 0.5) +
+  geom_sf(data = euro_obs, aes(geometry = jittered, fill = BsalDetected, shape = BsalDetected),
           alpha = 0.3, size = 4, stroke = 1, color = "gray30", show.legend = "point") +
   scale_fill_manual(values = c("gray40", "#b30000"), guide = "none") +
   scale_shape_manual(values = c(21, 24), guide = "none") +
@@ -338,9 +350,8 @@ esp_map <- ggplot() +
                    legend.position = "top",
                    legend.spacing = unit(1, "cm"), # Space legend labels
                    legend.key.size = unit(1,"cm"),
-                   legend.text.align = 0,
                    legend.text = element_text(size = 28, hjust = 0),
-                   axis.text.x = element_text(size = 24),
+                   axis.text.x = element_text(size = 24, angle = 45, vjust = 0.5),
                    axis.title.x = element_blank(),
                    axis.text.y = element_text(size = 24, face = "plain"),
                    axis.title.y = element_blank()) +
@@ -351,22 +362,23 @@ esp_map <- ggplot() +
 
 esp_map
 
-# rm(euro_obs, euroCountries, europe, europeLabs, g, s)
 
+# ggsave("SpainData.pdf", esp_map, device = cairo_pdf, path = file.path(dir, figpath),
+#        width = 2000, height = 2000, scale = 2, units = "px", dpi = 300, limitsize = F)
 
-#### Fig 1d. Asia data overview ------------------------------------------------
-
+#### d. Data overview: Asia ----------------------------------------------------
+map_bounds(95, 125, 10, 35, crs = epsg27703)
 
 asia_map <- ggplot() +
   geom_sf(data = asia, col = "gray40", fill = "#ECECEC", show.legend = F) +
   geom_sf(data = asiaCountries, aes(fill = sovereignt), col = "gray40", fill = "#B2BEB5", show.legend = F) +
-  geom_sf(data = asia_obs, aes(geometry = geometry, fill = BsalDetected, shape = BsalDetected),
+  geom_sf(data = asia_obs, aes(geometry = jittered, fill = BsalDetected, shape = BsalDetected),
           alpha = 0.3, size = 4, stroke = 1, color = "gray30", show.legend = "point") +
-  geom_sf_text(data = asiaCountries, aes(label = name), position = "identity", size = 5) +
+  geom_sf_text(data = asiaCountries, aes(label = name), position = "identity", size = 12) +
   scale_fill_manual(values = c("gray40", "#b30000"), guide = "none") +
   scale_shape_manual(values = c(21, 24), guide = "none") +
-  # coord_sf(xlim = c(-4945710.860769269, -2663075.078875761), # c(98, 122)
-  #          ylim = c(1281605.5100848181, 4352308.175397294)) + # c(10, 35)
+  coord_sf(xlim = c(4458518, 7129851), # c(95, 125)
+           ylim = c(711916.5, 4008620)) + # c(10, 35)
   annotation_scale(location = "br", width_hint = 0.5, text_cex = 2, text_face = "plain",
                    pad_y = unit(0.5, "cm")) +
   annotation_north_arrow(location = "bl", which_north = "true",
@@ -377,9 +389,8 @@ asia_map <- ggplot() +
                    legend.position = "top",
                    legend.spacing = unit(1, "cm"), # Space legend labels
                    legend.key.size = unit(1,"cm"),
-                   legend.text.align = 0,
                    legend.text = element_text(size = 28, hjust = 0),
-                   axis.text.x = element_text(size = 28),
+                   axis.text.x = element_text(size = 28, angle = 45, vjust = 0.5),
                    axis.title.x = element_blank(),
                    axis.text.y = element_text(size = 28, face = "plain"),
                    axis.title.y = element_blank()) +
@@ -392,20 +403,98 @@ asia_map <- ggplot() +
 
 asia_map
 
-#### 1e) Data distribution map for China ---------------------------------------
+# ggsave("AsiaData.pdf", asia_map, device = cairo_pdf, path = file.path(dir, figpath),
+#        width = 4000, height = 2000, scale = 2, units = "px", dpi = 300, limitsize = F)
 
+#### e. China data distribution map --------------------------------------------
+c <- mapLabels %>% filter(country == "China") %>%
+  plyr::mutate(label = paste(country, " (n = ", n, ")", sep = ""))
 
+map_bounds(98, 122, 19, 31, crs = epsg27703)
 
-#### 1f) Data distribution map for Vietnam -------------------------------------
+chn_map <- ggplot() +
+  geom_sf(data = asia, col = "gray40", fill = "#ECECEC", show.legend = F) +
+  geom_sf(data = subset(asiaCountries, geounit == "China"),
+          aes(fill = sovereignt), col = "gray40", fill = "#B2BEB5", show.legend = F) +
+  # geom_sf_label(data = c, aes(label = paste(label)), nudge_x = -900000, nudge_y = 850000,
+  #               size = 9, fontface = "bold", label.size = NA, alpha = 0.5) +
+  geom_sf(data = subset(asia_obs, country == "China"), aes(geometry = jittered, fill = BsalDetected, shape = BsalDetected),
+          alpha = 0.3, size = 4, stroke = 1, color = "gray30", show.legend = "point") +
+  scale_fill_manual(values = c("gray40", "#b30000"), guide = "none") +
+  scale_shape_manual(values = c(21, 24), guide = "none") +
+  coord_sf(xlim = c(4782975, 7005601), # c(98, 122)
+           ylim = c(1716599, 3479777)) + # c(19, 31)
+  annotation_scale(location = "br", width_hint = 0.5, text_cex = 2, text_face = "plain",
+                   pad_y = unit(0.5, "cm")) +
+  annotation_north_arrow(location = "bl", which_north = "true",
+                         height = unit(1.5, "cm"), width = unit(1.5, "cm"),
+                         pad_x = unit(0, "cm"), pad_y = unit(0, "cm"),
+                         style = north_arrow_fancy_orienteering(line_width = 1.8, text_size = 18)) +
+  ak_theme + theme(legend.title = element_blank(),
+                   legend.position = "top",
+                   legend.spacing = unit(1, "cm"), # Space legend labels
+                   legend.key.size = unit(1,"cm"),
+                   legend.text = element_text(size = 28, hjust = 0),
+                   axis.text.x = element_text(size = 24, angle = 45, vjust = 0.5),
+                   axis.title.x = element_blank(),
+                   axis.text.y = element_text(size = 24, face = "plain"),
+                   axis.title.y = element_blank()) +
+  guides(fill = guide_legend(override.aes = list(color = c("gray40", "#b30000"),
+                                                 shape = c(21, 24),
+                                                 size = c(5, 5),
+                                                 alpha = c(1, 1))))
 
+chn_map
 
-### NEED TO REORIENT/RELABEL THESE FIGURES -------------------------------------
-fig1a <- europe_map + theme(plot.tag.position = c(0.92, 0.88))
-fig1b <- gbr_map + theme(plot.tag.position = c(0.95, 0.78))
-fig1c <- esp_map + theme(plot.tag.position = c(0.95, 0.95))
-fig1d <- deu_map + theme(plot.tag.position = c(0.96, 0.82))
-fig1e <- che_map + theme(plot.tag.position = c(0.96, 0.92))
+# ggsave("ChinaData.pdf", chn_map, device = cairo_pdf, path = file.path(dir, figpath),
+#        width = 2000, height = 2000, scale = 2, units = "px", dpi = 300, limitsize = F)
 
+#### f. Vietnam data distribution map ------------------------------------------
+v <- mapLabels %>% filter(country == "Vietnam") %>%
+  plyr::mutate(label = paste(country, " (n = ", n, ")", sep = ""))
+
+map_bounds(100, 112, 8, 23, crs = epsg27703)
+
+vnm_map <- ggplot() +
+  geom_sf(data = asia, col = "gray40", fill = "#ECECEC", show.legend = F) +
+  geom_sf(data = subset(asiaCountries, geounit == "Vietnam"), aes(fill = sovereignt), col = "gray40", fill = "#B2BEB5", show.legend = F) +
+  # geom_sf_label(data = v, aes(label = paste(label)), nudge_x = -290000, nudge_y = 250000,
+  #               size = 7, fontface = "bold", label.size = NA, alpha = 0.5) +
+  geom_sf(data = subset(asia_obs, country == "Vietnam"), aes(geometry = jittered, fill = BsalDetected, shape = BsalDetected),
+          alpha = 0.3, size = 4, stroke = 1, color = "gray30", show.legend = "point") +
+  scale_fill_manual(values = c("gray40", "#b30000"), guide = "none") +
+  scale_shape_manual(values = c(21, 24), guide = "none") +
+  coord_sf(xlim = c(5055747, 6230263), # c(100, 112)
+           ylim = c(511536.1, 2408791)) + # c(8, 23)
+  annotation_scale(location = "br", width_hint = 0.5, text_cex = 2, text_face = "plain",
+                   pad_y = unit(0.5, "cm")) +
+  annotation_north_arrow(location = "bl", which_north = "true",
+                         height = unit(1.5, "cm"), width = unit(1.5, "cm"),
+                         pad_x = unit(0, "cm"), pad_y = unit(0, "cm"),
+                         style = north_arrow_fancy_orienteering(line_width = 1.8, text_size = 18)) +
+  ak_theme + theme(legend.title = element_blank(),
+                   legend.position = "top",
+                   legend.spacing = unit(1, "cm"), # Space legend labels
+                   legend.key.size = unit(1,"cm"),
+                   legend.text = element_text(size = 28, hjust = 0),
+                   axis.text.x = element_text(size = 24, angle = 45, vjust = 0.5),
+                   axis.title.x = element_blank(),
+                   axis.text.y = element_text(size = 24, face = "plain"),
+                   axis.title.y = element_blank()) +
+  guides(fill = guide_legend(override.aes = list(color = c("gray40", "#b30000"),
+                                                 shape = c(21, 24),
+                                                 size = c(5, 5),
+                                                 alpha = c(1, 1))))
+
+vnm_map
+
+# ggsave("VietnamData.pdf", vnm_map, device = cairo_pdf, path = file.path(dir, figpath),
+#        width = 2000, height = 2000, scale = 2, units = "px", dpi = 300, limitsize = F)
+
+# rm(asia, asia_obs, asiaCountries, asiaLabs, c, country_lookup, euro_obs,
+#    euroCountries, europe, europeLabs, g, mapLabels, obs, s, sampSize, v, worldmap)
+
+### Figure 1. Data distribution maps(combined) ---------------------------------
 p <- ggplot() + labs(x = "Longitude", y = "Latitude") + ak_theme + theme(plot.margin = margin(0, 0, 0, 0, "cm"),
                                                                          panel.spacing.y = unit(0,"cm"))
 x_axis <- cowplot::get_plot_component(p, "xlab-b")
@@ -418,21 +507,82 @@ BAAA
 ##C#
 "
 
+dummy <- ggplot() + theme_blank()
 
-fig1_map <- ((fig1b/fig1c)|(fig1a)|(fig1d/fig1e)) +
-  plot_annotation(tag_levels = list(c("B", "C", "A", "D", "E"))) +
-  plot_layout(guides = "collect",
-              widths = c(1, 2, 1),
-              heights = c(1, 2, 1)) &
-  theme(plot.margin = margin(0.25, 0.25, 0, -0.5, "cm"),
+## Country maps
+fig1a <- deu_map +
+  geom_sf_label(data = g, aes(label = paste(label)),  nudge_x = 90000,  nudge_y = 430000,
+                size = 7, fontface = "bold", label.size = NA, alpha = 0.5) +
+  theme(plot.tag.position = c(0.96, 0.80),
+        panel.spacing.y = unit(0,"cm"))
+fig1b <- esp_map +
+  geom_sf_label(data = s, aes(label = paste(label)), nudge_x = -500000, nudge_y = 250000,
+                size = 7, fontface = "bold", label.size = NA, alpha = 0.5) +
+  theme(plot.tag.position = c(0.95, 0.92),
+        panel.spacing.y = unit(0,"cm"))
+fig1c <- chn_map +
+  geom_sf_label(data = c, aes(label = paste(label)), nudge_x = -700000, nudge_y = 850000,
+                size = 7, fontface = "bold", label.size = NA, alpha = 0.5) +
+  coord_sf(xlim = c(4782975, 7005601), # c(98, 122)
+           ylim = c(1716599, 3479777)) + # c(19, 31)
+  theme(plot.tag.position = c(0.95, 0.73),
+        axis.text.x = element_blank(),
+        panel.spacing.y = unit(0,"cm"))
+fig1d <- vnm_map +
+  geom_sf_label(data = v, aes(label = paste(label)), nudge_x = -200000, nudge_y = 270000,
+                size = 7, fontface = "bold", label.size = NA, alpha = 0.5) +
+  coord_sf(xlim = c(4782975, 7005601), # c(98, 122)
+           ylim = c(499634.9, 2501979)) + # c(8, 23)
+  theme(plot.tag.position = c(0.95, 0.95),
+        panel.spacing.y = unit(0,"cm"))
+
+
+fig1abcd <- ((fig1a/fig1b) | (fig1c/fig1d)) +
+  # plot_annotation(tag_levels = "A") +
+  plot_layout(guides = "collect", axes = "collect_x",
+              ncol = 2, widths = c(2,2)) &
+  theme(plot.margin = margin(0.25, 0, 0, 0, "cm"),
         legend.position = "top",
         legend.box.margin = margin(0, 1, 1, 1, "cm"),
         legend.text = element_text(margin = margin(r = 1, unit = "cm")),
         legend.title = element_blank())
 
-fig1_map
+fig1abcd
 
-fig1_map_annotated <- wrap_plots(wrap_elements(fig1_map), ggdraw(y_axis), ggdraw(x_axis)) +
+## Continent maps
+fig1e <- europe_map + theme(plot.tag.position = c(0.92, 0.88))
+fig1f <- asia_map + theme(plot.tag.position = c(0.95, 0.95))
+
+# overview_maps <- (fig1e | fig1f) + plot_layout(guides = "collect") &
+#   theme(plot.margin = margin(0.25, 0.25, 0, -0.5, "cm"),
+#         legend.position = "top",
+#         legend.box.margin = margin(0, 1, 1, 1, "cm"),
+#         legend.text = element_text(margin = margin(r = 1, unit = "cm")),
+#         legend.title = element_blank())
+#
+# overview_maps
+
+
+
+
+
+
+# fig1abcd_map <- ( | (fig1c/fig1d)) +
+#   # plot_annotation(tag_levels = list(c("A", "B", "C"))) +
+#   plot_layout(guides = "collect") &
+#   theme(plot.margin = margin(0, 0, 0, -0.5, "cm"),
+#         legend.position = "top",
+#         legend.box.margin = margin(0, 1, 1, 1, "cm"),
+#         legend.text = element_text(margin = margin(r = 1, unit = "cm")),
+#         legend.title = element_blank())
+
+
+  # plot_layout(guides = "collect",
+  #             widths = c(1, 1, 2),
+  #             heights = c(1, 1, 2))
+
+fig1abcd_map
+
   plot_layout(widths = c(.15, 2.25),
               heights = c(2.25, 0.25),
               design = layout) + theme(plot.margin = margin(0.25, 0.25, 0.25, 0.25, "cm"))
