@@ -32,6 +32,10 @@ extrafont::loadfonts(device = "all", quiet = T) # plot fonts
 # remotes::install_github("thomasp85/patchwork")
 # remotes::install_github("tidyverse/ggplot2", ref = remotes::github_pull("5592"))
 
+## As of 2024-04-04, the Matrix package (a dependency of glmmTMB) is throwing errors
+##  (Matrix v. 1.6-5) and must be reverted to Matrix v. 1.6-1.1 to work
+# remotes::install_version("Matrix", version = "1.6-1.1")
+
 ## Packages --------------------------------------------------------------------
 ### > Visualization Packages----------------------------------------------------
 pckgs <- c("ggsignif", # adds labels to significant groups
@@ -104,7 +108,7 @@ map_bounds <- function(x1, x2, y1, y2, crs){
 ## File paths ------------------------------------------------------------------
 dir <- dirname(rstudioapi::getActiveDocumentContext()$path)
 csvpath <- (path.expand("/csvFiles"))
-figpath <- (path.expand("figures"))
+figpath <- (path.expand("/figures"))
 
 ## Read in .csv files-----------------------------------------------------------
 setwd(file.path(dir, csvpath))
@@ -113,7 +117,7 @@ dcbind <- read.csv("BsalData_cbind.csv", header = T, encoding = "UTF-8")
 
 
 ## Define general ggplot theme for plot uniformity -----------------------------
-ak_theme <- theme_ipsum() +
+ak_theme <- theme_ipsum(base_family = "Segoe UI Light") +
   theme(axis.text.x = element_text(size = 26),
         axis.title.x = element_text(size = 34, hjust = 0.5,
                                     margin = margin(t = 10, r = 0, b = 0, l = 0),
@@ -128,11 +132,10 @@ ak_theme <- theme_ipsum() +
         plot.title = element_text(size = 42, hjust = 0.5, face = "plain"),
         plot.subtitle = element_markdown(size = 12, face = "plain"),
         plot.margin = margin(1, 1, 1.5, 1.2, "cm"),
-        plot.caption = element_markdown(hjust = 0, size = 14, face = "plain"),
+        plot.caption = element_markdown(hjust = 1, size = 14, face = "plain"),
         plot.caption.position = "plot",
         legend.position = "top",
         legend.key.size = unit(2,"cm"),
-        # legend.text.align = 1,
         legend.text = element_text(size = 28, hjust = -1),
         legend.title = element_text(size = 28, face = "bold"),
         panel.border = element_blank(),
@@ -145,16 +148,34 @@ ak_theme <- theme_ipsum() +
 
 # log transform vars
 d <- d %>%
-  mutate(logsppAbun = log(sppAbun),
-         logsiteAbun = log(siteAbun),
+  mutate(logsppAbun = log(sppAbun + 1),
+         logsiteAbun = log(siteAbun + 1),
+         scientific = as.factor(scientific),
+         susceptibility = as.factor(susceptibility)) %>%
+  relocate(c(logsppAbun, logsiteAbun), .after = sppAbun)
+
+# subset data to exclude FS
+d_noFS <- d %>%
+  filter(scientific != "Salamandra salamandra") %>%
+  ## Relative species abundance (# individuals/spp at a site during each sampling event) -- excludes FS
+  group_by(scientific, Site, date) %>%
+  mutate(sppAbun = sum(individualCount)) %>%
+  ungroup() %>%
+  ## Relative site abundance (total # individuals at a site during each sampling event) -- excludes FS
+  group_by(Site, date) %>%
+  mutate(siteAbun = sum(individualCount),
+         projectId = as.character(projectId)) %>%
+  ungroup() %>%
+  mutate(logsppAbun = log(sppAbun + 1),
+         logsiteAbun = log(siteAbun + 1),
          scientific = as.factor(scientific),
          susceptibility = as.factor(susceptibility)) %>%
   relocate(c(logsppAbun, logsiteAbun), .after = sppAbun)
 
 
 dcbind <- dcbind %>%
-  mutate(logsppAbun = log(sppAbun),
-         logsiteAbun = log(siteAbun),
+  mutate(logsppAbun = log(sppAbun + 1),
+         logsiteAbun = log(siteAbun + 1),
          scientific = as.factor(scientific),
          susceptibility = as.factor(susceptibility)) %>%
   relocate(c(logsppAbun, logsiteAbun), .after = sppAbun)
@@ -208,6 +229,7 @@ mapLabels <- merge(x = sampSize, y = country_lookup,
 worldmap <- ne_countries(scale = "medium", type = "map_units", returnclass = "sf") %>%
   st_transform(., crs = 4326)
 
+
 ### > Maps ---------------------------------------------------------------------
 # Summarise the number of observations from each Bsal+ country and plot individual points on a map.
 euro_obs <- obs %>%
@@ -249,7 +271,7 @@ europe_map <- ggplot() +
   geom_sf(data = euroCountries, aes(fill = sovereignt), col = "gray40", fill = "#B2BEB5", show.legend = F) +
   geom_sf(data = euro_obs, aes(geometry = jittered, fill = BsalDetected, shape = BsalDetected),
           alpha = 0.3, size = 4, stroke = 1, color = "gray30", show.legend = "point") +
-  geom_sf_text(data = euroCountries, aes(label = name), position = "identity", size = 12) +
+  geom_sf_text(data = euroCountries, aes(label = name), position = "identity", size = 10) +
   scale_fill_manual(values = c("gray40", "#b30000"), guide = "none") +
   scale_shape_manual(values = c(21, 24), guide = "none") +
   coord_sf(xlim = c(2903943, 5277030), # c(-9, 15)
@@ -495,108 +517,98 @@ vnm_map
 #    euroCountries, europe, europeLabs, g, mapLabels, obs, s, sampSize, v, worldmap)
 
 ### Figure 1. Data distribution maps(combined) ---------------------------------
-p <- ggplot() + labs(x = "Longitude", y = "Latitude") + ak_theme + theme(plot.margin = margin(0, 0, 0, 0, "cm"),
-                                                                         panel.spacing.y = unit(0,"cm"))
-x_axis <- cowplot::get_plot_component(p, "xlab-b")
-y_axis <- cowplot::get_plot_component(p, "ylab-l")
-
-layout <- "
-#AAA
-BAAA
-#AAA
-##C#
-"
-
-dummy <- ggplot() + theme_blank()
-
-## Country maps
-fig1a <- deu_map +
-  geom_sf_label(data = g, aes(label = paste(label)),  nudge_x = 90000,  nudge_y = 430000,
-                size = 7, fontface = "bold", label.size = NA, alpha = 0.5) +
-  theme(plot.tag.position = c(0.96, 0.80),
-        panel.spacing.y = unit(0,"cm"))
-fig1b <- esp_map +
-  geom_sf_label(data = s, aes(label = paste(label)), nudge_x = -500000, nudge_y = 250000,
-                size = 7, fontface = "bold", label.size = NA, alpha = 0.5) +
-  theme(plot.tag.position = c(0.95, 0.92),
-        panel.spacing.y = unit(0,"cm"))
-fig1c <- chn_map +
-  geom_sf_label(data = c, aes(label = paste(label)), nudge_x = -700000, nudge_y = 850000,
-                size = 7, fontface = "bold", label.size = NA, alpha = 0.5) +
-  coord_sf(xlim = c(4782975, 7005601), # c(98, 122)
-           ylim = c(1716599, 3479777)) + # c(19, 31)
-  theme(plot.tag.position = c(0.95, 0.73),
-        axis.text.x = element_blank(),
-        panel.spacing.y = unit(0,"cm"))
-fig1d <- vnm_map +
-  geom_sf_label(data = v, aes(label = paste(label)), nudge_x = -200000, nudge_y = 270000,
-                size = 7, fontface = "bold", label.size = NA, alpha = 0.5) +
-  coord_sf(xlim = c(4782975, 7005601), # c(98, 122)
-           ylim = c(499634.9, 2501979)) + # c(8, 23)
-  theme(plot.tag.position = c(0.95, 0.95),
-        panel.spacing.y = unit(0,"cm"))
-
-
-fig1abcd <- ((fig1a/fig1b) | (fig1c/fig1d)) +
-  # plot_annotation(tag_levels = "A") +
-  plot_layout(guides = "collect", axes = "collect_x",
-              ncol = 2, widths = c(2,2)) &
-  theme(plot.margin = margin(0.25, 0, 0, 0, "cm"),
-        legend.position = "top",
-        legend.box.margin = margin(0, 1, 1, 1, "cm"),
-        legend.text = element_text(margin = margin(r = 1, unit = "cm")),
-        legend.title = element_blank())
-
-fig1abcd
-
-## Continent maps
-fig1e <- europe_map + theme(plot.tag.position = c(0.92, 0.88))
-fig1f <- asia_map + theme(plot.tag.position = c(0.95, 0.95))
-
-# overview_maps <- (fig1e | fig1f) + plot_layout(guides = "collect") &
-#   theme(plot.margin = margin(0.25, 0.25, 0, -0.5, "cm"),
+#### FIX THIS SECTION ----------------------------------------------------------
+# p <- ggplot() + labs(x = "Longitude", y = "Latitude") + ak_theme + theme(plot.margin = margin(0, 0, 0, 0, "cm"),
+#                                                                          panel.spacing.y = unit(0,"cm"))
+# x_axis <- cowplot::get_plot_component(p, "xlab-b")
+# y_axis <- cowplot::get_plot_component(p, "ylab-l")
+#
+# layout <- "
+# #AAA
+# BAAA
+# #AAA
+# ##C#
+# "
+#
+# ## Country maps
+# fig1a <- deu_map +
+#   geom_sf_label(data = g, aes(label = paste(label)),  nudge_x = 90000,  nudge_y = 430000,
+#                 size = 5, fontface = "bold", label.size = NA, alpha = 0.5) +
+#   theme(plot.tag.position = c(0.96, 0.80),
+#         panel.spacing.y = unit(0,"cm"))
+# fig1b <- esp_map +
+#   geom_sf_label(data = s, aes(label = paste(label)), nudge_x = -500000, nudge_y = 250000,
+#                 size = 5, fontface = "bold", label.size = NA, alpha = 0.5) +
+#   theme(plot.tag.position = c(0.95, 0.92),
+#         panel.spacing.y = unit(0,"cm"))
+# fig1c <- chn_map +
+#   geom_sf_label(data = c, aes(label = paste(label)), nudge_x = -700000, nudge_y = 850000,
+#                 size = 7, fontface = "bold", label.size = NA, alpha = 0.5) +
+#   coord_sf(xlim = c(4782975, 7005601), # c(98, 122)
+#            ylim = c(1716599, 3479777)) + # c(19, 31)
+#   theme(plot.tag.position = c(0.95, 0.73),
+#         axis.text.x = element_blank(),
+#         panel.spacing.y = unit(0,"cm"))
+# fig1d <- vnm_map +
+#   geom_sf_label(data = v, aes(label = paste(label)), nudge_x = -200000, nudge_y = 270000,
+#                 size = 7, fontface = "bold", label.size = NA, alpha = 0.5) +
+#   coord_sf(xlim = c(4782975, 7005601), # c(98, 122)
+#            ylim = c(499634.9, 2501979)) + # c(8, 23)
+#   theme(plot.tag.position = c(0.95, 0.95),
+#         panel.spacing.y = unit(0,"cm"))
+#
+#
+# fig1ab <- fig1a + fig1b +
+#   plot_annotation(tag_levels = "A") +
+#   plot_layout(guides = "collect",
+#               ncol = 1, nrow = 2,
+#               design = "1
+#                         2") &
+#   theme(plot.margin = margin(0.25, 0, 0, 0, "cm"),
 #         legend.position = "top",
 #         legend.box.margin = margin(0, 1, 1, 1, "cm"),
 #         legend.text = element_text(margin = margin(r = 1, unit = "cm")),
 #         legend.title = element_blank())
 #
-# overview_maps
-
-
-
-
-
-
-# fig1abcd_map <- ( | (fig1c/fig1d)) +
-#   # plot_annotation(tag_levels = list(c("A", "B", "C"))) +
-#   plot_layout(guides = "collect") &
-#   theme(plot.margin = margin(0, 0, 0, -0.5, "cm"),
+# fig1ab
+#
+#
+#
+# fig1abcd <- fig1a + fig1b + fig1c + fig1d +
+#   # plot_annotation(tag_levels = "A") +
+#   plot_layout(guides = "collect", axes = "collect_x",
+#               ncol = 2,
+#               design = "13
+#                         24") &
+#   theme(plot.margin = margin(0.25, 0, 0, 0, "cm"),
 #         legend.position = "top",
 #         legend.box.margin = margin(0, 1, 1, 1, "cm"),
 #         legend.text = element_text(margin = margin(r = 1, unit = "cm")),
 #         legend.title = element_blank())
-
-
-  # plot_layout(guides = "collect",
-  #             widths = c(1, 1, 2),
-  #             heights = c(1, 1, 2))
-
-fig1abcd_map
-
-  plot_layout(widths = c(.15, 2.25),
-              heights = c(2.25, 0.25),
-              design = layout) + theme(plot.margin = margin(0.25, 0.25, 0.25, 0.25, "cm"))
-
-
-
-fig1_map_annotated
-
+#
+# fig1abcd
+#
+# ## Continent maps
+# fig1e <- europe_map + theme(plot.tag.position = c(0.92, 0.88))
+# fig1f <- asia_map + theme(plot.tag.position = c(0.95, 0.95))
+#
+# # overview_maps <- (fig1e | fig1f) + plot_layout(guides = "collect") &
+# #   theme(plot.margin = margin(0.25, 0.25, 0, -0.5, "cm"),
+# #         legend.position = "top",
+# #         legend.box.margin = margin(0, 1, 1, 1, "cm"),
+# #         legend.text = element_text(margin = margin(r = 1, unit = "cm")),
+# #         legend.title = element_blank())
+# #
+# # overview_maps
+#
 # ggsave("Euro_map.pdf", fig1_map_annotated, device = cairo_pdf, path = file.path(dir, figpath),
 #         width = 4000, height = 2000, scale = 2, units = "px", dpi = 300, limitsize = F)
 
-
+rm(asia, asia_map, asia_obs, asiaCountries, asiaLabs, c, chn_map, country_lookup,
+   deu_map, esp_map, euro_obs, euroCountries, europe, europe_map, europeLabs, layout,
+   fig1a, fig1b, fig1c, fig1d, g, mapLabels, p, s, v, vnm_map, worldmap, x_axis, y_axis)
 ## II. Testing assumptions of the dilution effect hypothesis -------------------
-##      2a. Hosts differ in their reservoir competence.
+### a. Hosts differ in their reservoir competence. -----------------------------
 prev <- d %>%
   group_by(scientific) %>%
   mutate(ncas_Bsal = sum(BsalDetected == 1), # number of pos. Bsal cases
@@ -644,6 +656,24 @@ esp <- sampSize %>%
          prev = round((Pos/pop)*100, 2))
 print(esp$prev) # prevalence
 
+chn <- sampSize %>%
+  filter(country == "China") %>%
+  plyr::mutate(BsalDetected = as.factor(dplyr::recode(BsalDetected,
+                                                      "Bsal positive" = "Pos", "Bsal negative" = "Neg"))) %>%
+  pivot_wider(names_from = BsalDetected, values_from = n) %>%
+  mutate(pop = sum(Pos, Neg),
+         prev = round((Pos/pop)*100, 2))
+print(chn$prev) # prevalence
+
+vnm <- sampSize %>%
+  filter(country == "Vietnam") %>%
+  plyr::mutate(BsalDetected = as.factor(dplyr::recode(BsalDetected,
+                                                      "Bsal positive" = "Pos", "Bsal negative" = "Neg"))) %>%
+  pivot_wider(names_from = BsalDetected, values_from = n) %>%
+  mutate(pop = sum(Pos, Neg),
+         prev = round((Pos/pop)*100, 2))
+print(vnm$prev) # prevalence
+
 
 # Convert binconf point estimates + CIs to percentages for plotting
 bsal_ci <-  bsal_ci %>%
@@ -656,7 +686,8 @@ bsal_ci <-  bsal_ci %>%
 
 # Join with original 'prev' dataset, so we can plot actual vs expected
 prev <- prev %>%
-  left_join(., bsal_ci, by = "row_id")
+  left_join(., bsal_ci, by = "row_id") %>%
+  plyr::arrange(., scientific)
 
 prev_binconf_plot <- ggplot(prev, aes(scientific, sapply(PointEst, FUN = function(x) ifelse(x == 0.0, round(x, 0), x)),
                                           colour = susceptibility,
@@ -684,9 +715,10 @@ prev_binconf_plot
 # ggsave("prev_binconf_plot.pdf", prev_binconf_plot, device = cairo_pdf, path = file.path(dir, figpath),
 #          width = 2600, height = 2000, scale = 1.5, units = "px", dpi = 300, limitsize = F)
 
+rm(bsal_bayesci, bsal_ci, chn, deu, esp, prev, sampSize, vnm)
 
-##      2b. The most susceptible species are also the most abundant, while the
-##          least susceptible species are the least abundant.
+### b. The most susceptible species are the most abundant ----------------------
+#### > All animals in dataset --------------------------------------------------
 model_2b <- glmmTMB(logsppAbun ~ scientific + (1|Site),
                data = d,
                control = glmmTMBControl(optimizer = optim,
@@ -695,11 +727,10 @@ summary(model_2b)
 Anova(model_2b)
 
 
-# Calculate observed avg
-spavg <- d %>%
-  dplyr::select(scientific, sppAbun, Site) # subset relevant data
-spavg <- aggregate(sppAbun ~ scientific, spavg, mean) # aggregate by Site, & spp. and summarise
-names(spavg)[names(spavg) == 'sppAbun'] <- 'avg_sppAbun'
+# Subset observed abundance
+obs_abun <- d %>%
+  dplyr::select(scientific, sppAbun, Site) %>%
+  rename(obs_abun = sppAbun)
 
 textcol <- d %>%
   dplyr::select(scientific, susceptibility, Site) %>% # subset relevant data
@@ -709,18 +740,19 @@ textcol <- d %>%
   ungroup() %>%
   dplyr::select(!Site) %>%
   unique() %>%
-  left_join(., spavg, by = "scientific")
-
+  left_join(., obs_abun, by = "scientific")
 
 m2b_predict <- ggpredict(model_2b, terms = "scientific") %>%
   dplyr::rename("scientific" = "x",
          "logsppAbun" = "predicted",
          "expectedAbun" = "group") %>%
   left_join(., textcol, by = "scientific") %>%
-  plyr::mutate(expectedAbun = exp(logsppAbun),
-               conf.low = exp(conf.low),
-               conf.high = exp(conf.high),
-               susceptibility = as.factor(susceptibility))
+  plyr::mutate(expectedAbun = exp(logsppAbun - 1),
+               conf.low = exp(conf.low - 1),
+               conf.high = exp(conf.high - 1),
+               susceptibility = as.factor(susceptibility)) %>%
+  group_by(scientific, obs_abun, expectedAbun) %>%
+  unique()
 
 
 # xhat <- TeX(r"($\hat{X}_{\textit{a}} =)") ## LaTeX formula: $\hat{X}_{\textit{a}} = ## THIS ALSO WORKS, BUT WILL TRY USING LATEX EXP BELOW
@@ -741,29 +773,31 @@ df3 <- m2b_predict %>%
   filter(susceptibility == "3")
 
 
-m2b_plot <- ggplot(m2b_predict, aes(x = scientific, label = round(expectedAbun,0))) +
-  geom_point(aes(y = expectedAbun, colour = susceptibility), size = 5) +
-  # geom_point(aes(y = avg_sppAbun colour = susceptibility), size = 5, shape = 1) +
+m2b_plot <- ggplot(m2b_predict, aes(x = scientific, label = round(expectedAbun, 0))) +
+  geom_jitter(aes(y = obs_abun, colour = susceptibility), shape = 23, size = 2,
+             alpha = 0.25, show.legend = F) +
+  geom_point(aes(y = expectedAbun, colour = susceptibility), size = 4.5) +
   geom_errorbar(aes(ymin = conf.low, ymax = conf.high, colour = susceptibility), width = 0.5, linewidth = 1) +
-  geom_text(aes(colour = susceptibility, x = (as.numeric(scientific) + 0.05), y = conf.high + 3),
-            size = 6, fontface = "bold", alpha = 0.75) +
-  annotate(geom = "text", x = (as.numeric(df1$scientific) + 0.1), y = (df1$conf.high + 1.5),
-           label = paste(xhat), parse = TRUE, size = 6, color = "#548078", alpha = 0.75) +
-  annotate(geom = "text", x = (as.numeric(df2$scientific) + 0.1), y = (df2$conf.high + 1.5),
-           label = paste(xhat), parse = TRUE, size = 6, color = "#E3A630", alpha = 0.75) +
-  annotate(geom = "text", x = (as.numeric(df3$scientific) + 0.1), y = (df3$conf.high + 1.5),
-           label = paste(xhat), parse = TRUE, size = 6, color = "#b30000", alpha = 0.75) +
+  # geom_text(aes(colour = susceptibility, x = (as.numeric(scientific) + 0.05), y = conf.high + 3),
+  #           size = 6, fontface = "bold", alpha = 0.75) +
+  # annotate(geom = "text", x = (as.numeric(df1$scientific) + 0.1), y = (df1$conf.high + 1.5),
+  #          label = paste(xhat), parse = TRUE, size = 6, color = "#548078", alpha = 0.75) +
+  # annotate(geom = "text", x = (as.numeric(df2$scientific) + 0.1), y = (df2$conf.high + 1.5),
+  #          label = paste(xhat), parse = TRUE, size = 6, color = "#E3A630", alpha = 0.75) +
+  # annotate(geom = "text", x = (as.numeric(df3$scientific) + 0.1), y = (df3$conf.high + 1.5),
+  #          label = paste(xhat), parse = TRUE, size = 6, color = "#b30000", alpha = 0.75) +
   coord_flip(clip = "off") +
   ylab("Abundance") +
   xlab("Species") +
+  labs(caption = "*All species included") +
   scale_colour_manual(name = "Susceptibility",
                       values = c("#548078", "#E3A630", "#b30000"),
                       labels = c("Resistant", "Tolerant", "Susceptible"),
                       guide = "none") +
-  scale_y_continuous(labels = seq(0, 20, 5),
-                     breaks = seq(0, 20, 5),
-                     limits = c(0, 22)) +
-  scale_x_discrete(expand = expansion(mult = c(0, 0.01), add = c(1, 0.25))) +
+  scale_y_continuous(labels = seq(0, 90, 10),
+                     breaks = seq(0, 90, 10),
+                     limits = c(0, 92)) + # 1 obs. point cut off -- @112 (L. helveticus)
+  scale_x_discrete(expand = expansion(mult = c(0, 0.01), add = c(1, 0.29))) +
   ak_theme + theme(axis.text.y = element_text(face = "italic"),
                    legend.title = element_blank())
 
@@ -773,9 +807,99 @@ m2b_plot
 # ggsave("fig2b.pdf", m2b_plot, device = cairo_pdf, path = file.path(dir, figpath),
 #           width = 2000, height = 1400, scale = 2, units = "px", dpi = 300, limitsize = F)
 
+#### > Excluding fire salamanders ----------------------------------------------
+model_2b_noFS <- glmmTMB(logsppAbun ~ scientific + (1|Site),
+                         data = d_noFS,
+                         control = glmmTMBControl(optimizer = optim,
+                                                  optArgs = list(method = "BFGS")))
+summary(model_2b_noFS)
+Anova(model_2b_noFS)
 
 
-##      2c. Host abundance and susceptibility in our dataset.
+# Subset observed abundance
+obs_abun <- d_noFS %>%
+  dplyr::select(scientific, sppAbun, Site) %>%
+  rename(obs_abun = sppAbun)
+
+textcol <- d_noFS %>%
+  dplyr::select(scientific, susceptibility, Site) %>% # subset relevant data
+  mutate(Site = as.factor(Site)) %>%
+  group_by(scientific) %>%
+  mutate(No.Sites = length(unique(Site))) %>%
+  ungroup() %>%
+  dplyr::select(!Site) %>%
+  unique() %>%
+  left_join(., obs_abun, by = "scientific")
+
+m2b_noFS_predict <- ggpredict(model_2b_noFS, terms = "scientific") %>%
+  dplyr::rename("scientific" = "x",
+                "logsppAbun" = "predicted",
+                "expectedAbun" = "group") %>%
+  left_join(., textcol, by = "scientific") %>%
+  plyr::mutate(expectedAbun = exp(logsppAbun - 1),
+               conf.low = exp(conf.low - 1),
+               conf.high = exp(conf.high - 1),
+               susceptibility = as.factor(susceptibility)) %>%
+  group_by(scientific, obs_abun, expectedAbun) %>%
+  unique()
+
+
+# xhat <- TeX(r"($\hat{X}_{\textit{a}} =)") ## LaTeX formula: $\hat{X}_{\textit{a}} = ## THIS ALSO WORKS, BUT WILL TRY USING LATEX EXP BELOW
+TeXlabl <- glue::glue("$\\textbf{\\hat{x}_{\\textit{a}}}}}=", .open = "{{") # THIS WORKS
+xhat <- latex2exp::TeX(TeXlabl, output = "expression")
+
+# Create color coded labels for graph annotation
+# Resistant
+df1 <- m2b_noFS_predict %>%
+  filter(susceptibility == "1")
+
+# Tolerant
+df2 <- m2b_noFS_predict %>%
+  filter(susceptibility == "2")
+
+# Susceptible
+df3 <- m2b_noFS_predict %>%
+  filter(susceptibility == "3")
+
+
+m2b_noFS_plot <- ggplot(m2b_noFS_predict, aes(x = scientific, label = round(expectedAbun, 0))) +
+  geom_jitter(aes(y = obs_abun, colour = susceptibility), shape = 23, size = 2,
+              alpha = 0.25, show.legend = F) +
+  geom_point(aes(y = expectedAbun, colour = susceptibility), size = 4.5) +
+  geom_errorbar(aes(ymin = conf.low, ymax = conf.high, colour = susceptibility), width = 0.5, linewidth = 1) +
+  # geom_text(aes(colour = susceptibility, x = (as.numeric(scientific) + 0.05), y = conf.high + 3),
+  #           size = 6, fontface = "bold", alpha = 0.75) +
+  # annotate(geom = "text", x = (as.numeric(df1$scientific) + 0.1), y = (df1$conf.high + 1.5),
+  #          label = paste(xhat), parse = TRUE, size = 6, color = "#548078", alpha = 0.75) +
+  # annotate(geom = "text", x = (as.numeric(df2$scientific) + 0.1), y = (df2$conf.high + 1.5),
+  #          label = paste(xhat), parse = TRUE, size = 6, color = "#E3A630", alpha = 0.75) +
+  # annotate(geom = "text", x = (as.numeric(df3$scientific) + 0.1), y = (df3$conf.high + 1.5),
+  #          label = paste(xhat), parse = TRUE, size = 6, color = "#b30000", alpha = 0.75) +
+  coord_flip(clip = "off") +
+  ylab("Abundance") +
+  xlab("Species") +
+  labs(caption = "*Fire salamanders excluded") +
+  scale_colour_manual(name = "Susceptibility",
+                      values = c("#548078", "#E3A630", "#b30000"),
+                      labels = c("Resistant", "Tolerant", "Susceptible"),
+                      guide = "none") +
+  scale_y_continuous(labels = seq(0, 90, 10),
+                     breaks = seq(0, 90, 10),
+                     limits = c(0, 92)) + # 1 obs. point cut off -- @112 (L. helveticus)
+  scale_x_discrete(expand = expansion(mult = c(0, 0.01), add = c(1, 0.29))) +
+  ak_theme + theme(axis.text.y = element_text(face = "italic"),
+                   legend.title = element_blank())
+
+
+m2b_noFS_plot
+
+# ggsave("fig2b_noFS.pdf", m2b_noFS_plot, device = cairo_pdf, path = file.path(dir, figpath),
+#           width = 2000, height = 1400, scale = 2, units = "px", dpi = 300, limitsize = F)
+
+rm(m2b_predict, model_2b, obs_abun, textcol)
+
+### c. Host abundance and susceptibility in our dataset ------------------------
+#### > All animals in dataset --------------------------------------------------
 model_2c <- glmmTMB(logsppAbun ~ susceptibility + (1|Site),
                data = d,
                control = glmmTMBControl(optimizer = optim,
@@ -788,9 +912,9 @@ m2c_predict <- ggpredict(model_2c, terms = c("susceptibility")) %>%
   dplyr::rename("susceptibility" = "x",
        "group" = "group") %>%
   mutate(susceptibility = as.factor(susceptibility),
-         predicted = exp(as.numeric(predicted)),
-         conf.high = exp(as.numeric(conf.high)),
-         conf.low = exp(as.numeric(conf.low)))
+         predicted = exp(as.numeric(predicted - 1)),
+         conf.high = exp(as.numeric(conf.high - 1)),
+         conf.low = exp(as.numeric(conf.low - 1)))
 
 m2c_rug <- d %>%
   group_by(susceptibility) %>%
@@ -798,24 +922,27 @@ m2c_rug <- d %>%
 
 m2c_predict <- merge(m2c_predict, m2c_rug)
 
-comparisons <- list(c())
+# comparisons <- list(c())
 
 m2c_plot <- ggplot(m2c_predict, aes(susceptibility, predicted, color = susceptibility)) +
   geom_point(size = 5) +
-  geom_errorbar(aes(ymin = conf.low, ymax = conf.high), width = 0.2, linewidth = 1) +
-  geom_richtext(aes(y = (conf.high + 1), label = paste0("n<span style = 'font-size:15pt'><sub>*obs*</sub> </span>= ", n)),
+  geom_errorbar(aes(ymin = conf.low, ymax = conf.high), width = 0.1, linewidth = 1) +
+  geom_richtext(aes(y = (conf.high + 0.5), label = paste0("n<span style = 'font-size:15pt'><sub>*obs*</sub> </span>= ", n)),
                 alpha = 0.75, size = 8, label.size = NA, fill = NA, fontface = "bold", show.legend = F) +
-  annotate("text", x = 3, y = 6.75, label = "***", size = 10, fontface = "bold",
+  annotate("text", x = 3, y = 4.75, label = "***", size = 10, fontface = "bold",
            colour = "#b30000") +
   # annotate("text", x = 0.65, y = 9, label = "C", size = 12, fontface = "bold",
   #          colour = "black") +
   scale_x_discrete(labels = c("Resistant", "Tolerant", "Susceptible")) +
   ylab("Species abundance") +
   xlab("Susceptibility level") +
+  labs(caption = "*All species included") +
   scale_y_continuous(limits = c(0,9),
                    breaks = seq(0, 8, 2)) +
   scale_colour_manual(name = "Susceptibility",
-                      values = c("#548078", "#E3A630", "#b30000"),
+                      values = c("#548078", # 9 spp
+                                 "#E3A630", # 15 spp
+                                 "#b30000"),# 5 spp
                       labels = c("Resistant", "Tolerant", "Susceptible"),
                       guide = "none") +
   ak_theme + theme(axis.text.y = element_text(size = 26, face = "plain"),)
@@ -826,7 +953,58 @@ m2c_plot
 ggsave("fig2c.pdf", m2c_plot, device = cairo_pdf, path = file.path(dir, figpath),
           width = 2000, height = 1300, scale = 2, units = "px", dpi = 300, limitsize = F)
 
+#### > Excluding fire salamanders ----------------------------------------------
+model_2c_noFS <- glmmTMB(logsppAbun ~ susceptibility + (1|Site),
+                         data = d_noFS,
+                         control = glmmTMBControl(optimizer = optim,
+                                                  optArgs = list(method = "BFGS")))
+summary(model_2c_noFS)
+Anova(model_2c_noFS)
 
+
+m2c_noFS_predict <- ggpredict(model_2c_noFS, terms = c("susceptibility")) %>%
+  dplyr::rename("susceptibility" = "x",
+                "group" = "group") %>%
+  mutate(susceptibility = as.factor(susceptibility),
+         predicted = exp(as.numeric(predicted - 1)),
+         conf.high = exp(as.numeric(conf.high - 1)),
+         conf.low = exp(as.numeric(conf.low - 1)))
+
+m2c_noFS_rug <- d_noFS %>%
+  group_by(susceptibility) %>%
+  summarise(n = n())
+
+m2c_noFS_predict <- merge(m2c_noFS_predict, m2c_noFS_rug)
+
+m2c_noFS_plot <- ggplot(m2c_noFS_predict, aes(susceptibility, predicted, color = susceptibility)) +
+  geom_point(size = 5) +
+  geom_errorbar(aes(ymin = conf.low, ymax = conf.high), width = 0.1, linewidth = 1) +
+  geom_richtext(aes(y = (conf.high + 0.5), label = paste0("n<span style = 'font-size:15pt'><sub>*obs*</sub> </span>= ", n)),
+                alpha = 0.75, size = 8, label.size = NA, fill = NA, fontface = "bold", show.legend = F) +
+  annotate("text", x = 3, y = 8, label = "***", size = 10, fontface = "bold",
+           colour = "#b30000") +
+  # annotate("text", x = 0.65, y = 9, label = "C", size = 12, fontface = "bold",
+  #          colour = "black") +
+  scale_x_discrete(labels = c("Resistant", "Tolerant", "Susceptible")) +
+  ylab("Species abundance") +
+  xlab("Susceptibility level") +
+  labs(caption = "*Fire salamanders excluded") +
+  scale_y_continuous(limits = c(0,9),
+                     breaks = seq(0, 8, 2)) +
+  scale_colour_manual(name = "Susceptibility",
+                      values = c("#548078", # 9 spp
+                                 "#E3A630", # 15 spp
+                                 "#b30000"),# 5 spp
+                      labels = c("Resistant", "Tolerant", "Susceptible"),
+                      guide = "none") +
+  ak_theme + theme(axis.text.y = element_text(size = 26, face = "plain"),)
+
+m2c_noFS_plot
+
+# ggsave("fig2c_noFS.pdf", m2c_noFS_plot, device = cairo_pdf, path = file.path(dir, figpath),
+#           width = 2000, height = 1300, scale = 2, units = "px", dpi = 300, limitsize = F)
+
+### Figure 2. ------------------------------------------------------------------
 ## Create guide to force a common legend
 commonLegend <- guides(fill = guide_legend(override.aes = list(color = c("#548078", "#E3A630", "#b30000"),
                                                     shape = c(16, 16, 16),
@@ -856,6 +1034,17 @@ fig2b <- m2b_plot + labs(caption = NULL) +
                              plot.tag.position = c(0.92, 0.92)) +
                        commonLegend
 
+fig2b_noFS <- m2b_noFS_plot + labs(caption = NULL) +
+  theme(axis.text.y = element_blank(),
+        axis.title.y = element_blank(),
+        axis.title.x = element_text(size = 30),
+        axis.text.x = element_text(size = 24),
+        axis.ticks.length = unit(.25, "cm"),
+        axis.ticks = element_blank(),
+        plot.margin = margin(.5, .75, .5, .5, "cm"),
+        plot.tag.position = c(0.92, 0.92)) +
+  commonLegend
+
 fig2c <- m2c_plot + labs(caption = NULL) +
                       theme(panel.border = element_rect(colour = "black", fill = NA, linewidth = 1),
                             plot.margin = margin(.75, 2, .75, 0, "cm"),
@@ -866,6 +1055,18 @@ fig2c <- m2c_plot + labs(caption = NULL) +
                             axis.text.y = element_text(face = "plain"),
                             plot.tag.position = c(0.33, 0.92)) +
                       commonLegend
+
+fig2c_noFS <- m2c_noFS_plot + labs(caption = NULL) +
+  theme(panel.border = element_rect(colour = "black", fill = NA, linewidth = 1),
+        plot.margin = margin(.75, 2, .75, 0, "cm"),
+        axis.ticks.length.y = unit(.25, "cm"),
+        axis.ticks = element_blank(),
+        axis.title.y = element_text(margin = margin(r = -500)),
+        axis.title.x = element_text(size = 34),
+        axis.text.y = element_text(face = "plain"),
+        plot.tag.position = c(0.33, 0.92)) +
+  commonLegend
+
 
 
 fig2ab <-(fig2a | fig2b) + plot_layout(guides = "collect", heights = c(20, 16)) +
@@ -896,7 +1097,7 @@ ggsave("fig2_combined.pdf", fig2combined, device = cairo_pdf, path = file.path(d
 #   nrow()
 
 
-#### 3. Cbind models testing the Dilution Effect Hypothesis ####################
+## III. Cbind models testing the Dilution Effect Hypothesis --------------------
 ## Data prep for cbind models
 # Drop rows with NA vals in weather data & scale relevant vars
 dcbindScaled <- dcbind %>%
