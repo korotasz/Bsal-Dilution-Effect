@@ -869,12 +869,6 @@ m2b_noFS_plot <- ggplot(m2b_noFS_predict, aes(x = scientific, label = round(expe
   geom_errorbar(aes(ymin = conf.low, ymax = conf.high, colour = susceptibility), width = 0.5, linewidth = 1) +
   # geom_text(aes(colour = susceptibility, x = (as.numeric(scientific) + 0.05), y = conf.high + 3),
   #           size = 6, fontface = "bold", alpha = 0.75) +
-  # annotate(geom = "text", x = (as.numeric(df1$scientific) + 0.1), y = (df1$conf.high + 1.5),
-  #          label = paste(xhat), parse = TRUE, size = 6, color = "#548078", alpha = 0.75) +
-  # annotate(geom = "text", x = (as.numeric(df2$scientific) + 0.1), y = (df2$conf.high + 1.5),
-  #          label = paste(xhat), parse = TRUE, size = 6, color = "#E3A630", alpha = 0.75) +
-  # annotate(geom = "text", x = (as.numeric(df3$scientific) + 0.1), y = (df3$conf.high + 1.5),
-  #          label = paste(xhat), parse = TRUE, size = 6, color = "#b30000", alpha = 0.75) +
   coord_flip(clip = "off") +
   ylab("Abundance") +
   xlab("Species") +
@@ -922,8 +916,6 @@ m2c_rug <- d %>%
 
 m2c_predict <- merge(m2c_predict, m2c_rug)
 
-# comparisons <- list(c())
-
 m2c_plot <- ggplot(m2c_predict, aes(susceptibility, predicted, color = susceptibility)) +
   geom_point(size = 5) +
   geom_errorbar(aes(ymin = conf.low, ymax = conf.high), width = 0.1, linewidth = 1) +
@@ -933,6 +925,12 @@ m2c_plot <- ggplot(m2c_predict, aes(susceptibility, predicted, color = susceptib
            colour = "#b30000") +
   # annotate("text", x = 0.65, y = 9, label = "C", size = 12, fontface = "bold",
   #          colour = "black") +
+  # annotate(geom = "text", x = (as.numeric(df1$scientific) + 0.1), y = (df1$conf.high + 1.5),
+  #          label = paste(xhat), parse = TRUE, size = 6, color = "#548078", alpha = 0.75) +
+  # annotate(geom = "text", x = (as.numeric(df2$scientific) + 0.1), y = (df2$conf.high + 1.5),
+  #          label = paste(xhat), parse = TRUE, size = 6, color = "#E3A630", alpha = 0.75) +
+  # annotate(geom = "text", x = (as.numeric(df3$scientific) + 0.1), y = (df3$conf.high + 1.5),
+  #          label = paste(xhat), parse = TRUE, size = 6, color = "#b30000", alpha = 0.75) +
   scale_x_discrete(labels = c("Resistant", "Tolerant", "Susceptible")) +
   ylab("Species abundance") +
   xlab("Susceptibility level") +
@@ -1001,8 +999,8 @@ m2c_noFS_plot <- ggplot(m2c_noFS_predict, aes(susceptibility, predicted, color =
 
 m2c_noFS_plot
 
-# ggsave("fig2c_noFS.pdf", m2c_noFS_plot, device = cairo_pdf, path = file.path(dir, figpath),
-#           width = 2000, height = 1300, scale = 2, units = "px", dpi = 300, limitsize = F)
+ggsave("fig2c_noFS.pdf", m2c_noFS_plot, device = cairo_pdf, path = file.path(dir, figpath),
+          width = 2000, height = 1300, scale = 2, units = "px", dpi = 300, limitsize = F)
 
 ### Figure 2. ------------------------------------------------------------------
 ## Create guide to force a common legend
@@ -1097,48 +1095,184 @@ ggsave("fig2_combined.pdf", fig2combined, device = cairo_pdf, path = file.path(d
 #   nrow()
 
 
-## III. Cbind models testing the Dilution Effect Hypothesis --------------------
+## III. "All Spp" Cbind models testing the dilution dffect hypothesis ----------
 ## Data prep for cbind models
 # Drop rows with NA vals in weather data & scale relevant vars
 dcbindScaled <- dcbind %>%
-  tidyr::drop_na(., any_of(c(21:36))) %>%
+  tidyr::drop_na(., any_of(c(36:53))) %>%
   mutate_at(c("temp_d", "sMoist_d",
               "bio1_wc", "bio12_wc", "tavg_wc", "prec_wc"),
             ~(scale(., center = T, scale = T %>% as.numeric))) %>%
-  filter(country == "Germany" | country == "Spain")
+  mutate(year = year(date))
 
 
-##      3a. Cbind model including all salamander spp. --------------------------
-m_all <- glmmTMB(cbind(nPos_all, nNeg_all) ~ richness*logsiteAbun +
+#### > Relative richness (derived from dataset) --------------------------------
+all_RR <- glmmTMB(cbind(nPos_all, nNeg_all) ~ richness*logsiteAbun +
                     temp_d*sMoist_d + (1|scientific),
                   data = dcbindScaled, family = "binomial", na.action = "na.fail",
                   control = glmmTMBControl(optimizer = optim,
                                            optArgs = list(method = "BFGS")))
 
-summary(m_all)
-Anova(m_all)
+summary(all_RR)
+Anova(all_RR)
+
+resid <- simulateResiduals(all_RR)
+testResiduals(resid)
+testQuantiles(resid)
+testZeroInflation(resid)
+
+## Need to subset unique lat/lon vals to test for spatial autocorrelation
+coords <- dcbindScaled %>%
+  distinct(Site, Lat, Lon, .keep_all = T) %>%
+  group_by(Site) %>%
+  mutate(Lat = mean(Lat), Lon = mean(Lon)) %>%
+  distinct() %>%
+  ungroup()
+
+recalc.resid <- recalculateResiduals(resid, group = coords$Site)
+testSpatialAutocorrelation(recalc.resid, x = coords$Lon, y = coords$Lat)
+#DHARMa Moran's I test for distance-based autocorrelation
+#
+#data:  recalc.resid
+#observed = 0.039006, expected = -0.002924, sd = 0.022151, p-value = 0.05837
+
+# is slightly spatially autocorrelated -- tried to correct but it made the model significantly worse
+# dcbindScaled$pos <- numFactor(dcbindScaled$Lon, dcbindScaled$Lat)
+# dcbindScaled$group <- factor(rep(1, nrow(dcbindScaled))) # dummy grouping var
+#
+# # model is fit by adding the pos term in
+# all_RR2 <- glmmTMB(cbind(nPos_all, nNeg_all) ~ richness*logsiteAbun +
+#                     temp_d*sMoist_d + (1|scientific) + mat(pos + 0 | group),
+#                   data = dcbindScaled, family = "binomial", na.action = "na.fail",
+#                   control = glmmTMBControl(optimizer = optim,
+#                                            optArgs = list(method = "BFGS")))
+#
+#
+# summary(all_RR2)
+# Anova(all_RR2)
+#
+# resid2 <- simulateResiduals(all_RR2)
+# testResiduals(resid2)
+# testQuantiles(resid2)
+# testZeroInflation(resid2)
+#
+# recalc.resid2 <- recalculateResiduals(resid2, group = dcbindScaled$Site)
+# testSpatialAutocorrelation(recalc.resid2, x = dcbindScaled$Lon, y = dcbindScaled$Lat)
 
 
-m_all_noFS <- glmmTMB(cbind(nPos_all, nNeg_all) ~ richness*logsiteAbun +
+##      Prevalence by Abundance & Richness Plots for 'All spp.' model
+all_RR_pred <- ggpredict(all_RR,  terms = c("richness", "logsiteAbun")) %>%
+  dplyr::rename("richness" = "x",
+                "logsiteAbun" = "group") %>%
+  plyr::mutate(richness = as.numeric(as.character(richness)),
+               logsiteAbun = as.numeric(as.character(logsiteAbun)),
+               # Convert scaled prediction to original data scale:
+               siteAbun = as.factor(round(exp(as.numeric(logsiteAbun)), 0)))
+
+
+all_RR_plot <- ggplot(all_RR_pred, aes(x = richness, y = predicted, linetype = siteAbun, colour = siteAbun)) +
+  geom_line(aes(linetype = siteAbun, colour = siteAbun), linewidth = 1) +
+  geom_rug(data = dcbindScaled, aes(x = richness, y = 0), sides = "b",
+           alpha = 0.5, position = position_jitter(width = 0.4, height = 0.1),
+           inherit.aes = F, na.rm = T) +
+  labs(x = "Species richness",
+       y = "Bsal prevalence (%)",
+       # title = "All spp. model",
+  ) +
+  #  geom_ribbon(aes(x = richness, ymin = conf.low, ymax = conf.high,
+  #              fill = siteAbun), alpha = 0.2, colour = NA, show.legend = F) +
+  scale_linetype_manual(values = c("solid", "longdash", "twodash")) +
+  scale_color_grey(start = 0.8, end = 0.2) +
+  scale_x_continuous(labels = seq(0, 10, 1),
+                     breaks = seq(0, 10, 1)) +
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1),
+                     breaks = seq(0, .05, 0.01),
+                     limits = c(0, 0.05),
+                     minor_breaks = seq(0, 0.05, 0.01)) +
+  ak_theme + theme(plot.tag.position = c(0.96, 0.9),
+                   axis.text.y = element_text(face = "plain")) +
+  guides(colour = guide_legend("Site-level abundance", title.position = "top", title.hjust = 0.5),
+         linetype = guide_legend("Site-level abundance", title.position = "top", title.hjust = 0.5))
+
+all_RR_plot
+# ggsave("m_all_plot.pdf", m_all_plot, device = cairo_pdf, path = file.path(dir, figpath),
+#        width = 1250, height = 1500, scale = 2, units = "px", dpi = 300, limitsize = F)
+
+
+
+
+
+
+
+
+#### > Relative richness + no FS prevalence ------------------------------------
+## Fire salamanders are still accounted for in site abundance and richness calculations
+all_RR_noFS <- glmmTMB(cbind(nPos_all_noFS, nNeg_all_noFS) ~ richness*logsiteAbun +
+                    temp_d*sMoist_d + (1|scientific),
+                  data = dcbindScaled, family = "binomial", na.action = "na.fail",
+                  control = glmmTMBControl(optimizer = optim,
+                                           optArgs = list(method = "BFGS")))
+
+summary(all_RR_noFS)
+Anova(all_RR_noFS)
+
+resid_noFS <- simulateResiduals(all_RR_noFS)
+testResiduals(resid_noFS)
+testQuantiles(resid_noFS)
+testZeroInflation(resid_noFS)
+
+# Test for spatial autocorrelation
+recalc.resid_noFS <- recalculateResiduals(resid_noFS, group = coords$Site)
+testSpatialAutocorrelation(recalc.resid_noFS, x = coords$Lon, y = coords$Lat)
+# not spatially autocorrelated
+
+
+#### > IUCN Richness estimate --------------------------------------------------
+all_iucnR <- glmmTMB(cbind(nPos_all, nNeg_all) ~ iucn_rich*logsiteAbun +
                    temp_d*sMoist_d + (1|scientific),
                  data = dcbindScaled, family = "binomial", na.action = "na.fail",
                  control = glmmTMBControl(optimizer = optim,
                                           optArgs = list(method = "BFGS")))
 
-summary(m_all_noFS)
-Anova(m_all_noFS)
+summary(all_iucnR)
+Anova(all_iucnR)
+
+resid_iucnR <- simulateResiduals(all_iucnR)
+testResiduals(resid_iucnR)
+testQuantiles(resid_iucnR)
+testZeroInflation(resid_iucnR)
+
+# Test for spatial autocorrelation
+recalc.resid_iucnR <- recalculateResiduals(resid_iucnR, group = coords$Site)
+testSpatialAutocorrelation(recalc.resid_iucnR, x = coords$Lon, y = coords$Lat)
+
+#### > IUCN Richness estimate + no FS prevalence -------------------------------
+all_iucnR_noFS <- glmmTMB(cbind(nPos_all_noFS, nNeg_all_noFS) ~ iucn_rich*logsiteAbun +
+                       temp_d*sMoist_d + (1|scientific),
+                     data = dcbindScaled, family = "binomial", na.action = "na.fail",
+                     control = glmmTMBControl(optimizer = optim,
+                                              optArgs = list(method = "BFGS")))
+
+summary(all_iucnR_noFS)
+Anova(all_iucnR_noFS)
+
+resid_iucnR_noFS <- simulateResiduals(all_iucnR_noFS)
+testResiduals(resid_iucnR_noFS)
+testQuantiles(resid_iucnR_noFS)
+testZeroInflation(resid_iucnR_noFS)
+
+# Test for spatial autocorrelation
+recalc.resid_iucnR_noFS <- recalculateResiduals(resid_iucnR_noFS, group = coords$Site)
+testSpatialAutocorrelation(recalc.resid_iucnR_noFS, x = coords$Lon, y = coords$Lat)
 
 
-# m_all2 <- glmmTMB(cbind(nPos_all, nNeg_all) ~ richness*logsiteAbun +
-#                    temp_d*sMoist_d + (1|scientific) + (1|principalInvestigator),
-#                  data = dcbindScaled, family = "binomial", na.action = "na.fail",
-#                  control = glmmTMBControl(optimizer = optim,
-#                                           optArgs = list(method = "BFGS")))
-#
-# summary(m_all2)
-# Anova(m_all2)
 
-# anova(m_all, m_all2) # models are virtually the same, going with the simpler model to be parsimonious.
+
+
+
+
+
+
 
 
 #### Clean model outputs
@@ -1162,55 +1296,19 @@ webshot2::webshot(file.path(dir, figpath, "m_all.html"),
 
 
 
-##      Prevalence by Abundance & Richness Plots for 'All spp.' model
-m_all_predict <- ggpredict(m_all,  terms = c("richness", "logsiteAbun")) %>%
-  dplyr::rename("richness" = "x",
-         "logsiteAbun" = "group") %>%
-  plyr::mutate(richness = as.numeric(as.character(richness)),
-               logsiteAbun = as.numeric(as.character(logsiteAbun)),
-               # Convert scaled prediction to original data scale:
-               siteAbun = as.factor(round(exp(as.numeric(logsiteAbun)), 0)))
 
-
-m_all_plot <- ggplot(m_all_predict, aes(x = richness, y = predicted, linetype = siteAbun, colour = siteAbun)) +
-  geom_line(aes(linetype = siteAbun, colour = siteAbun), linewidth = 1) +
-  geom_rug(data = dcbindScaled, aes(x = richness, y = 0), sides = "b",
-           alpha = 0.5, position = position_jitter(width = 0.4, height = 0.1),
-           inherit.aes = F, na.rm = T) +
-  labs(x = "Species richness",
-       y = "Bsal prevalence (%)",
-       # title = "All spp. model",
-       ) +
-  #  geom_ribbon(aes(x = richness, ymin = conf.low, ymax = conf.high,
-  #              fill = siteAbun), alpha = 0.2, colour = NA, show.legend = F) +
-  scale_linetype_manual(values = c("solid", "longdash", "twodash")) +
-  scale_color_grey(start = 0.8, end = 0.2) +
-  scale_x_continuous(labels = seq(0, 10, 1),
-                     breaks = seq(0, 10, 1)) +
-  scale_y_continuous(labels = scales::percent_format(accuracy = 1),
-                     breaks = seq(0, .05, 0.01),
-                     limits = c(0, 0.05),
-                     minor_breaks = seq(0, 0.05, 0.01)) +
-  ak_theme + theme(plot.tag.position = c(0.96, 0.9),
-                   axis.text.y = element_text(face = "plain")) +
-  guides(colour = guide_legend("Site-level abundance", title.position = "top", title.hjust = 0.5),
-         linetype = guide_legend("Site-level abundance", title.position = "top", title.hjust = 0.5))
-
-m_all_plot
-# ggsave("m_all_plot.pdf", m_all_plot, device = cairo_pdf, path = file.path(dir, figpath),
-#        width = 1250, height = 1500, scale = 2, units = "px", dpi = 300, limitsize = F)
 
 # ggsave("m_all_plot.tif", m_all_plot, device = "tiff", scale = 2,
 #        width = 1500, height = 1000, units = "px",
 #        path = file.path(dir, figpath), dpi = 300)
 
 
-##      3b. Cbind model for fire salamanders only ------------------------------
+## IV. "Fire salamander only" Cbind models testing the dilution effect hypothesis ------------------------------
 ## Subset data even further to only include Fire Salamanders
 FSdata <- dcbindScaled %>%
   filter(scientific == "Salamandra salamandra")
 
-m_FS <- glmmTMB(cbind(nPos_FS, nNeg_FS) ~  richness + logsiteAbun + temp_d*sMoist_d + (1|scientific),
+m_FS <- glmmTMB(cbind(nPos_FS, nNeg_FS) ~  richness * logsiteAbun + temp_d*sMoist_d + (1|scientific),
                 data = FSdata, family = "binomial",
                 control = glmmTMBControl(optimizer = optim,
                                          optArgs = list(method = "BFGS")))
@@ -1219,6 +1317,15 @@ m_FS <- glmmTMB(cbind(nPos_FS, nNeg_FS) ~  richness + logsiteAbun + temp_d*sMois
 summary(m_FS)
 Anova(m_FS)
 
+
+m_FS_iucnR <- glmmTMB(cbind(nPos_FS, nNeg_FS) ~  iucn_rich * logsiteAbun + temp_d*sMoist_d + (1|scientific),
+                data = FSdata, family = "binomial",
+                control = glmmTMBControl(optimizer = optim,
+                                         optArgs = list(method = "BFGS")))
+
+
+summary(m_FS_iucnR)
+Anova(m_FS_iucnR)
 
 # m_FS2 <- glmmTMB(cbind(nPos_FS, nNeg_FS) ~  richness + logsppAbun + temp_d*sMoist_d + (1|scientific) + (1|principalInvestigator),
 #                  data = FSdata, family = "binomial", na.action = "na.fail",
