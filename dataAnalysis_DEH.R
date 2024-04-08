@@ -39,6 +39,7 @@ extrafont::loadfonts(device = "all", quiet = T) # plot fonts
 ## Packages --------------------------------------------------------------------
 ### > Visualization Packages----------------------------------------------------
 pckgs <- c("ggsignif", # adds labels to significant groups
+            "ggbreak", # create axis breaks in ggplots
                "renv", # environment lock
              "ggtext", # for text type/arrangements w/ ggplot2
            "Rttf2pt1", # to use with the extrafont package
@@ -703,9 +704,9 @@ prev_binconf_plot <- ggplot(prev, aes(scientific, sapply(PointEst, FUN = functio
                       values = c("#548078", "#E3A630", "#b30000"),
                       labels = c("Resistant", "Tolerant", "Susceptible"),
                       guide = "none") +
-  scale_y_continuous(labels = seq(0, 60, 20),
-                     breaks = seq(0, 60, 20),
-                     limits = c(0, 67)) +
+  scale_y_continuous(labels = seq(0, 50, 10),
+                     breaks = seq(0, 50, 10),
+                     limits = c(0, 51)) +
   scale_x_discrete(expand = expansion(mult = c(0, 0.01), add = c(1, 0.25))) +
   ak_theme + theme(axis.text.y = element_text(face = "italic"),
                    legend.title = element_blank())
@@ -719,20 +720,24 @@ rm(bsal_bayesci, bsal_ci, chn, deu, esp, prev, sampSize, vnm)
 
 ### b. The most susceptible species are the most abundant ----------------------
 #### > All animals in dataset --------------------------------------------------
-model_2b <- glmmTMB(logsppAbun ~ scientific + (1|Site),
-               data = d,
+##### i. Europe data only ------------------------------------------------------
+d_euro <- d %>%
+  filter(country == "Germany" | country == "Spain")
+
+m2b_europe <- glmmTMB(logsppAbun ~ scientific + (1|Site),
+               data = d_euro,
                control = glmmTMBControl(optimizer = optim,
                                         optArgs = list(method = "BFGS")))
-summary(model_2b)
-Anova(model_2b)
+summary(m2b_europe)
+Anova(m2b_europe)
 
 
 # Subset observed abundance
-obs_abun <- d %>%
+euro_abun <- d_euro %>%
   dplyr::select(scientific, sppAbun, Site) %>%
-  rename(obs_abun = sppAbun)
+  rename(euro_abun = sppAbun)
 
-textcol <- d %>%
+textcol <- d_euro %>%
   dplyr::select(scientific, susceptibility, Site) %>% # subset relevant data
   mutate(Site = as.factor(Site)) %>%
   group_by(scientific) %>%
@@ -740,9 +745,9 @@ textcol <- d %>%
   ungroup() %>%
   dplyr::select(!Site) %>%
   unique() %>%
-  left_join(., obs_abun, by = "scientific")
+  left_join(., euro_abun, by = "scientific")
 
-m2b_predict <- ggpredict(model_2b, terms = "scientific") %>%
+m2b_europe_predict <- ggpredict(m2b_europe, terms = "scientific") %>%
   dplyr::rename("scientific" = "x",
          "logsppAbun" = "predicted",
          "expectedAbun" = "group") %>%
@@ -751,7 +756,7 @@ m2b_predict <- ggpredict(model_2b, terms = "scientific") %>%
                conf.low = exp(conf.low - 1),
                conf.high = exp(conf.high - 1),
                susceptibility = as.factor(susceptibility)) %>%
-  group_by(scientific, obs_abun, expectedAbun) %>%
+  group_by(scientific, euro_abun, expectedAbun) %>%
   unique()
 
 
@@ -761,21 +766,21 @@ xhat <- latex2exp::TeX(TeXlabl, output = "expression")
 
 # Create color coded labels for graph annotation
 # Resistant
-df1 <- m2b_predict %>%
+df1 <- m2b_europe_predict %>%
   filter(susceptibility == "1")
 
 # Tolerant
-df2 <- m2b_predict %>%
+df2 <- m2b_europe_predict %>%
   filter(susceptibility == "2")
 
 # Susceptible
-df3 <- m2b_predict %>%
+df3 <- m2b_europe_predict %>%
   filter(susceptibility == "3")
 
 
-m2b_plot <- ggplot(m2b_predict, aes(x = scientific, label = round(expectedAbun, 0))) +
-  geom_jitter(aes(y = obs_abun, colour = susceptibility), shape = 23, size = 2,
-             alpha = 0.25, show.legend = F) +
+m2b_euro_plot <- ggplot(m2b_europe_predict, aes(x = scientific, label = round(expectedAbun, 0))) +
+  geom_jitter(aes(y = euro_abun, colour = susceptibility), shape = 23, size = 2,
+             alpha = 0.5, show.legend = F) +
   geom_point(aes(y = expectedAbun, colour = susceptibility), size = 4.5) +
   geom_errorbar(aes(ymin = conf.low, ymax = conf.high, colour = susceptibility), width = 0.5, linewidth = 1) +
   # geom_text(aes(colour = susceptibility, x = (as.numeric(scientific) + 0.05), y = conf.high + 3),
@@ -789,39 +794,139 @@ m2b_plot <- ggplot(m2b_predict, aes(x = scientific, label = round(expectedAbun, 
   coord_flip(clip = "off") +
   ylab("Abundance") +
   xlab("Species") +
-  labs(caption = "*All species included") +
+  labs(caption = "*All species included. Figure displays data from Europe only.") +
   scale_colour_manual(name = "Susceptibility",
                       values = c("#548078", "#E3A630", "#b30000"),
                       labels = c("Resistant", "Tolerant", "Susceptible"),
                       guide = "none") +
-  scale_y_continuous(labels = seq(0, 90, 10),
-                     breaks = seq(0, 90, 10),
-                     limits = c(0, 92)) + # 1 obs. point cut off -- @112 (L. helveticus)
+  scale_y_continuous(labels = seq(0, 110, 10),
+                     breaks = seq(0, 110, 10),
+                     limits = c(0, 113)) + # 1 obs. point cut off -- @112 (L. helveticus)
+  scale_y_break(c(66, 110)) +
+  scale_x_discrete(expand = expansion(mult = c(0, 0.01), add = c(1, 0.29))) +
+  ak_theme + theme(axis.text.y = element_text(face = "italic"),
+                   axis.text.x.top = element_blank(),
+                   legend.title = element_blank())
+
+
+m2b_euro_plot
+
+# ggsave("fig2b_europe.pdf", m2b_euro_plot, device = cairo_pdf, path = file.path(dir, figpath),
+#           width = 2000, height = 1400, scale = 2, units = "px", dpi = 300, limitsize = F)
+
+rm(df1, df2, df3, euro_abun, m2b_europe, m2b_europe_predict, textcol)
+##### ii. Asia data only -------------------------------------------------------
+d_asia <- d %>%
+  filter(country == "Vietnam" | country == "China")
+
+m2b_asia <- glmmTMB(logsppAbun ~ scientific + (1|Site),
+                    data = d_asia,
+                    control = glmmTMBControl(optimizer = optim,
+                                             optArgs = list(method = "BFGS")))
+summary(m2b_asia)
+Anova(m2b_asia)
+
+
+# Subset observed abundance
+asia_abun <- d_asia %>%
+  dplyr::select(scientific, sppAbun, Site) %>%
+  rename(asia_abun = sppAbun)
+
+textcol <- d_asia %>%
+  dplyr::select(scientific, susceptibility, Site) %>% # subset relevant data
+  mutate(Site = as.factor(Site)) %>%
+  group_by(scientific) %>%
+  mutate(No.Sites = length(unique(Site))) %>%
+  ungroup() %>%
+  dplyr::select(!Site) %>%
+  unique() %>%
+  left_join(., asia_abun, by = "scientific")
+
+m2b_asia_predict <- ggpredict(m2b_asia, terms = "scientific") %>%
+  dplyr::rename("scientific" = "x",
+                "logsppAbun" = "predicted",
+                "expectedAbun" = "group") %>%
+  left_join(., textcol, by = "scientific") %>%
+  plyr::mutate(expectedAbun = exp(logsppAbun - 1),
+               conf.low = exp(conf.low - 1),
+               conf.high = exp(conf.high - 1),
+               susceptibility = as.factor(susceptibility)) %>%
+  group_by(scientific, asia_abun, expectedAbun) %>%
+  unique()
+
+
+# xhat <- TeX(r"($\hat{X}_{\textit{a}} =)") ## LaTeX formula: $\hat{X}_{\textit{a}} = ## THIS ALSO WORKS, BUT WILL TRY USING LATEX EXP BELOW
+TeXlabl <- glue::glue("$\\textbf{\\hat{x}_{\\textit{a}}}}}=", .open = "{{") # THIS WORKS
+xhat <- latex2exp::TeX(TeXlabl, output = "expression")
+
+# Create color coded labels for graph annotation
+# Resistant
+df1 <- m2b_asia_predict %>%
+  filter(susceptibility == "1")
+
+# Tolerant
+df2 <- m2b_asia_predict %>%
+  filter(susceptibility == "2")
+
+# Susceptible
+df3 <- m2b_asia_predict %>%
+  filter(susceptibility == "3")
+
+
+m2b_asia_plot <- ggplot(m2b_asia_predict, aes(x = scientific, label = round(expectedAbun, 0))) +
+  geom_jitter(aes(y = asia_abun, colour = susceptibility), shape = 23, size = 2,
+              alpha = 0.75, show.legend = F) +
+  geom_point(aes(y = expectedAbun, colour = susceptibility), size = 4.5) +
+  geom_errorbar(aes(ymin = conf.low, ymax = conf.high, colour = susceptibility), width = 0.5, linewidth = 1) +
+  # geom_text(aes(colour = susceptibility, x = (as.numeric(scientific) + 0.05), y = conf.high + 3),
+  #           size = 6, fontface = "bold", alpha = 0.75) +
+  # annotate(geom = "text", x = (as.numeric(df1$scientific) + 0.1), y = (df1$conf.high + 1.5),
+  #          label = paste(xhat), parse = TRUE, size = 6, color = "#548078", alpha = 0.75) +
+  # annotate(geom = "text", x = (as.numeric(df2$scientific) + 0.1), y = (df2$conf.high + 1.5),
+  #          label = paste(xhat), parse = TRUE, size = 6, color = "#E3A630", alpha = 0.75) +
+  # annotate(geom = "text", x = (as.numeric(df3$scientific) + 0.1), y = (df3$conf.high + 1.5),
+  #          label = paste(xhat), parse = TRUE, size = 6, color = "#b30000", alpha = 0.75) +
+  coord_flip(clip = "off") +
+  ylab("Abundance") +
+  xlab("Species") +
+  labs(caption = "*All species included. Figure displays data from Asia only.") +
+  scale_colour_manual(name = "Susceptibility",
+                      values = c("#548078", "#E3A630", "#b30000"),
+                      labels = c("Resistant", "Tolerant", "Susceptible"),
+                      guide = "none") +
+  scale_y_continuous(labels = seq(0, 80, 10),
+                     breaks = seq(0, 80, 10),
+                     limits = c(0, 80)) + # 1 obs. point cut off -- @112 (L. helveticus)
   scale_x_discrete(expand = expansion(mult = c(0, 0.01), add = c(1, 0.29))) +
   ak_theme + theme(axis.text.y = element_text(face = "italic"),
                    legend.title = element_blank())
 
 
-m2b_plot
+m2b_asia_plot
 
-# ggsave("fig2b.pdf", m2b_plot, device = cairo_pdf, path = file.path(dir, figpath),
+# ggsave("fig2b_asia.pdf", m2b_asia_plot, device = cairo_pdf, path = file.path(dir, figpath),
 #           width = 2000, height = 1400, scale = 2, units = "px", dpi = 300, limitsize = F)
 
+rm(m2b_asia, m2b_asia_predict, df1, df2, df3)
 #### > Excluding fire salamanders ----------------------------------------------
-model_2b_noFS <- glmmTMB(logsppAbun ~ scientific + (1|Site),
-                         data = d_noFS,
+##### i. Europe data only ------------------------------------------------------
+d_noFS_euro <- d_noFS %>%
+  filter(country == "Germany" | country == "Spain")
+
+m2b_euro_noFS <- glmmTMB(logsppAbun ~ scientific + (1|Site),
+                         data = d_noFS_euro,
                          control = glmmTMBControl(optimizer = optim,
                                                   optArgs = list(method = "BFGS")))
-summary(model_2b_noFS)
-Anova(model_2b_noFS)
+summary(m2b_euro_noFS)
+Anova(m2b_euro_noFS)
 
 
 # Subset observed abundance
-obs_abun <- d_noFS %>%
+obs_abun <- d_noFS_euro %>%
   dplyr::select(scientific, sppAbun, Site) %>%
   rename(obs_abun = sppAbun)
 
-textcol <- d_noFS %>%
+textcol <- d_noFS_euro %>%
   dplyr::select(scientific, susceptibility, Site) %>% # subset relevant data
   mutate(Site = as.factor(Site)) %>%
   group_by(scientific) %>%
@@ -831,7 +936,7 @@ textcol <- d_noFS %>%
   unique() %>%
   left_join(., obs_abun, by = "scientific")
 
-m2b_noFS_predict <- ggpredict(model_2b_noFS, terms = "scientific") %>%
+m2b_euro_noFS_predict <- ggpredict(m2b_euro_noFS, terms = "scientific") %>%
   dplyr::rename("scientific" = "x",
                 "logsppAbun" = "predicted",
                 "expectedAbun" = "group") %>%
@@ -850,21 +955,21 @@ xhat <- latex2exp::TeX(TeXlabl, output = "expression")
 
 # Create color coded labels for graph annotation
 # Resistant
-df1 <- m2b_noFS_predict %>%
+df1 <- m2b_euro_noFS_predict %>%
   filter(susceptibility == "1")
 
 # Tolerant
-df2 <- m2b_noFS_predict %>%
+df2 <- m2b_euro_noFS_predict %>%
   filter(susceptibility == "2")
 
 # Susceptible
-df3 <- m2b_noFS_predict %>%
+df3 <- m2b_euro_noFS_predict %>%
   filter(susceptibility == "3")
 
 
-m2b_noFS_plot <- ggplot(m2b_noFS_predict, aes(x = scientific, label = round(expectedAbun, 0))) +
+m2b_euro_noFS_plot <- ggplot(m2b_euro_noFS_predict, aes(x = scientific, label = round(expectedAbun, 0))) +
   geom_jitter(aes(y = obs_abun, colour = susceptibility), shape = 23, size = 2,
-              alpha = 0.25, show.legend = F) +
+              alpha = 0.5, show.legend = F) +
   geom_point(aes(y = expectedAbun, colour = susceptibility), size = 4.5) +
   geom_errorbar(aes(ymin = conf.low, ymax = conf.high, colour = susceptibility), width = 0.5, linewidth = 1) +
   # geom_text(aes(colour = susceptibility, x = (as.numeric(scientific) + 0.05), y = conf.high + 3),
@@ -872,71 +977,80 @@ m2b_noFS_plot <- ggplot(m2b_noFS_predict, aes(x = scientific, label = round(expe
   coord_flip(clip = "off") +
   ylab("Abundance") +
   xlab("Species") +
-  labs(caption = "*Fire salamanders excluded") +
+  labs(caption = "*Fire salamanders excluded. Figure displays data from Europe only.") +
   scale_colour_manual(name = "Susceptibility",
                       values = c("#548078", "#E3A630", "#b30000"),
                       labels = c("Resistant", "Tolerant", "Susceptible"),
                       guide = "none") +
-  scale_y_continuous(labels = seq(0, 90, 10),
-                     breaks = seq(0, 90, 10),
-                     limits = c(0, 92)) + # 1 obs. point cut off -- @112 (L. helveticus)
+  scale_y_continuous(labels = seq(0, 110, 10),
+                     breaks = seq(0, 110, 10),
+                     limits = c(0, 113)) + # 1 obs. point cut off -- @112 (L. helveticus)
+  scale_y_break(c(66, 110)) +
   scale_x_discrete(expand = expansion(mult = c(0, 0.01), add = c(1, 0.29))) +
   ak_theme + theme(axis.text.y = element_text(face = "italic"),
+                   axis.text.x.top = element_blank(),
                    legend.title = element_blank())
 
 
-m2b_noFS_plot
+m2b_euro_noFS_plot
 
-# ggsave("fig2b_noFS.pdf", m2b_noFS_plot, device = cairo_pdf, path = file.path(dir, figpath),
+# ggsave("fig2b_euro_noFS.pdf", m2b_euro_noFS_plot, device = cairo_pdf, path = file.path(dir, figpath),
 #           width = 2000, height = 1400, scale = 2, units = "px", dpi = 300, limitsize = F)
 
-rm(m2b_predict, model_2b, obs_abun, textcol)
-
+rm(textcol, obs_abun, obs, m2b_euro_noFS_predict, m2b_euro_noFS, df1, df2, df3)
 ### c. Host abundance and susceptibility in our dataset ------------------------
 #### > All animals in dataset --------------------------------------------------
-model_2c <- glmmTMB(logsppAbun ~ susceptibility + (1|Site),
-               data = d,
+##### i. Europe data only ------------------------------------------------------
+m2c_euro <- glmmTMB(logsppAbun ~ susceptibility + (1|Site),
+               data = d_euro,
                control = glmmTMBControl(optimizer = optim,
                                         optArgs = list(method = "BFGS")))
-summary(model_2c)
-Anova(model_2c)
+summary(m2c_euro)
+Anova(m2c_euro)
 
 
-m2c_predict <- ggpredict(model_2c, terms = c("susceptibility")) %>%
+## Subset observed abundance for plot
+# euro_abun <- d_euro %>%
+#   dplyr::select(scientific, susceptibility, sppAbun) %>%
+#   rename(euro_abun = sppAbun) %>%
+#   group_by(susceptibility, scientific) %>%
+#   mutate(euro_abun = mean(euro_abun)) %>%
+#   distinct()
+
+
+## Summarise data for labels
+m2c_euro_labs <- d_euro %>%
+  group_by(susceptibility) %>%
+  summarise(n = n())
+
+m2c_euro_predict <- ggpredict(m2c_euro, terms = c("susceptibility")) %>%
   dplyr::rename("susceptibility" = "x",
        "group" = "group") %>%
   mutate(susceptibility = as.factor(susceptibility),
          predicted = exp(as.numeric(predicted - 1)),
          conf.high = exp(as.numeric(conf.high - 1)),
-         conf.low = exp(as.numeric(conf.low - 1)))
+         conf.low = exp(as.numeric(conf.low - 1))) %>%
+  drop_na(.) %>%
+  left_join(., m2c_euro_labs, by = "susceptibility")
 
-m2c_rug <- d %>%
-  group_by(susceptibility) %>%
-  summarise(n = n())
 
-m2c_predict <- merge(m2c_predict, m2c_rug)
-
-m2c_plot <- ggplot(m2c_predict, aes(susceptibility, predicted, color = susceptibility)) +
+m2c_euro_plot <- ggplot(m2c_euro_predict, aes(susceptibility, predicted, color = susceptibility)) +
+  # geom_jitter(data = euro_abun, aes(y = euro_abun, colour = susceptibility), shape = 23, size = 2,
+  #             alpha = 0.75, show.legend = F) + ## Including messes with scale of graph
   geom_point(size = 5) +
   geom_errorbar(aes(ymin = conf.low, ymax = conf.high), width = 0.1, linewidth = 1) +
   geom_richtext(aes(y = (conf.high + 0.5), label = paste0("n<span style = 'font-size:15pt'><sub>*obs*</sub> </span>= ", n)),
                 alpha = 0.75, size = 8, label.size = NA, fill = NA, fontface = "bold", show.legend = F) +
-  annotate("text", x = 3, y = 4.75, label = "***", size = 10, fontface = "bold",
+  annotate("text", x = 3, y = 4.25, label = "***", size = 10, fontface = "bold",
            colour = "#b30000") +
   # annotate("text", x = 0.65, y = 9, label = "C", size = 12, fontface = "bold",
   #          colour = "black") +
-  # annotate(geom = "text", x = (as.numeric(df1$scientific) + 0.1), y = (df1$conf.high + 1.5),
-  #          label = paste(xhat), parse = TRUE, size = 6, color = "#548078", alpha = 0.75) +
-  # annotate(geom = "text", x = (as.numeric(df2$scientific) + 0.1), y = (df2$conf.high + 1.5),
-  #          label = paste(xhat), parse = TRUE, size = 6, color = "#E3A630", alpha = 0.75) +
-  # annotate(geom = "text", x = (as.numeric(df3$scientific) + 0.1), y = (df3$conf.high + 1.5),
-  #          label = paste(xhat), parse = TRUE, size = 6, color = "#b30000", alpha = 0.75) +
   scale_x_discrete(labels = c("Resistant", "Tolerant", "Susceptible")) +
   ylab("Species abundance") +
   xlab("Susceptibility level") +
-  labs(caption = "*All species included") +
-  scale_y_continuous(limits = c(0,9),
-                   breaks = seq(0, 8, 2)) +
+  labs(caption = "*All species included. Figure displays data from Europe only.") +
+  scale_y_continuous(limits = c(0,6),
+                   breaks = seq(0, 6, 2)) +
   scale_colour_manual(name = "Susceptibility",
                       values = c("#548078", # 9 spp
                                  "#E3A630", # 15 spp
@@ -945,11 +1059,74 @@ m2c_plot <- ggplot(m2c_predict, aes(susceptibility, predicted, color = susceptib
                       guide = "none") +
   ak_theme + theme(axis.text.y = element_text(size = 26, face = "plain"),)
 
-m2c_plot
+m2c_euro_plot
 
 
-ggsave("fig2c.pdf", m2c_plot, device = cairo_pdf, path = file.path(dir, figpath),
-          width = 2000, height = 1300, scale = 2, units = "px", dpi = 300, limitsize = F)
+# ggsave("fig2c_europe.pdf", m2c_euro_plot, device = cairo_pdf, path = file.path(dir, figpath),
+#           width = 2000, height = 1300, scale = 2, units = "px", dpi = 300, limitsize = F)
+
+##### ii. Asia data only -------------------------------------------------------
+m2c_asia <- glmmTMB(logsppAbun ~ susceptibility + (1|Site),
+                    data = d_asia,
+                    control = glmmTMBControl(optimizer = optim,
+                                             optArgs = list(method = "BFGS")))
+summary(m2c_asia)
+Anova(m2c_asia)
+
+
+## Subset observed abundance for plot
+# asia_abun <- d_asia %>%
+#   dplyr::select(susceptibility, sppAbun) %>%
+#   rename(asia_abun = sppAbun) %>%
+#   distinct()
+
+
+## Summarise data for labels
+m2c_asia_labs <- d_asia %>%
+  group_by(susceptibility) %>%
+  summarise(n = n())
+
+m2c_asia_predict <- ggpredict(m2c_asia, terms = c("susceptibility")) %>%
+  dplyr::rename("susceptibility" = "x",
+                "group" = "group") %>%
+  mutate(susceptibility = as.factor(susceptibility),
+         predicted = exp(as.numeric(predicted - 1)),
+         conf.high = exp(as.numeric(conf.high - 1)),
+         conf.low = exp(as.numeric(conf.low - 1))) %>%
+  drop_na(.) %>%
+  left_join(., m2c_asia_labs, by = "susceptibility")
+
+
+m2c_asia_plot <- ggplot(m2c_asia_predict, aes(susceptibility, predicted, color = susceptibility)) +
+  # geom_jitter(data = asia_abun, aes(y = asia_abun, colour = susceptibility), shape = 23, size = 3,
+  #             show.legend = F) + ## not sure if I should include these
+  geom_point(size = 5) +
+  geom_errorbar(aes(ymin = conf.low, ymax = conf.high), width = 0.1, linewidth = 1) +
+  geom_richtext(aes(y = (conf.high + 1.5), label = paste0("n<span style = 'font-size:15pt'><sub>*obs*</sub> </span>= ", n)),
+                alpha = 0.75, size = 8, label.size = NA, fill = NA, fontface = "bold", show.legend = F) +
+  # annotate("text", x = 0.65, y = 9, label = "C", size = 12, fontface = "bold",
+  #          colour = "black") +
+  scale_x_discrete(labels = c("Resistant", "Tolerant", "Susceptible")) +
+  ylab("Species abundance") +
+  xlab("Susceptibility level") +
+  labs(caption = "*All species included. Figure displays data from asia only.") +
+  scale_y_continuous(limits = c(0,100),
+                     breaks = seq(0, 100, 10)) +
+  scale_y_break(c(30, 95), ticklabels = NULL) +
+  scale_colour_manual(name = "Susceptibility",
+                      values = c("#548078", # 9 spp
+                                 "#E3A630", # 15 spp
+                                 "#b30000"),# 5 spp
+                      labels = c("Resistant", "Tolerant", "Susceptible"),
+                      guide = "none") +
+  ak_theme + theme(axis.text.y = element_text(size = 26, face = "plain"),
+                   axis.text.y.right = element_blank())
+
+m2c_asia_plot
+
+# ggsave("fig2c_asia.pdf", m2c_asia_plot, device = cairo_pdf, path = file.path(dir, figpath),
+#           width = 2000, height = 1300, scale = 2, units = "px", dpi = 300, limitsize = F)
+
 
 #### > Excluding fire salamanders ----------------------------------------------
 model_2c_noFS <- glmmTMB(logsppAbun ~ susceptibility + (1|Site),
