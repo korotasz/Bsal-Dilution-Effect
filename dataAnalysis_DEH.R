@@ -39,7 +39,10 @@ extrafont::loadfonts(device = "all", quiet = T) # plot fonts
 ## Packages --------------------------------------------------------------------
 ### > Visualization Packages----------------------------------------------------
 pckgs <- c("ggsignif", # adds labels to significant groups
+             "ggpubr", # stat_compare_means()
             "ggbreak", # create axis breaks in ggplots
+             "gtools", # signif. value styling
+         "kableExtra", # table styling
                "renv", # environment lock
              "ggtext", # for text type/arrangements w/ ggplot2
            "Rttf2pt1", # to use with the extrafont package
@@ -608,7 +611,8 @@ vnm_map
 
 rm(asia, asia_map, asia_obs, asiaCountries, asiaLabs, c, chn_map, country_lookup,
    deu_map, esp_map, euro_obs, euroCountries, europe, europe_map, europeLabs, layout,
-   fig1a, fig1b, fig1c, fig1d, g, mapLabels, p, s, v, vnm_map, worldmap, x_axis, y_axis)
+   fig1a, fig1b, fig1c, fig1d, g, mapLabels, p, s, v, vnm_map, worldmap, x_axis, y_axis,
+   epsg27703, epsg27704)
 ## II. Testing assumptions of the dilution effect hypothesis -------------------
 ### a. Hosts differ in their reservoir competence. -----------------------------
 prev <- d %>%
@@ -720,25 +724,35 @@ prev_binconf_plot
 rm(bsal_bayesci, bsal_ci, chn, deu, esp, prev, sampSize, vnm)
 
 ### b. The most susceptible species are the most abundant ----------------------
-#### > All animals in dataset --------------------------------------------------
-##### i. Europe data only ------------------------------------------------------
-d_euro <- d %>%
-  filter(country == "Germany" | country == "Spain")
+#### > All animals in dataset (by continent) -----------------------------------
+##### i. Europe ----------------------------------------------------------------
+d_EU <- d %>%
+  filter(continent == "Europe")
 
-m2b_europe <- glmmTMB(logsppAbun ~ scientific + (1|Site),
-               data = d_euro,
+m2b_EU <- glmmTMB(logsppAbun ~ scientific + (1|Site),
+               data = d_EU,
                control = glmmTMBControl(optimizer = optim,
                                         optArgs = list(method = "BFGS")))
-summary(m2b_europe)
-Anova(m2b_europe)
 
+
+summary(m2b_EU)
+Anova(m2b_EU)
+## post-hoc test for multiple comparison of means
+# m2b_EU_post.hoc <- glht(m2b_EU, linfct = mcp(scientific = "Tukey")) %>%
+#   broom::tidy() %>%
+#   dplyr::select(-(term)) %>%
+#   dplyr::mutate(signif = gtools::stars.pval(adj.p.value)) %>%
+#   kableExtra::kbl(digits = 2) %>%
+#   kableExtra::kable_styling()
+#
+# m2b_EU_post.hoc
 
 # Subset observed abundance
-euro_abun <- d_euro %>%
+EU_abun <- d_EU %>%
   dplyr::select(scientific, sppAbun, Site) %>%
-  rename(euro_abun = sppAbun)
+  rename(EU_abun = sppAbun)
 
-textcol <- d_euro %>%
+textcol <- d_EU %>%
   dplyr::select(scientific, susceptibility, Site) %>% # subset relevant data
   mutate(Site = as.factor(Site)) %>%
   group_by(scientific) %>%
@@ -746,9 +760,9 @@ textcol <- d_euro %>%
   ungroup() %>%
   dplyr::select(!Site) %>%
   unique() %>%
-  left_join(., euro_abun, by = "scientific")
+  left_join(., EU_abun, by = "scientific")
 
-m2b_europe_predict <- ggpredict(m2b_europe, terms = "scientific") %>%
+m2b_EU_predict <- ggpredict(m2b_EU, terms = "scientific") %>%
   dplyr::rename("scientific" = "x",
          "logsppAbun" = "predicted",
          "expectedAbun" = "group") %>%
@@ -757,7 +771,7 @@ m2b_europe_predict <- ggpredict(m2b_europe, terms = "scientific") %>%
                conf.low = exp(conf.low - 1),
                conf.high = exp(conf.high - 1),
                susceptibility = as.factor(susceptibility)) %>%
-  group_by(scientific, euro_abun, expectedAbun) %>%
+  group_by(scientific, EU_abun, expectedAbun) %>%
   unique()
 
 
@@ -767,20 +781,19 @@ xhat <- latex2exp::TeX(TeXlabl, output = "expression")
 
 # Create color coded labels for graph annotation
 # Resistant
-df1 <- m2b_europe_predict %>%
+df1 <- m2b_EU_predict %>%
   filter(susceptibility == "1")
 
 # Tolerant
-df2 <- m2b_europe_predict %>%
+df2 <- m2b_EU_predict %>%
   filter(susceptibility == "2")
 
 # Susceptible
-df3 <- m2b_europe_predict %>%
+df3 <- m2b_EU_predict %>%
   filter(susceptibility == "3")
 
-
-m2b_euro_plot <- ggplot(m2b_europe_predict, aes(x = scientific, label = round(expectedAbun, 0))) +
-  geom_jitter(aes(y = euro_abun, colour = susceptibility), shape = 23, size = 2,
+m2b_EU_plot <- ggplot(m2b_EU_predict, aes(x = scientific, label = round(expectedAbun, 0))) +
+  geom_jitter(aes(y = EU_abun, colour = susceptibility), shape = 23, size = 2,
              alpha = 0.5, show.legend = F) +
   geom_point(aes(y = expectedAbun, colour = susceptibility), size = 4.5) +
   geom_errorbar(aes(ymin = conf.low, ymax = conf.high, colour = susceptibility), width = 0.5, linewidth = 1) +
@@ -795,7 +808,7 @@ m2b_euro_plot <- ggplot(m2b_europe_predict, aes(x = scientific, label = round(ex
   coord_flip(clip = "off") +
   ylab("Abundance") +
   xlab("Species") +
-  labs(caption = "*All species included. Figure displays data from Europe only.") +
+  labs(caption = "Figure displays all species from Europe") +
   scale_colour_manual(name = "Susceptibility",
                       values = c("#548078", "#E3A630", "#b30000"),
                       labels = c("Resistant", "Tolerant", "Susceptible"),
@@ -810,18 +823,18 @@ m2b_euro_plot <- ggplot(m2b_europe_predict, aes(x = scientific, label = round(ex
                    legend.title = element_blank())
 
 
-m2b_euro_plot
+m2b_EU_plot
 
 # ggsave("fig2b_europe.pdf", m2b_euro_plot, device = cairo_pdf, path = file.path(dir, figpath),
 #           width = 2000, height = 1400, scale = 2, units = "px", dpi = 300, limitsize = F)
 
-rm(df1, df2, df3, euro_abun, m2b_europe, m2b_europe_predict, textcol)
+rm(df1, df2, df3, EU_abun, m2b_EU_plot, m2b_EU_predict, textcol)
 ##### ii. Asia data only -------------------------------------------------------
-d_asia <- d %>%
+d_AS <- d %>%
   filter(country == "Vietnam" | country == "China")
 
 m2b_asia <- glmmTMB(logsppAbun ~ scientific + (1|Site),
-                    data = d_asia,
+                    data = d_AS,
                     control = glmmTMBControl(optimizer = optim,
                                              optArgs = list(method = "BFGS")))
 summary(m2b_asia)
@@ -829,11 +842,11 @@ Anova(m2b_asia)
 
 
 # Subset observed abundance
-asia_abun <- d_asia %>%
+asia_abun <- d_AS %>%
   dplyr::select(scientific, sppAbun, Site) %>%
   rename(asia_abun = sppAbun)
 
-textcol <- d_asia %>%
+textcol <- d_AS %>%
   dplyr::select(scientific, susceptibility, Site) %>% # subset relevant data
   mutate(Site = as.factor(Site)) %>%
   group_by(scientific) %>%
@@ -1003,7 +1016,7 @@ rm(textcol, obs_abun, obs, m2b_euro_noFS_predict, m2b_euro_noFS, df1, df2, df3)
 #### > All animals in dataset --------------------------------------------------
 ##### i. Europe data only ------------------------------------------------------
 m2c_euro <- glmmTMB(logsppAbun ~ susceptibility + (1|Site),
-               data = d_euro,
+               data = d_EU,
                control = glmmTMBControl(optimizer = optim,
                                         optArgs = list(method = "BFGS")))
 summary(m2c_euro)
@@ -1011,7 +1024,7 @@ Anova(m2c_euro)
 
 
 ## Subset observed abundance for plot
-# euro_abun <- d_euro %>%
+# euro_abun <- d_EU %>%
 #   dplyr::select(scientific, susceptibility, sppAbun) %>%
 #   rename(euro_abun = sppAbun) %>%
 #   group_by(susceptibility, scientific) %>%
@@ -1020,7 +1033,7 @@ Anova(m2c_euro)
 
 
 ## Summarise data for labels
-m2c_euro_labs <- d_euro %>%
+m2c_euro_labs <- d_EU %>%
   group_by(susceptibility) %>%
   summarise(n = n())
 
@@ -1069,7 +1082,7 @@ m2c_euro_plot
 rm(m2c_euro_labs, m2c_euro_predict, m2c_euro, euro_abun)
 ##### ii. Asia data only -------------------------------------------------------
 m2c_asia <- glmmTMB(logsppAbun ~ susceptibility + (1|Site),
-                    data = d_asia,
+                    data = d_AS,
                     control = glmmTMBControl(optimizer = optim,
                                              optArgs = list(method = "BFGS")))
 summary(m2c_asia)
@@ -1077,13 +1090,13 @@ Anova(m2c_asia)
 
 
 ## Subset observed abundance for plot
-# asia_abun <- d_asia %>%
+# asia_abun <- d_AS %>%
 #   dplyr::select(susceptibility, sppAbun) %>%
 #   rename(asia_abun = sppAbun)
 
 
 ## Summarise data for labels
-m2c_asia_labs <- d_asia %>%
+m2c_asia_labs <- d_AS %>%
   group_by(susceptibility) %>%
   summarise(n = n())
 
@@ -1128,7 +1141,7 @@ m2c_asia_plot
 # ggsave("fig2c_asia.pdf", m2c_asia_plot, device = cairo_pdf, path = file.path(dir, figpath),
 #           width = 2000, height = 1300, scale = 2, units = "px", dpi = 300, limitsize = F)
 
-rm(d_asia, m2c_asia_labs, m2c_asia_predict, m2c_asia)
+rm(d_AS, m2c_asia_labs, m2c_asia_predict, m2c_asia)
 #### > Excluding fire salamanders ----------------------------------------------
 ##### i. Europe data only ------------------------------------------------------
 m2c_euro_noFS <- glmmTMB(logsppAbun ~ susceptibility + (1|Site),

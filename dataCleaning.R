@@ -401,7 +401,9 @@ adminlvls <- read.csv(file = file.path(dir, csvpath, "adminlevels.csv"), header 
          ADM1 = NAME_1,
          ADM2 = NAME_2,
          country = COUNTRY) %>%
-  unique(.)
+  unique(.) %>%
+  mutate(continent = ifelse(country == "China" | country == "Vietnam", "Asia", "Europe")) %>%
+  relocate(continent, .before = ADM0)
 
 ## Check for missing admin levels!!
 # adminlvls %>%
@@ -465,7 +467,9 @@ missing_coords <- df %>%
   relocate(c(Lat, Lon), .after = ADM2)
 
 centroid_adms <- rbind(adm1, adm2) %>%
-  unite("LatLon", c(Lat, Lon), sep = ", ")
+  unite("LatLon", c(Lat, Lon), sep = ", ") %>%
+  mutate(continent = ifelse(country == "China" | country == "Vietnam", "Asia", "Europe")) %>%
+  relocate(continent, .before = ADM0)
 adminlvls <- rbind(adminlvls, centroid_adms)
 
 rm(points, polygon, adm1, adm1_centroids, adm2, adm2_centroids, centroid_adms)
@@ -481,7 +485,7 @@ df <- df %>%
   dplyr::select(!("country":"ADM2")) %>%
   unite("LatLon", c(Lat, Lon), sep = ", ") %>%
   left_join(., adminlvls, by = "LatLon", relationship = "many-to-one", keep = F) %>%
-  relocate(c(country, ADM0, ADM1, ADM2), .before = LatLon) %>%
+  relocate(c(continent, country, ADM0, ADM1, ADM2), .before = LatLon) %>%
   separate(LatLon, c("Lat", "Lon"), sep = ", ") %>%
   glimpse()
 
@@ -510,161 +514,10 @@ df$Site <- siteNumber$Site[base::match(paste(df$materialSampleID),
 df <- relocate(df, Site, .after = "day")
 rm(siteNumber)
 
-## Subset gbif.org data to supplement our calculations of relative abundance (when applicable) ----
-# ## Get species occurrence data using gbif "Sampling Event Data" -- an alternate measure of abundance?
-# ## Citation: GBIF.org (25 March 2024) GBIF Occurrence Download https://doi.org/10.15468/dl.z3jcfu
-gbif_amphib <- data.table::fread("gbif_amphibs.csv") %>%
-  rename(.,
-         Lat = decimalLatitude,
-         Lon = decimalLongitude,
-         scientific = verbatimScientificName) %>%
-  unite(c("year", "month", "day"), sep = "-", col = "date", remove = F) %>%
-  dplyr::filter(!(day == "NA")) %>%
-  # setNames(tolower(names(.))) %>% # set lowercase column names to work with CoordinateCleaner
-  filter(occurrenceStatus  == "PRESENT") %>%
-  filter(coordinatePrecision < 0.01 | is.na(coordinatePrecision)) %>%
-  filter(coordinateUncertaintyInMeters < 1000 | is.na(coordinateUncertaintyInMeters)) %>%
-  # Assume NA vals == 0
-  mutate(coordinateUncertaintyInMeters = tidyr::replace_na(coordinateUncertaintyInMeters, 0),
-         coordinatePrecision = tidyr::replace_na(coordinatePrecision, 0)) %>%
-  glimpse() # look at results of pipeline
 
-
-## Create key to match dates in 'df' to dates in 'gbif_amphib'
-df <- df %>%
-  unite(c("year", "month", "day"), sep = "-", col = "date", remove = F) %>%
-  relocate(date, .before = year)
-
-dates <- df %>%
-  filter(!(day == "NA")) %>%
-  subset(., select = date) %>%
-  unique(.)
-
-## Only retain observations that occurred on our sampling dates
-gbif_amphib <- inner_join(dates, gbif_amphib) ## 423 of 454 dates matched observations
-
-## Create buffer around points that correspond with their coordinate uncertainty
-gbif_coords <- gbif_amphib %>%
-  st_as_sf(., coords = c("Lon", "Lat"), crs = 4326)
-
-## First, separate out points that *have* no buffer
-gbif_noBuff <- gbif_coords %>%
-  filter(coordinateUncertaintyInMeters == 0) %>%
-  mutate(row = as.character(paste0("0", row_number())),
-         dummy = "noBuff") %>%
-  unite(col = "ID", c(dummy, row), remove = T) %>%
-  glimpse()
-
-## Need to use two different CRS for Europe (EPSG:27704) and Asia (EPSG:27703)
-epsg27703 <- crs('+proj=aeqd +lat_0=47 +lon_0=94 +x_0=4340913.84808 +y_0=4812712.92347 +datum=WGS84 +units=m +no_defs')
-epsg27704 <- crs('+proj=aeqd +lat_0=53 +lon_0=24 +x_0=5837287.81977 +y_0=2121415.69617 +datum=WGS84 +units=m +no_defs')
-
-## EUROPE:
-# Subset Europe data from gbif (gbif_27704) and from our dataset
-gbif_27704 <- gbif_coords %>%
-  filter(coordinateUncertaintyInMeters > 0) %>%
-  filter(countryCode == "BE" | countryCode == "GB" | countryCode == "DE" | countryCode == "ES") %>%
-  st_transform(., epsg27704) %>%
-  st_buffer(., dist = gbif_coords$coordinateUncertaintyInMeters) %>%
-  # transform buffered pts back to EPSG 4326
-  st_transform(., 4326) %>%
-  st_cast(., "MULTIPOLYGON")
-
-## ASIA:
-gbif_27703 <- gbif_coords %>%
-  filter(coordinateUncertaintyInMeters > 0) %>%
-  filter(countryCode == "CN" | countryCode == "VN" | countryCode == "HK" | countryCode == "MO") %>%
-  st_transform(., crs = epsg27703) %>%
-  st_buffer(., dist = gbif_coords$coordinateUncertaintyInMeters) %>%
-  # transform buffered pts back to EPSG 4326
-  st_transform(., 4326) %>%
-  st_cast(., "MULTIPOLYGON")
-
-
-# rbind buffered gbif coordinates and intersect them with distinct date/lat/lon points from dataset
-gbif_all <- rbind(gbif_27704, gbif_27703) %>%
-  mutate(row = as.character(paste0("0", row_number())),
-         dummy = "buff") %>%
-  unite(col = "ID", c(dummy, row), remove = T) %>%
-  glimpse()
-
-points <- df %>%
-  dplyr::filter(!(day == "NA")) %>%
-  subset(., select = c(Lat, Lon, date)) %>%
-  unique() %>%
-  st_as_sf(x = ., coords = c("Lon", "Lat"), crs = 4326) %>%
-  mutate(Lon = sf::st_coordinates(.)[,1],
-         Lat = sf::st_coordinates(.)[,2])
-
-## Save all data to 'gbif.gpkg' to deal with in QGIS (3.28.3-Firenze)
-# st_write(gbif_all, file.path(dir, shppath, "gbif.gpkg"), layer = "gbif_buffered", append = F, delete_layer = T)
-# st_write(gbif_noBuff, file.path(dir, shppath, "gbif.gpkg"), layer = "gbif_noBuffer", append = F, delete_layer = T)
-# st_write(points, file.path(dir, shppath, "gbif.gpkg"), layer = "all_points", append = F, delete_layer = T)
-
-## Save colnames from gbif_all to rename columns in gbif_intersectedPts
-names <- c(colnames(gbif_all), "Lon", "Lat")
-
-rm(dates, gbif_amphib, gbif_27704, gbif_27703, gbif_coords, gbif_noBuff, gbif_all, points)
-## Process gbif data and add to main df ----------------------------------------
-## Load in layer of gbif.gpkg containing all points from gbif that intersected with our data
-gbif_intersectedPts <- st_read(file.path(dir, shppath, "gbif.gpkg"), layer = "intersected_pts") %>%
-  subset(., select = -c(date:gbif_fid)) %>%
-  mutate(Lon = sf::st_coordinates(.)[,1],
-         Lat = sf::st_coordinates(.)[,2]) %>%
-  data.frame(.)
-
-colnames(gbif_intersectedPts) <- names
-
-## Add site numbers from our data set to gbif_intersectedPts
-Sites <- df %>%
-  subset(., select = c(Lat, Lon, Site)) %>%
-  mutate(Lat = as.numeric(Lat),
-         Lon = as.numeric(Lon)) %>%
-  unique() %>%
-  left_join(., adminlvls, by = c("Lat", "Lon")) %>%
-  relocate(c(country, ADM0, ADM1, ADM2), .before = "Lat")
-
-
-## prep gbif df to join back to main df
-gbif_intersectedPts <- gbif_intersectedPts %>%
-  subset(., select = c(Lat, Lon, date, year, month, day, gbifID, scientific, individualCount,
-                       basisOfRecord, collectionCode, issue, publishingOrgKey,recordedBy,
-                       occurrenceID, catalogNumber, datasetKey)) %>%
-  separate(scientific, into = c("genus", "species"), sep = " ", remove = F) %>%
-  mutate(individualCount = case_when(is.na(individualCount) ~ 1, # Assume NA = one individual
-                                     TRUE ~ individualCount),
-         scientific = case_when(scientific == "Pelophylax spec." ~ "Pelophylax sp.",
-                                TRUE ~ scientific),
-         gbifID = as.character(gbifID),
-         datasetKey = as.character(datasetKey)) %>%
-  rename(materialSampleID = gbifID,
-         sampleType = collectionCode,
-         sampleRemarks = issue,
-         principalInvestigator = publishingOrgKey,
-         collectorList = recordedBy,
-         Sample_bcid = occurrenceID,
-         expeditionCode = catalogNumber,
-         projectId = datasetKey) %>%
-  left_join(., Sites, by = c("Lat", "Lon")) %>%
-  relocate(c(country, ADM0, ADM1, ADM2, Lat, Lon), .before = date) %>%  # kept gbifID for QA/QC
-  relocate(c(Site, materialSampleID, genus, species, scientific, individualCount,
-             basisOfRecord, sampleType, sampleRemarks, principalInvestigator,
-             collectorList, Sample_bcid, expeditionCode, projectId), .after = day) %>%
-  ## gbif species abundance (# spp at a site during each sampling event)
-  group_by(scientific, Site, date) %>%
-  mutate(gbif_sppAbun = sum(individualCount)) %>%
-  ungroup() %>%
-  ## gbif site abundance (# total individuals at a site during each sampling event, regardless of species)
-  group_by(Site, date) %>%
-  mutate(gbif_siteAbun = sum(individualCount)) %>%
-  ungroup() %>%
-  mutate(materialSampleID = as.character(materialSampleID))
-
-
-
-rm(Sites)
 ## Add measures of abundance  --------------------------------------------------
 df <- df %>%
+  unite(c("year", "month", "day"), sep = "-", col = "date", remove = F) %>%
   ## Relative species abundance (# individuals/spp at a site during each sampling event) -- calculated using ONLY our data
   group_by(scientific, Site, date) %>%
   mutate(sppAbun = sum(individualCount)) %>%
@@ -674,34 +527,12 @@ df <- df %>%
   mutate(siteAbun = sum(individualCount),
          projectId = as.character(projectId)) %>%
   ungroup() %>%
-## Add in gbif data and recalculate combining both our data and gbif data
-  mutate(Lat = as.numeric(Lat),
-         Lon = as.numeric(Lon)) %>%
-bind_rows(., gbif_intersectedPts) %>%
-  mutate(gbif_sppAbun = case_when(is.na(gbif_sppAbun) ~ 0,
-                                           TRUE ~ gbif_sppAbun),
-         gbif_siteAbun = case_when(is.na(gbif_siteAbun) ~ 0,
-                                  TRUE ~ gbif_siteAbun),
-         sppAbun = case_when(is.na(sppAbun) ~ 0,
-                             TRUE ~ sppAbun),
-         siteAbun = case_when(is.na(siteAbun) ~ 0,
-                             TRUE ~ siteAbun)) %>%
-  group_by(scientific, Site, date) %>%
-  mutate(combined_sppAbun = sum(individualCount)) %>%
-  ungroup() %>%
-  group_by(Site, date) %>%
-  mutate(combined_siteAbun = sum(individualCount),
-         projectId = as.character(projectId)) %>%
-  ungroup() %>%
   glimpse()
-
-rm(gbif_intersectedPts)
 
 ## Add measures of richness ----------------------------------------------------
 ## Richness calculations include fire salamanders
 ## calculate relative spp richness (from our dataset)
 spr <- df %>%
-  filter(!row_number() %in% c(8813:9817)) %>% # remove all gbif rows -- cannot use them in overall analyses
   dplyr::select(Site, date, scientific) %>%
   na.omit(.) %>%
   group_by(Site, date, scientific) %>%
@@ -1212,7 +1043,7 @@ tmin_df <- as.data.frame(tmin_extract) %>%
           times = as.integer(seq_len(12)),
           direction = "long") %>%
   left_join(., latlon_id, by = "id", keep = F) %>%
-  relocate(c(id, ADM0, country, ADM1, ADM2, Lon, Lat), .before = month)
+  relocate(c(id, continent, ADM0, country, ADM1, ADM2, Lon, Lat), .before = month)
 
 
 rm(tmin, tmin_extract)
@@ -1231,7 +1062,7 @@ tmax_df <- as.data.frame(tmax_extract) %>%
           times = as.integer(seq_len(12)),
           direction = "long") %>%
   left_join(., latlon_id, by = "id", keep = F) %>%
-  relocate(c(id, ADM0, country, ADM1, ADM2, Lon, Lat), .before = month)
+  relocate(c(id, continent, ADM0, country, ADM1, ADM2, Lon, Lat), .before = month)
 
 
 rm(tmax, tmax_extract)
@@ -1250,7 +1081,7 @@ tavg_df <- as.data.frame(tavg_extract) %>%
           times = as.integer(seq_len(12)),
           direction = "long") %>%
   left_join(., latlon_id, by = "id", keep = F) %>%
-  relocate(c(id, ADM0, country, ADM1, ADM2, Lon, Lat), .before = month)
+  relocate(c(id, continent, ADM0, country, ADM1, ADM2, Lon, Lat), .before = month)
 
 
 rm(tavg, tavg_extract)
@@ -1268,7 +1099,7 @@ prec_df <- as.data.frame(prec_extract) %>%
           times = as.integer(seq_len(12)),
           direction = "long") %>%
   left_join(., latlon_id, by = "id", keep = F) %>%
-  relocate(c(id, ADM0, country, ADM1, ADM2, Lon, Lat), .before = month) %>%
+  relocate(c(id, continent, ADM0, country, ADM1, ADM2, Lon, Lat), .before = month) %>%
   mutate(prec = (prec * 0.1)) # convert mm to cm
 
 
@@ -1292,7 +1123,7 @@ bio_df <- as.data.frame(bio_extract) %>%
          bio19 = (0.1*bio19),
          id = row_number()) %>%
   left_join(., latlon_id, by = "id", keep = F) %>%
-  relocate(c(id, ADM0, country, ADM1, ADM2, Lon, Lat), .before = bio1)
+  relocate(c(id, continent, ADM0, country, ADM1, ADM2, Lon, Lat), .before = bio1)
 
 
 rm(bio, bio_extract)
@@ -1300,16 +1131,16 @@ rm(bio, bio_extract)
 
 ## 6. Merge WorldClim data to one dataframe
 wclim <- tmin_df %>%
-  left_join(., tavg_df, by = c("id", "Lat", "Lon", "month", "country", "ADM0", "ADM1", "ADM2"), keep = F) %>%
-  left_join(., tmax_df, by = c("id", "Lat", "Lon", "month", "country", "ADM0", "ADM1", "ADM2"), keep = F) %>%
-  left_join(., prec_df, by = c("id", "Lat", "Lon", "month", "country", "ADM0", "ADM1", "ADM2"), keep = F) %>%
-  left_join(., bio_df, by = c("id", "Lat", "Lon", "country", "ADM0", "ADM1", "ADM2")) %>%
+  left_join(., tavg_df, by = c("id", "Lat", "Lon", "month", "continent", "country", "ADM0", "ADM1", "ADM2"), keep = F) %>%
+  left_join(., tmax_df, by = c("id", "Lat", "Lon", "month", "continent", "country", "ADM0", "ADM1", "ADM2"), keep = F) %>%
+  left_join(., prec_df, by = c("id", "Lat", "Lon", "month", "continent", "country", "ADM0", "ADM1", "ADM2"), keep = F) %>%
+  left_join(., bio_df, by = c("id", "Lat", "Lon", "continent", "country", "ADM0", "ADM1", "ADM2")) %>%
   dplyr::select(-(id))
 
 rm(tmin_cropped, tmin_df, tavg_cropped, tavg_df, tmax_cropped, tmax_df, bio_cropped, bio_df, latlon_id, prec_cropped, prec_df)
 
 df <- df %>%
-  left_join(., wclim, by = c("Lat", "Lon", "month", "country", "ADM0", "ADM1", "ADM2"), keep = F) %>%
+  left_join(., wclim, by = c("Lat", "Lon", "month", "continent", "country", "ADM0", "ADM1", "ADM2"), keep = F) %>%
   relocate(c(tmin, tavg, tmax, prec, bio1:bio19), .after = sMoist_d)
 
 rm(wclim, points, adminlvls)
@@ -1324,7 +1155,6 @@ df %>%
 
 # Classify which sites are Bsal positive, i.e., if that site has ever had any Bsal+ cases
 Bsalpos <- df %>%
-  filter(!row_number() %in% c(8813:9817)) %>% # remove all gbif rows -- cannot use them in overall analyses
   tidyr::drop_na(., any_of(c("BsalDetected", "susceptibility", "date", "sMoist_d", "temp_d"))) %>%
   # Drop species that have <10 observations
   subset(scientific != "Echinotriton chinhaiensis" &    # 2 obs
@@ -1344,7 +1174,6 @@ Bsalpos <- df %>%
 ## Double checking #s
 nBsalPos <- aggregate(individualCount ~ BsalDetected+scientific, data = Bsalpos, sum) %>%
   pivot_wider(names_from = BsalDetected, values_from = individualCount)
-View(nBsalPos)
 
 rm(nBsalPos)
 # Add all data back into 'df' data frame, even sites that are negative
@@ -1354,10 +1183,9 @@ df <- Bsalpos %>%
   rename(tmin_wc = tmin, tmax_wc = tmax, tavg_wc = tavg, prec_wc = prec, bio1_wc = bio1, bio2_wc = bio2, bio3_wc = bio3, bio4_wc = bio4, bio5_wc = bio5, bio6_wc = bio6,
          bio7_wc = bio7, bio8_wc = bio8, bio9_wc = bio9, bio10_wc = bio10, bio11_wc = bio11, bio12_wc = bio12, bio13_wc = bio13, bio14_wc = bio14, bio15_wc = bio15, bio16_wc = bio16,
          bio17_wc = bio17, bio18_wc = bio18, bio19_wc = bio19) %>%
-  relocate(c(iucn_rich, iucn_rwr), .after = richness) %>%
-  relocate(c(gbif_sppAbun, gbif_siteAbun, combined_sppAbun, combined_siteAbun), .after = siteAbun)
+  relocate(c(iucn_rich, iucn_rwr), .after = richness)
 
-rm(Bsalpos, names, extent, i)
+rm(Bsalpos, extent, i)
 ## Create 'cbind' dataset ------------------------------------------------------
 # Return data frame containing all observations from countries that had confirmed Bsal positive sites (will separate out Bsal+ and Bsal- sites later)
 BsalData_cbind <- df %>%
@@ -1383,7 +1211,7 @@ BsalData_cbind <- df %>%
   ungroup() %>%
   relocate(c(nPos_FS, nNeg_FS, nDead_FS, nAlive_FS, nFatalUnk_FS, nPos_all, nNeg_all, nDead_all, nAlive_all, nFatalUnk_all,
              nPos_all_noFS, nNeg_all_noFS, nDead_all_noFS, nAlive_all_noFS, nFatalUnk_all_noFS), .after = rangeStatus) %>%
-  dplyr::select(country, Lat, Lon, Site, posSite, date, richness:iucn_rwr, sppAbun:siteAbun, combined_sppAbun:combined_siteAbun,
+  dplyr::select(continent, country, Lat, Lon, Site, posSite, date, richness:iucn_rwr, sppAbun:siteAbun,
                 genus, scientific:rangeStatus, redListCategory, nPos_FS:nFatalUnk_all_noFS,temp_m2:bio19_wc,
                 diagnosticLab, principalInvestigator, collectorList, expeditionCode) %>%
 #         In the absence of a listed 'diagnosticLab', the diagnostic lab is assumed
@@ -1415,10 +1243,9 @@ BsalData_cbind <- with(BsalData_cbind, BsalData_cbind[order(Site, scientific), ]
 BsalData_all <- df %>%
   filter(!(country == "Switzerland" | country == "United Kingdom")) %>%
   mutate(posSite = as.factor(posSite)) %>%
-  dplyr::select(country:Lon, Site:posSite, date_m2:date, richness:iucn_rwr, sppAbun:siteAbun,
-                combined_sppAbun:combined_siteAbun, materialSampleID, genus:rangeStatus,
-                redListCategory, lifeStage, sex, individualCount, diseaseTested:BsalDetected,
-                fatal:sampleRemarks, temp_m2:projectId) %>%
+  dplyr::select(continent:Lon, Site:posSite, date_m2:date, richness:iucn_rwr, sppAbun:siteAbun,
+                materialSampleID, genus:rangeStatus, redListCategory, lifeStage, sex,
+                individualCount, diseaseTested:BsalDetected, fatal:sampleRemarks, temp_m2:projectId) %>%
 #         In the absence of a listed 'diagnosticLab', the diagnostic lab is assumed
 #          to belong to the PI of the paper associated with the data.
   mutate(diagnosticLab = case_when(country == "Switzerland" ~ "Catenazzi",
