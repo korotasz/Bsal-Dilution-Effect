@@ -1821,6 +1821,7 @@ testZeroInflation(resid)
 
 ## Need to subset unique lat/lon vals to test for spatial autocorrelation
 coords <- dcbindScaled %>%
+  filter(continent == "Asia") %>%
   distinct(Site, Lat, Lon, .keep_all = T) %>%
   group_by(Site) %>%
   mutate(Lat = mean(Lat), Lon = mean(Lon)) %>%
