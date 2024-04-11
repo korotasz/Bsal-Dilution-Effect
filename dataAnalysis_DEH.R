@@ -1722,7 +1722,7 @@ ggsave("fig2_combined.pdf", fig2combined, device = cairo_pdf, path = file.path(d
 ## Data prep for cbind models
 # Drop rows with NA vals in weather data & scale relevant vars
 dcbindScaled <- dcbind %>%
-  tidyr::drop_na(., any_of(c(36:53))) %>%
+  tidyr::drop_na(., any_of(c(41, 48:52, 64))) %>%
   mutate_at(c("temp_d", "sMoist_d",
               "bio1_wc", "bio12_wc", "tavg_wc", "prec_wc"),
             ~(scale(., center = T, scale = T %>% as.numeric))) %>%
@@ -1743,11 +1743,13 @@ Anova(all_EU_RR)
 
 resid <- simulateResiduals(all_EU_RR)
 testResiduals(resid)
+testOutliers(resid, type = "bootstrap")
 testQuantiles(resid)
 testZeroInflation(resid)
 
 ## Need to subset unique lat/lon vals to test for spatial autocorrelation
 coords <- dcbindScaled %>%
+  filter(continent == "Europe") %>%
   distinct(Site, Lat, Lon, .keep_all = T) %>%
   group_by(Site) %>%
   mutate(Lat = mean(Lat), Lon = mean(Lon)) %>%
@@ -1759,9 +1761,40 @@ testSpatialAutocorrelation(recalc.resid, x = coords$Lon, y = coords$Lat)
 # DHARMa Moran's I test for distance-based autocorrelation
 #
 # data:  recalc.resid
-# observed = 0.025432, expected = -0.002924, sd = 0.022145, p-value = 0.2004
+# observed = 0.0697829, expected = -0.0034247, sd = 0.0216687, p-value = 0.0007289
 # alternative hypothesis: Distance-based autocorrelation
 
+## Data are spatially autocorrelated -- trying to correct
+tmp <- dcbindScaled
+coords <- tmp %>%
+  filter(continent == "Europe") %>%
+  distinct(Site, Lat, Lon, .keep_all = T) %>%
+  group_by(Site) %>%
+  mutate(Lat = mean(Lat), Lon = mean(Lon)) %>%
+  distinct() %>%
+  ungroup()
+
+tmp$pos <- numFactor(tmp$Lon, tmp$Lat)
+tmp$group <- factor(rep(1, nrow(tmp))) # dummy grouping var
+
+## model is fit by adding the pos term in
+all_EU_RR2 <- glmmTMB(cbind(nPos_all, nNeg_all) ~ richness*logsiteAbun +
+                    temp_d*sMoist_d + (1|scientific) + exp(pos + 0 | group),
+                  data = tmp, family = "binomial", na.action = "na.fail",
+                  control = glmmTMBControl(optimizer = optim,
+                                           optArgs = list(method = "BFGS")))
+
+
+summary(all_EU_RR2)
+Anova(all_EU_RR2)
+
+resid2 <- simulateResiduals(all_EU_RR2)
+testResiduals(all_EU_RR2)
+testQuantiles(all_EU_RR2)
+testZeroInflation(all_EU_RR2)
+
+recalc.resid2 <- recalculateResiduals(resid2, group = coords$Site)
+testSpatialAutocorrelation(recalc.resid2, x = tmp$Lon, y = tmp$Lat)
 
 
 
@@ -1784,8 +1817,10 @@ all_EU_RR_plot <- ggplot(all_EU_RR_pred, aes(x = richness, y = predicted, linety
        y = "Bsal prevalence (%)",
        # title = "All spp. model",
   ) +
-  #  geom_ribbon(aes(x = richness, ymin = conf.low, ymax = conf.high,
-  #              fill = siteAbun), alpha = 0.2, colour = NA, show.legend = F) +
+   # geom_ribbon(aes(x = richness, ymin = conf.low, ymax = conf.high,
+   #             fill = siteAbun), alpha = 0.2, colour = NA, show.legend = F) +
+  geom_label(label = "Europe", size = 8, colour = "gray20", label.padding = unit(0.25, "lines"),
+             x = 9, y = 0.055, alpha = 0.75) +
   scale_linetype_manual(values = c("solid", "longdash", "twodash")) +
   scale_color_grey(start = 0.8, end = 0.2) +
   scale_x_continuous(labels = seq(0, 10, 1),
@@ -1804,7 +1839,8 @@ all_EU_RR_plot
 #        width = 1250, height = 1500, scale = 2, units = "px", dpi = 300, limitsize = F)
 
 ##### ii. Asia data (all) ------------------------------------------------------
-all_AS_RR <- glmmTMB(cbind(nPos_all, nNeg_all) ~ richness*logsiteAbun +
+# Relative richness calculated from our dataset was '1' for all observations -- had to drop the term
+all_AS_RR <- glmmTMB(cbind(nPos_all, nNeg_all) ~ logsiteAbun +
                        temp_d*sMoist_d + (1|scientific),
                      data = filter(dcbindScaled, continent == "Asia"),
                      family = "binomial", na.action = "na.fail",
@@ -1833,10 +1869,8 @@ testSpatialAutocorrelation(recalc.resid, x = coords$Lon, y = coords$Lat)
 # DHARMa Moran's I test for distance-based autocorrelation
 #
 # data:  recalc.resid
-# observed = 0.025432, expected = -0.002924, sd = 0.022145, p-value = 0.2004
+# observed = -0.043343, expected = -0.017544, sd = 0.079297, p-value = 0.7449
 # alternative hypothesis: Distance-based autocorrelation
-
-
 
 
 ##  Prevalence by Abundance & Richness Plots for 'All spp.' model
@@ -1858,8 +1892,12 @@ all_AS_RR_plot <- ggplot(all_AS_RR_pred, aes(x = richness, y = predicted, linety
        y = "Bsal prevalence (%)",
        # title = "All spp. model",
   ) +
-  #  geom_ribbon(aes(x = richness, ymin = conf.low, ymax = conf.high,
-  #              fill = siteAbun), alpha = 0.2, colour = NA, show.legend = F) +
+  # geom_ribbon(aes(x = richness, ymin = conf.low, ymax = conf.high,
+  #             fill = siteAbun), alpha = 0.2, colour = NA, show.legend = F) +
+  geom_label(label = "Asia", size = 8, colour = "gray20", label.padding = unit(0.25, "lines"),
+             x = 9, y = 0.055, alpha = 0.75) +
+  # annotate(geom = "text", x = 9, y = 0.055,
+  #          label = "Asia", parse = TRUE, size = 6, color = "gray30", alpha = 0.75) +
   scale_linetype_manual(values = c("solid", "longdash", "twodash")) +
   scale_color_grey(start = 0.8, end = 0.2) +
   scale_x_continuous(labels = seq(0, 10, 1),
