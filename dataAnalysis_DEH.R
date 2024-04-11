@@ -1839,7 +1839,10 @@ all_EU_RR_plot
 #        width = 1250, height = 1500, scale = 2, units = "px", dpi = 300, limitsize = F)
 
 ##### ii. Asia data (all) ------------------------------------------------------
-# Relative richness calculated from our dataset was '1' for all observations -- had to drop the term
+# Relative richness calculated from our dataset was '1' for all observations* from Asia -- had to drop the term.
+# *There were sites that had >1 observations, but none of the species present at these sites had been
+#    designated a Bsal susceptibility status, and therefore could not be used for more than
+#    abundance/richness estimates.
 all_AS_RR <- glmmTMB(cbind(nPos_all, nNeg_all) ~ logsiteAbun +
                        temp_d*sMoist_d + (1|scientific),
                      data = filter(dcbindScaled, continent == "Asia"),
