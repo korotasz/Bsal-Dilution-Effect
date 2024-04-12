@@ -1729,8 +1729,8 @@ dcbindScaled <- dcbind %>%
   mutate(year = year(date))
 
 
-#### > Relative richness (derived from dataset) --------------------------------
-##### i. Europe data (all) -----------------------------------------------------
+#### > Europe data only --------------------------------------------------------
+##### > Relative richness (derived from dataset) -------------------------------
 all_EU_RR <- glmmTMB(cbind(nPos_all, nNeg_all) ~ richness*logsiteAbun +
                     temp_d*sMoist_d + (1|scientific),
                   data = filter(dcbindScaled, continent == "Europe"),
@@ -1739,10 +1739,10 @@ all_EU_RR <- glmmTMB(cbind(nPos_all, nNeg_all) ~ richness*logsiteAbun +
                                            optArgs = list(method = "BFGS")))
 
 summary(all_EU_RR)
-Anova(all_EU_RR)
+Anova(all_EU_RR) # richness:logsiteAbun and soil moisture are highly significant
 
 resid <- simulateResiduals(all_EU_RR)
-testResiduals(resid)
+testResiduals(resid) # Outlier test significant (p = 0.01716)
 testOutliers(resid, type = "bootstrap")
 testQuantiles(resid)
 testZeroInflation(resid)
@@ -1757,6 +1757,7 @@ coords <- dcbindScaled %>%
   ungroup()
 
 recalc.resid <- recalculateResiduals(resid, group = coords$Site)
+
 testSpatialAutocorrelation(recalc.resid, x = coords$Lon, y = coords$Lat)
 # DHARMa Moran's I test for distance-based autocorrelation
 #
@@ -1764,40 +1765,57 @@ testSpatialAutocorrelation(recalc.resid, x = coords$Lon, y = coords$Lat)
 # observed = 0.0697829, expected = -0.0034247, sd = 0.0216687, p-value = 0.0007289
 # alternative hypothesis: Distance-based autocorrelation
 
-## Data are spatially autocorrelated -- trying to correct
-tmp <- dcbindScaled
-coords <- tmp %>%
-  filter(continent == "Europe") %>%
-  distinct(Site, Lat, Lon, .keep_all = T) %>%
-  group_by(Site) %>%
-  mutate(Lat = mean(Lat), Lon = mean(Lon)) %>%
-  distinct() %>%
-  ungroup()
+###### *Data are spatially autocorrelated -- trying to correct -----------------
+## -> Tried running all Europe data in spatial-autocorrelation corrected model.
+#     Not only did it make the model worse, but it also did not correct the spatial-
+#     Autocorrelation issue.
+## -> Then tried separating data by country, but Spain only had 9 distinct sites,
+#     which was not enough for a robust model.
+## -> I then created a model using only the Germany data, initially not correcting
+#     for spatial-autocorrelation to see if we still have a spatial-autocorrelation
+#     issue if it's just one country (284 distinct sites).
 
-tmp$pos <- numFactor(tmp$Lon, tmp$Lat)
-tmp$group <- factor(rep(1, nrow(tmp))) # dummy grouping var
+
+## Create dummy df with only Germany data.
+tmp <- dcbindScaled %>%
+  filter(country == "Germany")
 
 ## model is fit by adding the pos term in
 all_EU_RR2 <- glmmTMB(cbind(nPos_all, nNeg_all) ~ richness*logsiteAbun +
-                    temp_d*sMoist_d + (1|scientific) + exp(pos + 0 | group),
+                    temp_d*sMoist_d + (1|scientific),
                   data = tmp, family = "binomial", na.action = "na.fail",
                   control = glmmTMBControl(optimizer = optim,
                                            optArgs = list(method = "BFGS")))
 
 
 summary(all_EU_RR2)
-Anova(all_EU_RR2)
+Anova(all_EU_RR2) # Soil moisture and logsppAbun are significant
 
 resid2 <- simulateResiduals(all_EU_RR2)
 testResiduals(all_EU_RR2)
 testQuantiles(all_EU_RR2)
 testZeroInflation(all_EU_RR2)
 
+## Need to subset unique lat/lon vals to test for spatial autocorrelation
+coords <- tmp %>%
+  distinct(Site, Lat, Lon, .keep_all = T) %>%
+  group_by(Site) %>%
+  mutate(Lat = mean(Lat), Lon = mean(Lon)) %>%
+  distinct() %>%
+  ungroup()
+
 recalc.resid2 <- recalculateResiduals(resid2, group = coords$Site)
-testSpatialAutocorrelation(recalc.resid2, x = tmp$Lon, y = tmp$Lat)
+testSpatialAutocorrelation(recalc.resid2, x = coords$Lon, y = coords$Lat)
+
+# DHARMa Moran's I test for distance-based autocorrelation
+#
+# data:  recalc.resid2
+# observed = 0.0204701, expected = -0.0035336, sd = 0.0211485, p-value = 0.2564
+# alternative hypothesis: Distance-based autocorrelation
 
 
-
+tmp <- coords %>%
+  filter(country == "Spain")
 ##  Prevalence by Abundance & Richness Plots for 'All spp.' model
 all_EU_RR_pred <- ggpredict(all_EU_RR,  terms = c("richness", "logsiteAbun")) %>%
   dplyr::rename("richness" = "x",
