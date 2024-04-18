@@ -42,6 +42,7 @@ pckgs <- c("ggsignif", # adds labels to significant groups
              "ggpubr", # stat_compare_means()
             "ggbreak", # create axis breaks in ggplots
              "gtools", # signif. value styling
+           # "ggiraphExtra", # make an interactive plot
          "kableExtra", # table styling
                "renv", # environment lock
              "ggtext", # for text type/arrangements w/ ggplot2
@@ -1814,8 +1815,6 @@ testSpatialAutocorrelation(recalc.resid2, x = coords$Lon, y = coords$Lat)
 # alternative hypothesis: Distance-based autocorrelation
 
 
-tmp <- coords %>%
-  filter(country == "Spain")
 ##  Prevalence by Abundance & Richness Plots for 'All spp.' model
 all_EU_RR_pred <- ggpredict(all_EU_RR,  terms = c("richness", "logsiteAbun")) %>%
   dplyr::rename("richness" = "x",
@@ -1831,10 +1830,8 @@ all_EU_RR_plot <- ggplot(all_EU_RR_pred, aes(x = richness, y = predicted, linety
   geom_rug(data = dcbindScaled, aes(x = richness, y = 0), sides = "b",
            alpha = 0.5, position = position_jitter(width = 0.4, height = 0.1),
            inherit.aes = F, na.rm = T) +
-  labs(x = "Species richness",
-       y = "Bsal prevalence (%)",
-       # title = "All spp. model",
-  ) +
+  labs(x = "Relative species richness",
+       y = "Bsal prevalence (%)") +
    # geom_ribbon(aes(x = richness, ymin = conf.low, ymax = conf.high,
    #             fill = siteAbun), alpha = 0.2, colour = NA, show.legend = F) +
   geom_label(label = "Europe", size = 8, colour = "gray20", label.padding = unit(0.25, "lines"),
