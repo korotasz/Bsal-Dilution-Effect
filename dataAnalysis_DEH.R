@@ -716,7 +716,7 @@ prev_bayes_plot <- ggplot(prev, aes(scientific, sapply(mean, FUN = function(x) i
                                           label = paste(mean,"%"))) +
   geom_point(size = 5) +
   geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.5, linewidth = 1) +
-  geom_text(aes(colour = susceptibility, x = (as.numeric(scientific) + 0.05), y = upper + 2),
+  geom_text(aes(colour = susceptibility, x = (as.numeric(scientific) + 0.05), y = upper + 5),
             size = 6, fontface = "bold", alpha = 0.75) +
   coord_flip(clip = "off") +
   ylab("Disease prevalence (%)") +
@@ -734,8 +734,8 @@ prev_bayes_plot <- ggplot(prev, aes(scientific, sapply(mean, FUN = function(x) i
 
 prev_bayes_plot
 
-# ggsave("prev_bayes_plot.pdf", prev_bayes_plot, device = cairo_pdf, path = file.path(dir, figpath),
-#          width = 2600, height = 2000, scale = 1.5, units = "px", dpi = 300, limitsize = F)
+ggsave("prev_bayes_plot.pdf", prev_bayes_plot, device = cairo_pdf, path = file.path(dir, figpath),
+         width = 2600, height = 2000, scale = 1.5, units = "px", dpi = 300, limitsize = F)
 
 # rm(prev_bayes_plot, bsal_bayesci, bsal_ci, chn, deu, esp, prev, sampSize, vnm)
 
@@ -1733,7 +1733,7 @@ dcbindScaled <- dcbind %>%
 #### > Europe data only --------------------------------------------------------
 ##### > Relative richness (derived from dataset) -------------------------------
 all_EU_RR <- glmmTMB(cbind(nPos_all, nNeg_all) ~ richness*logsiteAbun +
-                    temp_d*sMoist_d + (1|scientific),
+                    temp_d*sMoist_d + (1|country) + (1|scientific),
                   data = filter(dcbindScaled, continent == "Europe"),
                   family = "binomial", na.action = "na.fail",
                   control = glmmTMBControl(optimizer = optim,
@@ -1853,7 +1853,75 @@ all_EU_RR_plot
 # ggsave("Europe_allRR_plot.pdf", all_EU_RR_plot, device = cairo_pdf, path = file.path(dir, figpath),
 #        width = 1250, height = 1500, scale = 2, units = "px", dpi = 300, limitsize = F)
 
+##### > IUCN Richness estimate --------------------------------------------------
+EU_iucnR <- glmmTMB(cbind(nPos_all, nNeg_all) ~ iucn_rich*logsiteAbun +
+                       temp_d*sMoist_d + (1|country) + (1|scientific),
+                     data = filter(dcbindScaled, continent == "Europe"),
+                    family = "binomial", na.action = "na.fail",
+                    control = glmmTMBControl(optimizer = optim,
+                                             optArgs = list(method = "BFGS")))
+
+summary(EU_iucnR)
+Anova(EU_iucnR)
+
+resid <- simulateResiduals(EU_iucnR)
+testResiduals(resid) # Outlier test significant (p = 0.01716)
+testOutliers(resid, type = "bootstrap")
+testQuantiles(resid)
+testZeroInflation(resid)
+
+## Need to subset unique lat/lon vals to test for spatial autocorrelation
+coords <- dcbindScaled %>%
+  filter(continent == "Europe") %>%
+  distinct(Site, Lat, Lon, .keep_all = T) %>%
+  group_by(Site) %>%
+  mutate(Lat = mean(Lat), Lon = mean(Lon)) %>%
+  distinct() %>%
+  ungroup()
+
+recalc.resid <- recalculateResiduals(resid, group = coords$Site)
+
+testSpatialAutocorrelation(recalc.resid, x = coords$Lon, y = coords$Lat)
+
+##  Prevalence by Abundance & Richness Plots for 'All spp.' model
+EU_iucnR_pred <- ggpredict(EU_iucnR,  terms = c("iucn_rich", "logsiteAbun")) %>%
+  dplyr::rename("richness" = "x",
+                "logsiteAbun" = "group") %>%
+  plyr::mutate(richness = as.numeric(as.character(richness)),
+               logsiteAbun = as.numeric(as.character(logsiteAbun)),
+               # Convert scaled prediction to original data scale:
+               siteAbun = as.factor(round(exp(as.numeric(logsiteAbun)), 0)))
+
+
+EU_iucnR_plot <- ggplot(EU_iucnR_pred, aes(x = richness, y = predicted, linetype = siteAbun, colour = siteAbun)) +
+  geom_line(aes(linetype = siteAbun, colour = siteAbun), linewidth = 1) +
+  geom_rug(data = dcbindScaled, aes(x = iucn_rich, y = 0), sides = "b",
+           alpha = 0.5, position = position_jitter(width = 0.4, height = 0.1),
+           inherit.aes = F, na.rm = T) +
+  labs(x = "IUCN Richness est.",
+       y = "Bsal prevalence (%)") +
+  # geom_ribbon(aes(x = richness, ymin = conf.low, ymax = conf.high,
+  #             fill = siteAbun), alpha = 0.2, colour = NA, show.legend = F) +
+  geom_label(label = "Europe", size = 8, colour = "gray20", label.padding = unit(0.25, "lines"),
+             x = 9, y = 0.055, alpha = 0.75) +
+  scale_linetype_manual(values = c("solid", "longdash", "twodash")) +
+  scale_color_grey(start = 0.8, end = 0.2) +
+  scale_x_continuous(limits = c(0, 17),
+                     labels = seq(0, 15, 1),
+                     breaks = seq(0, 15, 1)) +
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1),
+                     breaks = seq(0, .10, 0.02),
+                     limits = c(0, 0.10),
+                     minor_breaks = seq(0, 0.10, 0.02)) +
+  ak_theme + theme(plot.tag.position = c(0.96, 0.9),
+                   axis.text.y = element_text(face = "plain")) +
+  guides(colour = guide_legend("Site-level abundance", title.position = "top", title.hjust = 0.5),
+         linetype = guide_legend("Site-level abundance", title.position = "top", title.hjust = 0.5))
+
+EU_iucnR_plot
+
 ##### ii. Asia data (all) ------------------------------------------------------
+##### > Relative richness (derived from dataset) -------------------------------
 # Relative richness calculated from our dataset was '1' for all observations* from Asia -- had to drop the term.
 # *There were sites that had >1 observations, but none of the species present at these sites had been
 #    designated a Bsal susceptibility status, and therefore could not be used for more than
@@ -1932,13 +2000,43 @@ all_AS_RR_plot <- ggplot(all_AS_RR_pred, aes(x = richness, y = predicted, linety
 all_AS_RR_plot
 # ggsave("Asia_allRR_plot.pdf", all_AS_RR_plot, device = cairo_pdf, path = file.path(dir, figpath),
 #        width = 1250, height = 1500, scale = 2, units = "px", dpi = 300, limitsize = F)
+
+##### > IUCN Richness estimate --------------------------------------------------
+AS_iucnR <- glmmTMB(cbind(nPos_all, nNeg_all) ~ iucn_rich*logsiteAbun +
+                      temp_d*sMoist_d + (1|scientific),
+                    data = filter(dcbindScaled, continent == "Asia"),
+                    family = "binomial", na.action = "na.fail",
+                    control = glmmTMBControl(optimizer = optim,
+                                             optArgs = list(method = "BFGS")))
+
+summary(AS_iucnR)
+Anova(AS_iucnR)
+
+resid <- simulateResiduals(AS_iucnR)
+testResiduals(resid) # Outlier test significant (p = 0.01716)
+testOutliers(resid, type = "bootstrap")
+testQuantiles(resid)
+testZeroInflation(resid)
+
+## Need to subset unique lat/lon vals to test for spatial autocorrelation
+coords <- dcbindScaled %>%
+  filter(continent == "Asia") %>%
+  distinct(Site, Lat, Lon, .keep_all = T) %>%
+  group_by(Site) %>%
+  mutate(Lat = mean(Lat), Lon = mean(Lon)) %>%
+  distinct() %>%
+  ungroup()
+
+recalc.resid <- recalculateResiduals(resid, group = coords$Site)
+
+testSpatialAutocorrelation(recalc.resid, x = coords$Lon, y = coords$Lat)
 #### > Relative richness + no FS prevalence ------------------------------------
 ## Fire salamanders are still accounted for in site abundance and richness calculations
 all_RR_noFS <- glmmTMB(cbind(nPos_all_noFS, nNeg_all_noFS) ~ richness*logsiteAbun +
-                    temp_d*sMoist_d + (1|scientific),
-                  data = dcbindScaled, family = "binomial", na.action = "na.fail",
-                  control = glmmTMBControl(optimizer = optim,
-                                           optArgs = list(method = "BFGS")))
+                         temp_d*sMoist_d + (1|scientific),
+                       data = dcbindScaled, family = "binomial", na.action = "na.fail",
+                       control = glmmTMBControl(optimizer = optim,
+                                                optArgs = list(method = "BFGS")))
 
 summary(all_RR_noFS)
 Anova(all_RR_noFS)
@@ -1952,26 +2050,6 @@ testZeroInflation(resid_noFS)
 recalc.resid_noFS <- recalculateResiduals(resid_noFS, group = coords$Site)
 testSpatialAutocorrelation(recalc.resid_noFS, x = coords$Lon, y = coords$Lat)
 # not spatially autocorrelated
-
-
-#### > IUCN Richness estimate --------------------------------------------------
-all_iucnR <- glmmTMB(cbind(nPos_all, nNeg_all) ~ iucn_rich*logsiteAbun +
-                   temp_d*sMoist_d + (1|scientific),
-                 data = filter(dcbindScaled, continent != "Asia"), family = "binomial", na.action = "na.fail",
-                 control = glmmTMBControl(optimizer = optim,
-                                          optArgs = list(method = "BFGS")))
-
-summary(all_iucnR)
-Anova(all_iucnR)
-
-resid_iucnR <- simulateResiduals(all_iucnR)
-testResiduals(resid_iucnR)
-testQuantiles(resid_iucnR)
-testZeroInflation(resid_iucnR)
-
-# Test for spatial autocorrelation
-recalc.resid_iucnR <- recalculateResiduals(resid_iucnR, group = coords$Site)
-testSpatialAutocorrelation(recalc.resid_iucnR, x = coords$Lon, y = coords$Lat)
 
 #### > IUCN Richness estimate + no FS prevalence -------------------------------
 all_iucnR_noFS <- glmmTMB(cbind(nPos_all_noFS, nNeg_all_noFS) ~ iucn_rich*logsiteAbun +
