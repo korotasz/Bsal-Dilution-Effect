@@ -17,8 +17,7 @@ pckgs <- c("tidyverse", # data wrangling/manipulation
        "rnaturalearth", # obtain spatial polygons that can be used with sf
              "geodata", # get admin levels for each country
                "rgbif", # obtain species occurrence data
-   "CoordinateCleaner", # resolve geospatial issues
-             "taxlist", # standardize/update taxonomic names
+              "tabula", # add different measures of diversity (e.g. Brillouin index)
            "geosphere", # distGeo(); distm()
         "measurements", # convert coordinates from DMS to DD
             "maptools", # package to create maps
@@ -69,6 +68,11 @@ assign_start_date <- function(df, timepoint, date, out_col){
   }
   return(df)
 }
+
+# brillouin <- function(x) {
+#   N <- sum(x)
+#   (log(factorial(N)) - sum(log(factorial(x))))/N
+# }
 
 ## File paths ------------------------------------------------------------------
 dir <- dirname(rstudioapi::getActiveDocumentContext()$path)
@@ -515,7 +519,7 @@ df <- relocate(df, Site, .after = "day")
 rm(siteNumber)
 
 
-## Add measures of abundance  --------------------------------------------------
+## Add measure(s) of abundance -------------------------------------------------
 df <- df %>%
   unite(c("year", "month", "day"), sep = "-", col = "date", remove = F) %>%
   ## Relative species abundance (# individuals/spp at a site during each sampling event) -- calculated using ONLY our data
@@ -529,9 +533,8 @@ df <- df %>%
   ungroup() %>%
   glimpse()
 
-## Add measures of richness ----------------------------------------------------
-## Richness calculations include fire salamanders
-## calculate relative spp richness (from our dataset)
+## Add measure(s) of richness --------------------------------------------------
+### > Relative spp richness (from our dataset) ---------------------------------
 spr <- df %>%
   dplyr::select(Site, date, scientific) %>%
   na.omit(.) %>%
@@ -551,7 +554,8 @@ df <- df %>%
   # species richness
   left_join(spr[,c(1:2, 63)], by = c("Site", "date"))
 
-# Read in IUCN richness .csv (data processed in QGIS)
+
+### > IUCN richness .csv (data processed in QGIS) ------------------------------
 iucn_rich <- read.csv("iucn_richness.csv", header = T, encoding = "UTF-8") %>%
   rename(., iucn_rich = iucn_sr1) %>%
   dplyr::select(-(L1))
@@ -576,6 +580,41 @@ df <- df %>%
          Lon = as.numeric(Lon))
 
 rm(iucn_rich, iucn_rwr, spr)
+
+## Add measures of diversity (Brillouin Index) ---------------------------------
+# The Brillouin diversity index is a modification of the Shannon-Wiener Index
+# that is preferred when sample randomness cannot be guaranteed
+
+## First create matrix with Site ~ Species setup
+spDiv <- df %>%
+  dplyr::select(Site, scientific, individualCount) %>%
+  na.omit(.) %>%
+  reshape2::acast(., Site ~ scientific, sum, margins = F,
+                  fill = 0, value.var = "individualCount")
+
+
+heatmap(spDiv)
+
+
+## Calculate heterogeneity
+heterogeneity <- tabula::heterogeneity(spDiv, method = "brillouin")
+
+plot(heterogeneity)
+## Bootstrap to construct a sampling distribution
+H.boot <- bootstrap(heterogeneity, n = 1000, f = summary)
+
+plot(H.boot$Mean)
+ggplot(H.boot, aes(x = Index, y = Mean))
+## Calculate evenness
+evenness <- tabula::evenness(spDiv, method = "brillouin")
+
+plot(evenness)
+## Bootstrap to construct a sampling distribution
+E.boot <- bootstrap(evenness, n = 1000, f = summary)
+
+
+
+
 
 ## Add susceptibility data -----------------------------------------------------
 ## Susceptibility codes (based on a combination of Martel et al. 2014 and Bosch et al. 2021)
