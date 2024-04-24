@@ -17,7 +17,7 @@ pckgs <- c("tidyverse", # data wrangling/manipulation
        "rnaturalearth", # obtain spatial polygons that can be used with sf
              "geodata", # get admin levels for each country
                "rgbif", # obtain species occurrence data
-              "tabula", # add different measures of diversity (e.g. Brillouin index)
+               "abdiv", # add different measures of diversity (e.g. Brillouin index)
            "geosphere", # distGeo(); distm()
         "measurements", # convert coordinates from DMS to DD
             "maptools", # package to create maps
@@ -69,10 +69,6 @@ assign_start_date <- function(df, timepoint, date, out_col){
   return(df)
 }
 
-# brillouin <- function(x) {
-#   N <- sum(x)
-#   (log(factorial(N)) - sum(log(factorial(x))))/N
-# }
 
 ## File paths ------------------------------------------------------------------
 dir <- dirname(rstudioapi::getActiveDocumentContext()$path)
@@ -533,7 +529,8 @@ df <- df %>%
   ungroup() %>%
   glimpse()
 
-## Add measure(s) of richness --------------------------------------------------
+
+## Add measures of biodiversity ------------------------------------------------
 ### > Relative spp richness (from our dataset) ---------------------------------
 spr <- df %>%
   dplyr::select(Site, date, scientific) %>%
@@ -578,44 +575,45 @@ df$iucn_rwr <- iucn_rwr$iucn_rwr[base::match(paste(df$Lat, df$Lon),
 df <- df %>%
   mutate(Lat =  as.numeric(Lat),
          Lon = as.numeric(Lon))
+### > Brillouin Diversity Index (Hb) -------------------------------------------
+# Hb is a modification of the Shannon-Wiener Index that is preferred when sample
+# randomness cannot be guaranteed
 
-rm(iucn_rich, iucn_rwr, spr)
-
-## Add measures of diversity (Brillouin Index) ---------------------------------
-# The Brillouin diversity index is a modification of the Shannon-Wiener Index
-# that is preferred when sample randomness cannot be guaranteed
-
-## First create matrix with Site ~ Species setup
-spDiv <- df %>%
+## Create matrix with Site ~ Species setup & calculate Hb
+Hb <- df %>%
   dplyr::select(Site, scientific, individualCount) %>%
   na.omit(.) %>%
-  reshape2::acast(., Site ~ scientific, sum, margins = F,
-                  fill = 0, value.var = "individualCount")
+  group_by(Site) %>%
+  pivot_wider(names_from = scientific, # convert df to matrix
+              values_from = individualCount, values_fn = sum, values_fill = 0) %>%
+  plyr::ddply(., ~Site, function(x){
+    data.frame(Hb = brillouin_d(x))
+  }) %>%
+  mutate(Hb.max = max(Hb)) %>%
+  mutate(Hb.evenness = (Hb/Hb.max))
+
+plot(Hb$Site, Hb$Hb, xlab = "Site", ylab = "Brillouin's Diversity Index (Hb)")
+plot(Hb$Site, Hb$Hb.evenness, xlab = "Site", ylab = "Evenness (Hb)")
+
+# ## Evenness
+# Hb_even <- df %>%
+#   dplyr::select(Site, scientific, individualCount) %>%
+#   na.omit(.) %>%
+#   group_by(Site, scientific) %>%
+#   mutate(N = sum(individualCount)) %>%
+#   dplyr::select(-(individualCount)) %>%
+#   ungroup %>%
+#   unique() %>%
+#   group_by(Site) %>%
+#   # pivot_wider(names_from = scientific, # convert df to matrix
+#   #             values_from = individualCount, values_fn = sum, values_fill = 0) %>%
+#   plyr::ddply(., ~Site, function(x){
+#     data.frame(shannon = shannon(x[,-2]))
+#   }) #%>%
+#   mutate(pielou = pielou_e(shannon))
 
 
-heatmap(spDiv)
-
-
-## Calculate heterogeneity
-heterogeneity <- tabula::heterogeneity(spDiv, method = "brillouin")
-
-plot(heterogeneity)
-## Bootstrap to construct a sampling distribution
-H.boot <- bootstrap(heterogeneity, n = 1000, f = summary)
-
-plot(H.boot$Mean)
-ggplot(H.boot, aes(x = Index, y = Mean))
-## Calculate evenness
-evenness <- tabula::evenness(spDiv, method = "brillouin")
-
-plot(evenness)
-## Bootstrap to construct a sampling distribution
-E.boot <- bootstrap(evenness, n = 1000, f = summary)
-
-
-
-
-
+rm(iucn_rich, iucn_rwr, spr)
 ## Add susceptibility data -----------------------------------------------------
 ## Susceptibility codes (based on a combination of Martel et al. 2014 and Bosch et al. 2021)
 ## 1 = resistant: no infection, no clinical signs of disease, no mortality
