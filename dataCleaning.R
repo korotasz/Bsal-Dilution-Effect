@@ -515,7 +515,7 @@ df <- relocate(df, Site, .after = "day")
 rm(siteNumber)
 
 
-## Add measure(s) of abundance -------------------------------------------------
+## Add relative abundance ------------------------------------------------------
 df <- df %>%
   unite(c("year", "month", "day"), sep = "-", col = "date", remove = F) %>%
   ## Relative species abundance (# individuals/spp at a site during each sampling event) -- calculated using ONLY our data
@@ -588,32 +588,15 @@ Hb <- df %>%
               values_from = individualCount, values_fn = sum, values_fill = 0) %>%
   plyr::ddply(., ~Site, function(x){
     data.frame(Hb = brillouin_d(x))
-  }) %>%
-  mutate(Hb.max = max(Hb)) %>%
-  mutate(Hb.evenness = (Hb/Hb.max))
+  })
 
 plot(Hb$Site, Hb$Hb, xlab = "Site", ylab = "Brillouin's Diversity Index (Hb)")
-plot(Hb$Site, Hb$Hb.evenness, xlab = "Site", ylab = "Evenness (Hb)")
 
-# ## Evenness
-# Hb_even <- df %>%
-#   dplyr::select(Site, scientific, individualCount) %>%
-#   na.omit(.) %>%
-#   group_by(Site, scientific) %>%
-#   mutate(N = sum(individualCount)) %>%
-#   dplyr::select(-(individualCount)) %>%
-#   ungroup %>%
-#   unique() %>%
-#   group_by(Site) %>%
-#   # pivot_wider(names_from = scientific, # convert df to matrix
-#   #             values_from = individualCount, values_fn = sum, values_fill = 0) %>%
-#   plyr::ddply(., ~Site, function(x){
-#     data.frame(shannon = shannon(x[,-2]))
-#   }) #%>%
-#   mutate(pielou = pielou_e(shannon))
+df$brillouin <- Hb$Hb[base::match(paste(df$Site), paste(Hb$Site))]
+df <- df %>%
+  relocate(brillouin, .after = richness)
 
-
-rm(iucn_rich, iucn_rwr, spr)
+rm(iucn_rich, iucn_rwr, spr, Hb)
 ## Add susceptibility data -----------------------------------------------------
 ## Susceptibility codes (based on a combination of Martel et al. 2014 and Bosch et al. 2021)
 ## 1 = resistant: no infection, no clinical signs of disease, no mortality
@@ -667,7 +650,7 @@ locs <- df %>%
 st_write(locs, file.path(dir, shppath, "admData.gpkg"), append = F, delete_layer = T, layer = "adm_info")
 
 
-rm(locs, iucn_info, geoRange)
+rm(locs, iucn_info)
 
 
 
