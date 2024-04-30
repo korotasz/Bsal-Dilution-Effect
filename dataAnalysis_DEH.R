@@ -142,7 +142,7 @@ ak_theme <- theme_ipsum(base_family = "Segoe UI Light") +
         plot.tag = element_text(size = 36, face = "bold"),
         plot.title = element_text(size = 42, hjust = 0.5, face = "plain"),
         plot.subtitle = element_markdown(size = 12, face = "plain"),
-        plot.margin = margin(1, 1, 1.5, 1.2, "cm"),
+        # plot.margin = margin(1, 1, 1.5, 1.2, "cm"),
         plot.caption = element_markdown(hjust = 1, size = 14, face = "plain"),
         plot.caption.position = "plot",
         legend.position = "top",
@@ -250,7 +250,7 @@ europe_map <- ggplot() +
   geom_sf(data = countries, aes(fill = sovereignt), col = "gray40", fill = "#B2BEB5", show.legend = F) +
   geom_sf(data = obs, aes(geometry = jittered, fill = BsalDetected, shape = BsalDetected),
           alpha = 0.3, size = 4, stroke = 1, color = "gray30", show.legend = "point") +
-  geom_sf_text(data = countries, aes(label = name), position = "identity", size = 10) +
+  # geom_sf_text(data = countries, aes(label = name), position = "identity", size = 10) +
   scale_fill_manual(values = c("gray40", "#b30000"), guide = "none") +
   scale_shape_manual(values = c(21, 24), guide = "none") +
   coord_sf(xlim = c(2903943, 5277030), # c(-9, 15)
@@ -291,8 +291,8 @@ map_bounds(7.5, 14.5, 46, 55.5, crs = epsg27704)
 deu_map <- ggplot() +
   geom_sf(data = europe, col = "gray40", fill = "#ECECEC", show.legend = F) +
   geom_sf(data = countries, aes(fill = sovereignt), col = "gray40", fill = "#B2BEB5", show.legend = F) +
-  # geom_sf_label(data = g, aes(label = paste(label)),  nudge_x = -40000,  nudge_y = 430000,
-  #               size = 7, fontface = "bold", label.size = NA, alpha = 0.5) +
+  geom_sf_label(data = g, aes(label = paste(label)),  nudge_x = 400000,  nudge_y = 430000,
+                size = 7, fontface = "bold", label.size = NA, alpha = 0.5) +
   geom_sf(data = obs, aes(geometry = jittered, fill = BsalDetected, shape = BsalDetected),
           alpha = 0.3, size = 4, stroke = 1, color = "gray30", show.legend = "point") +
   scale_fill_manual(values = c("gray40", "#b30000"), guide = "none") +
@@ -333,8 +333,8 @@ map_bounds(-9, 4.5, 34, 47, crs = epsg27704)
 esp_map <- ggplot() +
   geom_sf(data = europe, col = "gray40", fill = "#ECECEC", show.legend = F) +
   geom_sf(data = countries, aes(fill = sovereignt), col = "gray40", fill = "#B2BEB5", show.legend = F) +
-  # geom_sf_label(data = s, aes(label = paste(label)), nudge_x = -700000, nudge_y = 250000,
-  #               size = 7, fontface = "bold", label.size = NA, alpha = 0.5) +
+  geom_sf_label(data = s, aes(label = paste(label)), nudge_x = 300000, nudge_y = 250000,
+                size = 7, fontface = "bold", label.size = NA, alpha = 0.5) +
   geom_sf(data = obs, aes(geometry = jittered, fill = BsalDetected, shape = BsalDetected),
           alpha = 0.3, size = 4, stroke = 1, color = "gray30", show.legend = "point") +
   scale_fill_manual(values = c("gray40", "#b30000"), guide = "none") +
@@ -370,17 +370,16 @@ esp_map
 
 ### Figure 1. Data distribution maps(combined) ---------------------------------
 #### FIX THIS SECTION ----------------------------------------------------------
-fig1a <- europe_map + theme(plot.tag.position = c(0.85, 0.85),
-                            plot.margin = c(0, 0, 0, 0))
-fig1b <- esp_map + labs(y = "") + theme(axis.title.y = element_blank(),
-                                        legend.position = element_blank(),
-                                        plot.tag.position = c(0.95, 0.72))
-fig1c <- deu_map + labs(y = "") + theme(axis.title.y = element_blank(),
-                                        legend.position = element_blank(),
-                                        plot.tag.position = c(0.96, 0.94))
+fig1a <- europe_map + labs(x = NULL, y = NULL) + theme(plot.tag.position = c(0.13, 0.82),
+                            plot.margin = unit(c(0,-5,0,0), "cm"), aspect.ratio = .8)
+fig1b <- deu_map + labs(x = NULL, y = NULL) + theme(plot.tag.position = c(0.22, 0.75),
+                                        plot.margin = unit(c(0,0,0,-5), "cm"))
+
+fig1c <- esp_map + labs(x = NULL, y = NULL) + theme(plot.tag.position = c(0.22, 0.9),
+                                        plot.margin = unit(c(0,0,0,0-5), "cm"))
 
 
-p <- ggplot() + labs(x = "Longitude", y = "Latitude") + ak_theme + theme(plot.margin = margin(0, 0, 0, 0, "cm"),
+p <- ggplot() + labs(x = "Longitude", y = "Latitude") + ak_theme + theme(plot.margin = margin(0, 0, 0, 0.15, "cm"),
                                                                          panel.spacing.y = unit(0,"cm"))
 x_axis <- cowplot::get_plot_component(p, "xlab-b")
 y_axis <- cowplot::get_plot_component(p, "ylab-l")
@@ -391,32 +390,31 @@ BAAA
 #AAA
 ##C#
 "
-layout <- "
-AAB
-AAC
-"
 
+bc <- (fig1b/fig1c)
 
-fig1_map <- (fig1a + fig1b + fig1c) +
+fig1_map <- (fig1a|bc) +
   plot_annotation(tag_levels = "A") +
   plot_layout(guides = "collect",
-              design = layout) &
+              widths = c(2, 1),
+              heights = c(1, 1)) &
   theme(legend.position = "top",
-        plot.margin = margin(0.25, 0.25, 0, -0.5, "cm"),
-        panel.spacing.y = unit(0,"cm"),
-        legend.box.margin = margin(0, 1, 1, 1, "cm"),
+        legend.box.margin = margin(1, 1, 1, 1, "cm"),
         legend.text = element_text(margin = margin(r = 1, unit = "cm")),
         legend.title = element_blank())
 
 fig1_map
 
 fig1_map_annotated <- wrap_plots(wrap_elements(fig1_map), ggdraw(y_axis), ggdraw(x_axis)) +
-  plot_layout(widths = c(.15, 2.25),
-              heights = c(2.25, 0.25),
-              design = empty) + theme(plot.margin = margin(0.25, 0.25, 0.25, 0.25, "cm"))
+  plot_layout(design = empty,
+              widths = c(.15, 2.25),
+              heights = c(2.25, 0.25)) +
+  theme(plot.margin = margin(t = 0, r = 0, b = 0.25, l = 0.25, "cm"))
 
 fig1_map_annotated
 
+ggsave("Fig1.pdf", fig1_map_annotated, device = cairo_pdf, path = file.path(dir, figpath, "/maps"),
+       width = 3000, height = 1900, scale = 2, units = "px", dpi = 300, limitsize = F)
 
 ## II. Testing assumptions of the dilution effect hypothesis -------------------
 ### a. Hosts differ in their reservoir competence. -----------------------------
