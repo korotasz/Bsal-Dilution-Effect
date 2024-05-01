@@ -243,6 +243,14 @@ countries <- worldmap %>%
   st_transform(., crs = epsg27704)
 
 #### a. Data overview: Europe --------------------------------------------------
+eu <- data.frame(label = paste("(n = ", sum(n), ")", sep = ""))
+
+  mapLabels %>%
+  filter(country == "Germany" | country == "Spain") %>%
+  mutate(total = sum(n))
+  plyr::mutate(label = paste("(n = ", sum(n), ")", sep = ""))
+
+
 map_bounds(-8, 15, 34, 56, crs = epsg27704)
 
 europe_map <- ggplot() +
@@ -250,7 +258,8 @@ europe_map <- ggplot() +
   geom_sf(data = countries, aes(fill = sovereignt), col = "gray40", fill = "#B2BEB5", show.legend = F) +
   geom_sf(data = obs, aes(geometry = jittered, fill = BsalDetected, shape = BsalDetected),
           alpha = 0.3, size = 4, stroke = 1, color = "gray30", show.legend = "point") +
-  # geom_sf_text(data = countries, aes(label = name), position = "identity", size = 10) +
+  geom_sf_label(data = eu, aes(label = paste(label)),  nudge_x = 400000,  nudge_y = 430000,
+                size = 7, fontface = "bold", label.size = NA, alpha = 0.5) +
   scale_fill_manual(values = c("gray40", "#b30000"), guide = "none") +
   scale_shape_manual(values = c(21, 24), guide = "none") +
   coord_sf(xlim = c(2903943, 5277030), # c(-9, 15)
