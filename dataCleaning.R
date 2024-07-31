@@ -79,14 +79,20 @@ shppath <- (path.expand("/csvFiles/shapefiles"))
 setwd(file.path(dir, csvpath))
 
 germany <- read.csv("germany.csv", header = T, encoding = "UTF-8")
+germanyv2 <- read.csv("germany_revised.csv", header = T, encoding = "UTF-8")
 euram <- read.csv("euram.csv", header = T, encoding = "UTF-8")
 belgium <- read.csv("belgium.csv", header = T, encoding = "UTF-8")
 uk <- read.csv("uk.csv", header = T, encoding = "UTF-8")
-
 spain <- read.csv("spain.csv", header = T, encoding = "UTF-8")
 china <- read.csv("china.csv", header = T, encoding = "UTF-8")
 vietnam <- read.csv("vietnam.csv", header = T, encoding = "UTF-8")
 
+
+## Compare new germany data to old germany data --------------------------------
+data.frame(colnames(germany))
+data.frame(colnames(germanyv2))
+
+deu_v2
 
 
 ## Belgium, Germany, UK, and Europe/North America combined data ----------------
