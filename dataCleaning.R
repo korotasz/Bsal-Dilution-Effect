@@ -1,17 +1,26 @@
-require(renv)
-require(pacman)
+## GETTING STARTED -------------------------------------------------------------
+## Please review the program version requirements in the .README document associated with this GitHub repository.
+## 1. Make sure you have the correct version of R (4.3.3 "Angel Food Cake") loaded for this session.
 
-## May need to run:
-# renv::init(repos = "https://packagemanager.posit.co/cran/2023-10-13") # will install the correct versions of maptools, rgdal, and sp
-# renv::restore(packages = "renv")
+## 2. Load 'renv'
+require(renv)
+
+## 3. Restore project dependencies from the renv lockfile ('renv.lock'). You should get a message that
+##    no issues have been found and that the project is in a consistent state.
+# renv::restore()
+
+## If step 3 does give an error, try running:
+# renv::init(repos = "https://packagemanager.posit.co/cran/2023-10-13") # (should install the correct versions of maptools, rgdal, and sp)
 
 #### Packages ####
+require(pacman)
 pckgs <- c("tidyverse", # data wrangling/manipulation
             "reshape2", # data wrangling/manipulation
           "data.table", # data wrangling/manipulation (particularly weather data)
-               "rgdal", # geospatial analyses
            "lubridate", # deals with dates
                "stats", # aggregate()
+               "rgdal", # geospatial analyses
+            "maptools", # package to create maps
               "raster", # raster manipulation/working with geospatial data
                "terra", # supercedes raster package
        "rnaturalearth", # obtain spatial polygons that can be used with sf
@@ -20,13 +29,13 @@ pckgs <- c("tidyverse", # data wrangling/manipulation
                "abdiv", # add different measures of diversity (e.g. Brillouin index)
            "geosphere", # distGeo(); distm()
         "measurements", # convert coordinates from DMS to DD
-            "maptools", # package to create maps
                "gstat", # spatio-temporal geostatistical modelling
                "stars", # interacting with rasters as sf objects
                   "sp", # working with geospatial data
                   "sf", # working with geospatial data
              "usethis", # edit R environ to access gbif data
                   "fs"  # construct relative paths to files/directories
+
 )
 
 ## Load packages
@@ -89,12 +98,85 @@ vietnam <- read.csv("vietnam.csv", header = T, encoding = "UTF-8")
 
 
 ## Compare new germany data to old germany data --------------------------------
-data.frame(colnames(germany))
-data.frame(colnames(germanyv2))
+deu_revised <- germanyv2 %>%
+  mutate(occurrenceRemarks = as.factor(occurrenceRemarks)) %>%
+  subset(., select = c(occurrenceRemarks, locality, yearCollected:decimalLongitude, genus:specificEpithet,
+                       monthCollected:dayCollected, BsalDetected, fatal, individualCount)) %>%
+         # trim white space around genus and species names
+  mutate(locality = trimws(locality),
+         genus = trimws(genus),
+         specificEpithet = trimws(specificEpithet),
+         decimalLatitude = as.character(decimalLatitude),
+         decimalLongitude = as.character(decimalLongitude),
+         BsalDetected = as.logical(BsalDetected),
+         fatal = as.logical(fatal),
+         # replace 'MISSING' in dataset with NA vals
+         monthCollected = case_when(monthCollected == "MISSING" ~ NA,
+                                    TRUE ~ monthCollected),
+         dayCollected = case_when(dayCollected == "MISSING" ~ NA,
+                                    TRUE ~ dayCollected),
+         individualCount = case_when(individualCount == "MISSING" ~ NA,
+                                     TRUE ~ individualCount),
+         occurrenceRemarks = case_when(occurrenceRemarks == "1" ~ "OK",
+                                       occurrenceRemarks == "2" ~ "potentialDataError",
+                                       occurrenceRemarks == "3" ~ "dataMissing",
+                                       TRUE ~ occurrenceRemarks)) %>%
+  mutate(individualCount = as.numeric(individualCount)) %>%
+  # combine date columns into a single 'date' column
+  unite(., col = "date", c("yearCollected", "monthCollected", "dayCollected"),
+        sep = "-", remove = TRUE, na.rm = TRUE) %>%
+  # combine genus & specificEpithet columns into single 'species' column
+  unite(., col = "species", c("genus", "specificEpithet"),
+        sep = " ", remove = TRUE, na.rm = TRUE)
 
-deu_v2
+head(deu_revised)
 
 
+# Compare ALL usable cases ("OK", "potentialDataError", & NA) to old data
+deu_revised_all <- deu_revised %>%
+  filter(occurrenceRemarks != "dataMissing") %>%
+  subset(., select = c(locality, decimalLatitude, decimalLongitude, date, species,
+                       BsalDetected, fatal, individualCount)) %>%
+  group_by(locality, decimalLatitude, decimalLongitude, date, species,
+           BsalDetected, fatal, individualCount) %>%
+  summarise()
+
+print(deu_revised_all)
+
+deu_all <- germany %>%
+  subset(., select = c(locality, yearCollected:decimalLongitude, genus:specificEpithet,
+                       monthCollected:dayCollected, BsalDetected, fatal, individualCount)) %>%
+  # trim white space around genus and species names
+  mutate(locality = trimws(locality),
+         genus = trimws(genus),
+         specificEpithet = trimws(specificEpithet),
+         # replace 'MISSING' in dataset with NA vals
+         monthCollected = case_when(monthCollected == "MISSING" ~ NA,
+                                    TRUE ~ monthCollected),
+         dayCollected = case_when(dayCollected == "MISSING" ~ NA,
+                                  TRUE ~ dayCollected),
+         # Convert lat/lon to characters to retain precision
+         decimalLatitude = as.character(decimalLatitude),
+         decimalLongitude = as.character(decimalLongitude)) %>%
+  # combine date columns into a single 'date' column
+  unite(., col = "date", c("yearCollected", "monthCollected", "dayCollected"),
+        sep = "-", remove = TRUE, na.rm = TRUE) %>%
+  # combine genus & specificEpithet columns into single 'species' column
+  unite(., col = "species", c("genus", "specificEpithet"),
+        sep = " ", remove = TRUE, na.rm = TRUE) %>%
+  subset(., select = c(locality, decimalLatitude, decimalLongitude, date, species,
+                       BsalDetected, fatal, individualCount)) %>%
+  group_by(locality, decimalLatitude, decimalLongitude, date, species,
+           BsalDetected, fatal, individualCount) %>%
+  summarise()
+
+all_diff <- anti_join(deu_all, deu_revised_all)
+all_diff2 <- anti_join(deu_revised_all, deu_all)
+# Compare ONLY data mentioned in revision sheet (1 & 2)
+
+
+
+# Compare ONLY data I am confident in (1 only)
 ## Belgium, Germany, UK, and Europe/North America combined data ----------------
 df <- rbind(belgium, euram, germany, uk)
 
