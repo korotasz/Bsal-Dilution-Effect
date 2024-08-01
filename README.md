@@ -6,9 +6,9 @@ This chapter of my dissertation leveraged publicly available data to test the di
 ## Getting Started
 ### Project Requirements
 **Requirements** to run the code for this project include:
-- R version 4.3.1
-- R Studio version 2023.06.1+524 'Mountain Hydrangea'
-- ***renv*** R package version 1.0.2
+- R version 4.3.3 (2024-02-29 ucrt) 'Angel Food Cake'
+- R Studio version 2024.06.05+764 'Chocolate Cosmos'
+- ***renv*** R package version 1.0.5
     - This package was used for version control of packages used in this project. More information about ***renv*** can be found [here](https://rstudio.github.io/renv/articles/renv.html). 
     - All other info regarding package versions can be found in the [renv.lock](https://github.com/korotasz/Chapter-2-Analyses/blob/main/renv.lock) file.
 
@@ -28,8 +28,8 @@ This chapter of my dissertation leveraged publicly available data to test the di
 
 5. **Before running any part of the script**, make sure the ***renv*** package is installed and loaded:
    ```
-   install.packages('renv', version = '1.0.2')
-   library(renv)
+   install.packages('renv', version = '1.0.5')
+   require(renv)
    ```
    
 6. You will then need to call ```renv::restore()``` to reinstall the specific package versions used in this project.
