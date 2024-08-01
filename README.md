@@ -35,7 +35,7 @@ This chapter of my dissertation leveraged publicly available data, supplemented 
    
 6. You will then need to call ```renv::restore()``` to reinstall the specific package versions used in this project.
 
-7. Once the required package versions have been installed, you are ready to run the R script. Happy coding!
+7. Once the required package versions have been installed, you are ready to run the R script. Happy coding! 🎊
 
 ## Maintainers
 [@korotasz](https://github.com/korotasz)
