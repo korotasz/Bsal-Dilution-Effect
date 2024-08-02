@@ -12,7 +12,7 @@ require(renv)
 ## If step 3 does give an error, try running:
 # renv::init(repos = "https://packagemanager.posit.co/cran/2023-10-13") # (should install the correct versions of maptools, rgdal, and sp)
 
-#### Packages ####
+### Packages -------------------------------------------------------------------
 require(pacman)
 pckgs <- c("tidyverse", # data wrangling/manipulation
             "reshape2", # data wrangling/manipulation
@@ -46,7 +46,7 @@ pacman::p_load(pckgs, character.only = T)
 ## Work computer
 # renv::hydrate(packages = c(pckgs, "pacman"), sources = c("C:/Users/Alexis/AppData/Local/R/win-library/4.3", "C:/Program Files/R/R-4.3.1/library"))
 
-## Functions -------------------------------------------------------------------
+### Functions ------------------------------------------------------------------
 assign_week <- function(df, timepoint, out_col){
   for(i in 1:nrow(df)){
     if(df[[timepoint]][i] == "t8" || df[[timepoint]][i] == "t9" || df[[timepoint]][i] == "t10" || df[[timepoint]][i] == "t11" || df[[timepoint]][i] == "t12" || df[[timepoint]][i] == "t13" || df[[timepoint]][i] =="t14"){
@@ -79,16 +79,15 @@ assign_start_date <- function(df, timepoint, date, out_col){
 }
 
 
-## File paths ------------------------------------------------------------------
+### File paths -----------------------------------------------------------------
 dir <- dirname(rstudioapi::getActiveDocumentContext()$path)
 csvpath <- (path.expand("/csvFiles"))
 shppath <- (path.expand("/csvFiles/shapefiles"))
 
-## Read in .csv files-----------------------------------------------------------
+### Read in .csv files----------------------------------------------------------
 setwd(file.path(dir, csvpath))
 
 germany <- read.csv("germany.csv", header = T, encoding = "UTF-8")
-germanyv2 <- read.csv("germany_revised.csv", header = T, encoding = "UTF-8")
 euram <- read.csv("euram.csv", header = T, encoding = "UTF-8")
 belgium <- read.csv("belgium.csv", header = T, encoding = "UTF-8")
 uk <- read.csv("uk.csv", header = T, encoding = "UTF-8")
@@ -97,12 +96,11 @@ china <- read.csv("china.csv", header = T, encoding = "UTF-8")
 vietnam <- read.csv("vietnam.csv", header = T, encoding = "UTF-8")
 
 
-## Compare new germany data to old germany data --------------------------------
-deu_revised <- germanyv2 %>%
+## Germany ---------------------------------------------------------------------
+germany <- germany %>%
+  dplyr::select(-("Bsal_area")) %>%
   mutate(occurrenceRemarks = as.factor(occurrenceRemarks)) %>%
-  subset(., select = c(occurrenceRemarks, locality, yearCollected:decimalLongitude, genus:specificEpithet,
-                       monthCollected:dayCollected, BsalDetected, fatal, individualCount)) %>%
-         # trim white space around genus and species names
+  # trim white space around genus and species names
   mutate(locality = trimws(locality),
          genus = trimws(genus),
          specificEpithet = trimws(specificEpithet),
@@ -114,74 +112,51 @@ deu_revised <- germanyv2 %>%
          monthCollected = case_when(monthCollected == "MISSING" ~ NA,
                                     TRUE ~ monthCollected),
          dayCollected = case_when(dayCollected == "MISSING" ~ NA,
-                                    TRUE ~ dayCollected),
+                                  TRUE ~ dayCollected),
          individualCount = case_when(individualCount == "MISSING" ~ NA,
                                      TRUE ~ individualCount),
+         # redefine 'occurrenceRemarks' to be more intuitive
+         #  (using this column to note which observations I am confident in vs
+         #   ones with potential errors/NA vals/missing data)
          occurrenceRemarks = case_when(occurrenceRemarks == "1" ~ "OK",
                                        occurrenceRemarks == "2" ~ "potentialDataError",
                                        occurrenceRemarks == "3" ~ "dataMissing",
-                                       TRUE ~ occurrenceRemarks)) %>%
-  mutate(individualCount = as.numeric(individualCount)) %>%
-  # combine date columns into a single 'date' column
-  unite(., col = "date", c("yearCollected", "monthCollected", "dayCollected"),
-        sep = "-", remove = TRUE, na.rm = TRUE) %>%
-  # combine genus & specificEpithet columns into single 'species' column
-  unite(., col = "species", c("genus", "specificEpithet"),
-        sep = " ", remove = TRUE, na.rm = TRUE)
-
-head(deu_revised)
-
-
-# Compare ALL usable cases ("OK", "potentialDataError", & NA) to old data
-deu_revised_all <- deu_revised %>%
+                                       TRUE ~ occurrenceRemarks),
+         # rename localities that have the same lat/lon but different locality names
+         locality = case_when(locality == "Ernzen (Gutenbach)" ~ "Gutenbach",
+                              locality == "Wittlich" ~ "Bernkastel-Wittlich",
+                              locality == "Arzfeld (Arzfelderhöhe)" ~ "Arzfeld",
+                              locality == "Lützkampen" ~ "Seisbach",
+                              locality == "Döppeskaul" ~ "Teich Döppeskaul",
+                              locality == "Palsen Mützenich" ~ "Palsen",
+                              locality == "Kottenforst" ~ "Kottenforst-Rott",
+                              locality == "Kall, Peterbach" ~ "Peterbach",
+                              locality == "Reuter Schacht" ~ "Dresbach",
+                              locality == "Schlangenberg (Stolberg)" ~ "Schlangenberg",
+                              locality == "Teiche Mohnen, Schevenhütte" ~ "Schevenhütte",
+                              locality == "Sandkauflbach Generalsweg" |
+                                locality == "Merode Generalsweg" ~ "Meroder Wald",
+                              locality == "Rumbachtal" ~ "Rottbachtal",
+                              locality == "Funne" |
+                                locality == "Gerlingsbach" |
+                                locality == "Paßbach" ~ "Cappenberger Wald",
+                              TRUE ~ locality),
+         rowID_prefix = "BsalGer",
+         rowID_suffix = sprintf("%04d", 1:nrow(.))) %>%
+  mutate(materialSampleID = ifelse(is.na(materialSampleID), paste(germany$rowID_prefix,"_",germany$rowID_suffix), materialSampleID),
+         individualCount = as.numeric(individualCount),
+         occurrenceRemarks = ifelse(is.na(occurrenceRemarks), "NA_val", occurrenceRemarks)) %>%
   filter(occurrenceRemarks != "dataMissing") %>%
-  subset(., select = c(locality, decimalLatitude, decimalLongitude, date, species,
-                       BsalDetected, fatal, individualCount)) %>%
-  group_by(locality, decimalLatitude, decimalLongitude, date, species,
-           BsalDetected, fatal, individualCount) %>%
-  summarise()
-
-print(deu_revised_all)
-
-deu_all <- germany %>%
-  subset(., select = c(locality, yearCollected:decimalLongitude, genus:specificEpithet,
-                       monthCollected:dayCollected, BsalDetected, fatal, individualCount)) %>%
-  # trim white space around genus and species names
-  mutate(locality = trimws(locality),
-         genus = trimws(genus),
-         specificEpithet = trimws(specificEpithet),
-         # replace 'MISSING' in dataset with NA vals
-         monthCollected = case_when(monthCollected == "MISSING" ~ NA,
-                                    TRUE ~ monthCollected),
-         dayCollected = case_when(dayCollected == "MISSING" ~ NA,
-                                  TRUE ~ dayCollected),
-         # Convert lat/lon to characters to retain precision
-         decimalLatitude = as.character(decimalLatitude),
-         decimalLongitude = as.character(decimalLongitude)) %>%
-  # combine date columns into a single 'date' column
-  unite(., col = "date", c("yearCollected", "monthCollected", "dayCollected"),
-        sep = "-", remove = TRUE, na.rm = TRUE) %>%
-  # combine genus & specificEpithet columns into single 'species' column
-  unite(., col = "species", c("genus", "specificEpithet"),
-        sep = " ", remove = TRUE, na.rm = TRUE) %>%
-  subset(., select = c(locality, decimalLatitude, decimalLongitude, date, species,
-                       BsalDetected, fatal, individualCount)) %>%
-  group_by(locality, decimalLatitude, decimalLongitude, date, species,
-           BsalDetected, fatal, individualCount) %>%
-  summarise()
-
-all_diff <- anti_join(deu_all, deu_revised_all)
-all_diff2 <- anti_join(deu_revised_all, deu_all)
-# Compare ONLY data mentioned in revision sheet (1 & 2)
+  dplyr::select(-c(rowID_prefix, rowID_suffix))
 
 
+## Belgium ---------------------------------------------------------------------
+belgium <- belgium %>%
+  mutate(associatedReferences = Sample_bcid,
+         Sample_bcid = NA)
 
-# Compare ONLY data I am confident in (1 only)
-## Belgium, Germany, UK, and Europe/North America combined data ----------------
+## Combine Belgium, Germany, UK, and Europe/North America data -----------------
 df <- rbind(belgium, euram, germany, uk)
-
-## Remove empty columns
-df <- Filter(function(x)!all(is.na(x)), df)
 
 df <- df %>%
   # replace empty string with NA
@@ -199,71 +174,92 @@ df <- df %>%
                                  USA = "United States")) %>%
   # Change name of these columns
   rename(species = specificEpithet,
-         sampleRemarks = eventRemarks,
-         specimenFate = specimenDisposition) %>%
+         specimenFate = specimenDisposition,
+         ADM1 = stateProvince,
+         ADM2 = municipality,) %>%
   # Combine genus & species into one new column
   unite(., col = "scientific", c("genus", "species"),
         sep = " ", remove = FALSE) %>%
-  relocate(scientific, .after = species) %>%
-  # Add empty columns for new variables
-  mutate(ADM0 = NA, ADM1 = NA, ADM2 = NA, susceptibility = NA, nativeStatus = NA)
+  relocate(scientific, .after = species)
 
-## Delete irrelevant columns
-data.frame(colnames(df)) # returns indexed data frame
+## Retain relevant columns
 df <- df %>%
-  subset(., select = -c(locality, cycleTimeFirstDetection, locationRemarks:locationID,
-                        occurrenceRemarks, diseaseLineage, zeScore:DiagFALSEstics_bcid))
-
-## Rearrange df
-data.frame(colnames(df))
-df <- df %>%
-  relocate(country, .before = principalInvestigator) %>%
-  relocate(c(ADM0:ADM2, decimalLatitude, decimalLongitude, yearCollected, monthCollected, dayCollected,
-             materialSampleID, genus:scientific, susceptibility, nativeStatus, lifeStage:individualCount,
-             diseaseTested:fatal, specimenFate, basisOfRecord,sampleType, testMethod, diagnosticLab, sampleRemarks,
-             principalInvestigator, collectorList, Sample_bcid:projectId), .after = country) %>%
+  subset(., select = c(continentOcean, country, ADM1:ADM2, locality, decimalLatitude:decimalLongitude,
+                       horizontalDatum:georeferenceProtocol, locationID, yearCollected, monthCollected:dayCollected, verbatimEventDate,
+                       materialSampleID, genus:scientific, establishmentMeans, lifeStage, sex,
+                       individualCount, diseaseTested:BsalDetected, fatal, specimenFate, basisOfRecord,
+                       sampleType:testMethod, diagnosticLab, locationRemarks, eventRemarks,
+                       organismRemarks,collectorList, principalInvestigator, associatedReferences)) %>%
   rename(year = yearCollected,
          month = monthCollected,
          day = dayCollected,
+         date = verbatimEventDate,
+         continent = continentOcean,
+         EPSG = horizontalDatum,
          Lat = decimalLatitude,
          Lon = decimalLongitude)
 
-
+# data.frame(colnames(df))
 ## Spain -----------------------------------------------------------------------
-data.frame(colnames(spain))
+# data.frame(colnames(spain))
 spain <- spain %>%
-  subset(., select = c(country, ADM0:ADM2, Lat:Lon, yearCollected:dayCollected,
-                       materialSampleID, genus:scientific, susceptibility, nativeStatus,
-                       lifeStage:sex, individualCount, diseaseTested, BdDetected:fatal,
-                       specimenDisposition, basisOfRecord, sampleType, testMethod,
-                       diagnosticLab, location, collectorList, Sample_bcid, expeditionCode, projectId)) %>%
+  subset(., select = c(country, ADM1:ADM2, location:Lon, coordinateUncertaintyInMeters,
+                       yearCollected:dayCollected, materialSampleID, genus:nativeStatus,
+                       lifeStage:sex, individualCount, diseaseTested, BdDetected:BsalDetected,
+                       fatal, specimenDisposition, basisOfRecord, sampleType, testMethod,
+                       diagnosticLab, collectorList)) %>%
   replace(., . == "", NA) %>%
-  rename(specimenFate = specimenDisposition,
+  rename(locality = location,
          year = yearCollected,
          month = monthCollected,
          day = dayCollected,
-         sampleRemarks = location) %>%
-  mutate(principalInvestigator = "An Martel") %>%
-  relocate(c(sampleRemarks, principalInvestigator), .after = diagnosticLab)
+         establishmentMeans = nativeStatus,
+         specimenFate = specimenDisposition) %>%
+  mutate(continent = "Europe",
+         principalInvestigator = "An Martel",
+         diagnosticLab = "MNdCN_CSIC",
+         locality = case_when(locality == "Park 1\x9610" ~ "Park1_10",
+                              locality == "Inner perimeter" ~ "2 KM Buffer", # same lat/lon
+                              TRUE ~ locality),
+         EPSG = NA,
+         georeferenceProtocol = NA,
+         locationID = NA,
+         locationRemarks = NA,
+         eventRemarks = NA,
+         organismRemarks = NA,
+         date = NA,
+         associatedReferences = case_when(collectorList == "An Martel" ~ "Martel et al. 2020",
+                                          collectorList == "Jaime Bosch" ~ "unpublished")) %>%
+  subset(., select = c(continent, country:Lon, EPSG, coordinateUncertaintyInMeters, georeferenceProtocol,
+                       locationID, year:day, date, materialSampleID:diagnosticLab, locationRemarks:organismRemarks,
+                       collectorList, principalInvestigator, associatedReferences))
 
 
 ## China -----------------------------------------------------------------------
-data.frame(colnames(china))
 china <- china %>%
-  subset(., select = c(country:ADM2, N:E, year:day, materialSampleID, genus:scientific,
-                       susceptibility, nativeStatus, lifeStage:sex, individualCount, diseaseTested,
-                       BdDetected:fatal, specimenDisposition, basisOfRecord:sampleType, testMethod,
-                       diagnosticLab, sampleRemarks, comments, collectorList:projectId)) %>%
+  subset(., select = c(country, ADM1:ADM2, Locality:E, year:day, date, materialSampleID,
+                       genus:scientific, nativeStatus, lifeStage:sex, individualCount, diseaseTested,
+                       BdDetected:BsalDetected, fatal, specimenDisposition, basisOfRecord:sampleType, testMethod,
+                       diagnosticLab, sampleRemarks, comments, collectorList)) %>%
   # Remove non-wild observations
   filter(scientific != "Andrias davidianus") %>% # farm bred/raised animals
-  unite(., sampRemarks, c(sampleRemarks, comments), sep = "; ", remove = T) %>%
   # Replace any empty cells with 'NA'
   replace(., . == "", NA) %>%
-  rename(Lat = N,
+  rename(locality = Locality,
+         Lat = N,
          Lon = E,
+         establishmentMeans = nativeStatus,
          specimenFate = specimenDisposition,
-         sampleRemarks = sampRemarks) %>%
-  mutate(principalInvestigator = "Frank Pasmans", # Last author on Yuan et al. 2018 paper
+         locationRemarks = sampleRemarks,
+         eventRemarks = comments) %>%
+  mutate(continent = "Asia",
+         EPSG = NA,
+         coordinateUncertaintyInMeters = NA,
+         georeferenceProtocol = NA,
+         locationID = NA,
+         organismRemarks = NA,
+         principalInvestigator = "Frank Pasmans", # Last author on Yuan et al. 2018 paper
+         associatedReferences = "Yuan et al. 2018",
          basisOfRecord = "LivingSpecimen",
          # Create new sample IDs based on row number -- Did not use original sample IDs here to avoid confusion:
          # Bsal+ individuals in 'Table 1.xlsx' were not associated with specific sample IDs.
@@ -273,9 +269,14 @@ china <- china %>%
          ADM1 = case_when(ADM1 == "Liaoling" ~ "Liaoning",
                           TRUE ~ ADM1)) %>%
   unite(., materialSampleID, c(rowID_prefix, rowID_suffix), sep = "_", remove = T) %>%
+  relocate(continent, .before = country) %>%
+  relocate(c(EPSG, coordinateUncertaintyInMeters, georeferenceProtocol, locationID), .after = Lon) %>%
   relocate(materialSampleID, .after = day) %>%
-  relocate(c(sampleRemarks, principalInvestigator), .after = diagnosticLab)
+  relocate(specimenFate, .after = fatal) %>%
+  relocate(c(locationRemarks, eventRemarks), .after = diagnosticLab) %>%
+  relocate(c(principalInvestigator, associatedReferences), .after = collectorList)
 
+# data.frame(colnames(china))
 
 ## Need coords for these locs.; Get centroid
 china %>%
@@ -365,21 +366,31 @@ vietnam_coords <- vietnam_coords %>%
 
 vietnam <- vietnam %>%
   left_join(., vietnam_coords, by = c("ADM1", "ADM2", "N_start", "E_start", "N_end", "E_end"), keep = F) %>%
-  unite(., sampRemarks, c(sampleRemarks, comments), sep = "; ", remove = T) %>%
-  mutate(principalInvestigator = "Nguyen",
+  rename(specimenFate = specimenDisposition,
+         locationRemarks = sampleRemarks,
+         eventRemarks = comments,
+         establishmentMeans = nativeStatus) %>%
+  mutate(continent = "Asia",
+         locality = NA,
+         EPSG = NA,
+         coordinateUncertaintyInMeters = NA,
+         georeferenceProtocol = NA,
+         locationID = NA,
+         organismRemarks = NA,
+         principalInvestigator = "Nguyen",
+         associatedReferences = "Laking et al. 2017",
   # Create new sample IDs based on row number -- Did not use original sample IDs here to avoid confusion:
   # Bsal+ individuals in 'Table 1.xlsx' were not associated with specific sample IDs.
   rowID_prefix = "laking",
   rowID_suffix = sprintf("%03d", 1:nrow(.))) %>%
   unite(., materialSampleID, c(rowID_prefix, rowID_suffix), sep = "_", remove = T) %>%
   relocate(materialSampleID, .after = day) %>%
-  rename(specimenFate = specimenDisposition,
-         sampleRemarks = sampRemarks) %>%
-  subset(., select = c(country:ADM2, Lat:Lon, year:day, materialSampleID,
-                       genus:scientific, susceptibility:nativeStatus, lifeStage:sex,
-                       individualCount, diseaseTested, BdDetected:fatal, specimenFate,
+  subset(., select = c(continent, country, ADM1:ADM2, locality, Lat:Lon, EPSG:locationID,
+                       year:day, date, materialSampleID, genus:establishmentMeans, lifeStage:sex,
+                       individualCount, diseaseTested, BdDetected:BsalDetected, fatal, specimenFate,
                        basisOfRecord, sampleType, testMethod, diagnosticLab,
-                       sampleRemarks, principalInvestigator, collectorList:projectId))
+                       locationRemarks, eventRemarks, organismRemarks, collectorList,
+                       principalInvestigator:associatedReferences))
 
 
 vietnam %>% ## Need centroids for these locs
@@ -387,10 +398,18 @@ vietnam %>% ## Need centroids for these locs
   group_by(ADM1, ADM2) %>%
   summarise(n = n())
 
-
 rm(vietnam_coords, VNM_btwn, x, y)
 ## Join Spain, China, & Vietnam to main df -------------------------------------
 df <- rbind(df, spain, china, vietnam) %>%
+  filter(country != "Peru" & country != "Italy" & country != "United States" & country != "United Kingdom") %>%
+  mutate(ADM0 = case_when(country == "Belgium" ~ "BEL",
+                          country == "China" ~ "CHN",
+                          country == "Germany" ~ "DEU",
+                          country == "Spain" ~ "ESP",
+                          country == "Vietnam" ~ "VNM"),
+         continent = case_when(country == "Belgium" | country == "Germany" | country == "Spain" ~ "Europe",
+                               country == "China" | country == "Vietnam" ~ "Asia")) %>%
+  relocate(ADM0, .before = ADM1) %>%
   glimpse()
 
 # df %>%
@@ -443,7 +462,7 @@ df <- df %>%
 
 
 rm(sppNames)
-#### Obtain administrative level data from geodata package ---------------------
+## Obtain administrative level data from geodata package -----------------------
 ## Construct file path to store Euro country shapefiles
 dir.create(file.path(dir, shppath)) # Will give warning if path already exists
 setwd(file.path(dir, shppath))
@@ -560,6 +579,8 @@ centroid_adms <- rbind(adm1, adm2) %>%
   relocate(continent, .before = ADM0)
 adminlvls <- rbind(adminlvls, centroid_adms)
 
+gc()
+
 rm(points, polygon, adm1, adm1_centroids, adm2, adm2_centroids, centroid_adms)
 
 ## Add ADM info back to main dataframe -----------------------------------------
@@ -572,7 +593,7 @@ df <- df %>%
   rbind(., missing_coords) %>%
   dplyr::select(!("country":"ADM2")) %>%
   unite("LatLon", c(Lat, Lon), sep = ", ") %>%
-  left_join(., adminlvls, by = "LatLon", relationship = "many-to-one", keep = F) %>%
+  left_join(., adminlvls, by = c("continent", "LatLon"), relationship = "many-to-one", keep = F) %>%
   relocate(c(continent, country, ADM0, ADM1, ADM2), .before = LatLon) %>%
   separate(LatLon, c("Lat", "Lon"), sep = ", ") %>%
   glimpse()
@@ -591,20 +612,20 @@ rm(missing_coords)
 setwd(file.path(dir, csvpath))
 # Group sites by unique lat/long combos and assign site #s to them, for all countries
 siteNumber <- df %>%
-  dplyr::select(materialSampleID, Lat, Lon) %>%
-  dplyr::group_by(Lat, Lon) %>%
- mutate(Site = cur_group_id()) %>%
+  dplyr::select(ADM1, locality, materialSampleID) %>%
+  dplyr::group_by(ADM1, locality) %>%
+ mutate(locationID = cur_group_id()) %>%
  ungroup()
 
-df$Site <- siteNumber$Site[base::match(paste(df$materialSampleID),
+df$locationID <- siteNumber$locationID[base::match(paste(df$materialSampleID),
                                       paste(siteNumber$materialSampleID))]
 
-df <- relocate(df, Site, .after = "day")
 rm(siteNumber)
-
 
 ## Add relative abundance ------------------------------------------------------
 df <- df %>%
+  dplyr::select(!(date)) %>%
+  rename(Site = locationID) %>%
   unite(c("year", "month", "day"), sep = "-", col = "date", remove = F) %>%
   ## Relative species abundance (# individuals/spp at a site during each sampling event) -- calculated using ONLY our data
   group_by(scientific, Site, date) %>%
@@ -612,8 +633,7 @@ df <- df %>%
   ungroup() %>%
   ## Relative site abundance (total # individuals at a site during each sampling event) -- calculated using ONLY our data
   group_by(Site, date) %>%
-  mutate(siteAbun = sum(individualCount),
-         projectId = as.character(projectId)) %>%
+  mutate(siteAbun = sum(individualCount)) %>%
   ungroup() %>%
   glimpse()
 
@@ -636,8 +656,32 @@ spr <- df %>%
 
 
 df <- df %>%
-  # species richness
+  # species richness at a site on the date of sampling
   left_join(spr[,c(1:2, 63)], by = c("Site", "date"))
+
+### > locality spp richness (using known local species pools) ------------------
+locality_spr <- df %>%
+  filter(country == "Germany") %>%
+  dplyr::select(Site, date, locationRemarks) %>%
+  na.omit(.) %>%
+  mutate(locationRemarks = case_when(locationRemarks == "Ss, Ia Lh, Bb, Rt" ~ "Ss, Ia, Lh, Bb, Rt",
+                                     TRUE ~ locationRemarks)) %>%
+  group_by(Site, date) %>%
+  distinct() %>% # remove duplicate rows
+  ungroup()
+
+exclude <- c("Site", "date")
+
+subset <- locality_spr %>%
+  separate(locationRemarks, c('a','b','c', 'd', 'e', 'f'), sep = ",") %>%
+  dplyr::select(!c(Site, date))
+
+locality_spr$locality_rich<- rowSums(!is.na(subset))
+
+
+df <- df %>%
+  # species richness at a site on the date of sampling
+  left_join(., locality_spr, by = c("Site", "date", "locationRemarks"))
 
 
 ### > IUCN richness .csv (data processed in QGIS) ------------------------------
@@ -648,43 +692,29 @@ iucn_rich <- read.csv("iucn_richness.csv", header = T, encoding = "UTF-8") %>%
 df$iucn_rich <- iucn_rich$iucn_rich[base::match(paste(df$Lat, df$Lon),
                                                 paste(iucn_rich$Lat, iucn_rich$Lon))]
 
-# Read in IUCN rarity-weighted richness (RWR) score .csv (data processed in QGIS)
-# RWR: The proportion of the species' range contained within a cell.
-#      For this raster, it is 1/the total number of cells overlapped by that species' range.
-#      The values are summed across all the species in the analysis to give the
-#      relative importance of each cell to the species found there.
-iucn_rwr <- read.csv("iucn_rwr.csv", header = T, encoding = "UTF-8") %>%
-  rename(., iucn_rwr = iucn_rwr1) %>%
-  dplyr::select(-(L1))
+# # Read in IUCN rarity-weighted richness (RWR) score .csv (data processed in QGIS)
+# # RWR: The proportion of the species' range contained within a cell.
+# #      For this raster, it is 1/the total number of cells overlapped by that species' range.
+# #      The values are summed across all the species in the analysis to give the
+# #      relative importance of each cell to the species found there.
+# iucn_rwr <- read.csv("iucn_rwr.csv", header = T, encoding = "UTF-8") %>%
+#   rename(., iucn_rwr = iucn_rwr1) %>%
+#   dplyr::select(-(L1))
+#
+#
+# df$iucn_rwr <- iucn_rwr$iucn_rwr[base::match(paste(df$Lat, df$Lon),
+#                                              paste(iucn_rwr$Lat, iucn_rwr$Lon))]
 
 
-df$iucn_rwr <- iucn_rwr$iucn_rwr[base::match(paste(df$Lat, df$Lon),
-                                             paste(iucn_rwr$Lat, iucn_rwr$Lon))]
 df <- df %>%
   mutate(Lat =  as.numeric(Lat),
-         Lon = as.numeric(Lon))
-### > Brillouin Diversity Index (Hb) -------------------------------------------
-# Hb is a modification of the Shannon-Wiener Index that is preferred when sample
-# randomness cannot be guaranteed
+         Lon = as.numeric(Lon)) %>%
+  relocate(richness:locality_rich, .after = date) %>%
+  relocate(sppAbun:siteAbun, .after = locality_rich) %>%
+  relocate(locality, .after = ADM2)
 
-## Create matrix with Site ~ Species setup & calculate Hb
-Hb <- df %>%
-  dplyr::select(Site, scientific, individualCount) %>%
-  na.omit(.) %>%
-  group_by(Site) %>%
-  pivot_wider(names_from = scientific, # convert df to matrix
-              values_from = individualCount, values_fn = sum, values_fill = 0) %>%
-  plyr::ddply(., ~Site, function(x){
-    data.frame(Hb = brillouin_d(x))
-  })
 
-plot(Hb$Site, Hb$Hb, xlab = "Site", ylab = "Brillouin's Diversity Index (Hb)")
-
-df$brillouin <- Hb$Hb[base::match(paste(df$Site), paste(Hb$Site))]
-df <- df %>%
-  relocate(brillouin, .after = richness)
-
-rm(iucn_rich, iucn_rwr, spr, Hb)
+rm(iucn_rich, locality_spr, spr, subset)
 ## Add susceptibility data -----------------------------------------------------
 ## Susceptibility codes (based on a combination of Martel et al. 2014 and Bosch et al. 2021)
 ## 1 = resistant: no infection, no clinical signs of disease, no mortality
@@ -704,32 +734,40 @@ plyr::count(df, "susceptibility")
 #   group_by(scientific) %>%
 #   summarise(n = n()) # 25 spp. total missing susceptibility scores
 # print(sum(sus$n)) # 732 observations total, missing
-
+df <- df %>%
+  relocate(susceptibility, .after = scientific)
 
 rm(s)
 
 ## Add IUCN Assessment Summary info for each species from each country ---------
 # (data derived from iucnredlist.org)
-iucn_info <- read.csv("iucn_info.csv", header = T)
+iucn_info <- read.csv("iucn_info.csv", header = T) %>%
+  rename(establishmentMeans = rangeStatus) %>%
+  filter(country == "Germany" | country == "Spain" | country == "China"
+         | country == "Vietnam" | country == "Belgium")
 
 df <- df %>%
-  dplyr::select(-(nativeStatus)) %>%
+  dplyr::select(-(establishmentMeans)) %>%
   left_join(., iucn_info, by = c("scientific", "country")) %>%
-  relocate(c(rangeStatus, redListCategory, populationTrend, assessmentScope), .after = "susceptibility") %>%
+  relocate(c(establishmentMeans, redListCategory, populationTrend, assessmentScope), .after = susceptibility) %>%
+  filter(country == "Germany" | country == "Spain" | country == "China"
+         | country == "Vietnam" | country == "Belgium") %>%
+  filter(scientific != "Lissotriton alpestris") %>%
   glimpse()
 
 ## check for NA vals
-sum(is.na(df$rangeStatus))
+sum(is.na(df$establishmentMeans))
 
 # geoRange <- df %>%
-#   subset(., select = c(country, scientific, rangeStatus)) %>%
-#   group_by(country, scientific, rangeStatus) %>%
+#   subset(., select = c(country, scientific, establishmentMeans)) %>%
+#   group_by(country, scientific, establishmentMeans) %>%
 #   summarise(n = n())
+
 
 # Save locations with supplemental data as a layer in admData.gpkg
 locs <- df %>%
   subset(., select = c(Lat, Lon, country, ADM0, ADM1, ADM2, date,
-                       materialSampleID, scientific, susceptibility, rangeStatus)) %>%
+                       materialSampleID, scientific, susceptibility, establishmentMeans)) %>%
   sf::st_as_sf(x = ., coords = c("Lon", "Lat"), crs = 4326, na.fail = F) %>%
   mutate(Lon = sf::st_coordinates(.)[,1],
          Lat = sf::st_coordinates(.)[,2]) %>%
@@ -1318,9 +1356,9 @@ BsalData_cbind <- df %>%
   slice(1) %>%
   ungroup() %>%
   relocate(c(nPos_FS, nNeg_FS, nDead_FS, nAlive_FS, nFatalUnk_FS, nPos_all, nNeg_all, nDead_all, nAlive_all, nFatalUnk_all,
-             nPos_all_noFS, nNeg_all_noFS, nDead_all_noFS, nAlive_all_noFS, nFatalUnk_all_noFS), .after = rangeStatus) %>%
+             nPos_all_noFS, nNeg_all_noFS, nDead_all_noFS, nAlive_all_noFS, nFatalUnk_all_noFS), .after = establishmentMeans) %>%
   dplyr::select(continent, country, Lat, Lon, Site, posSite, date, richness:iucn_rwr, sppAbun:siteAbun,
-                genus, scientific:rangeStatus, redListCategory, nPos_FS:nFatalUnk_all_noFS,temp_m2:bio19_wc,
+                genus, scientific:establishmentMeans, redListCategory, nPos_FS:nFatalUnk_all_noFS,temp_m2:bio19_wc,
                 diagnosticLab, principalInvestigator, collectorList, expeditionCode) %>%
 #         In the absence of a listed 'diagnosticLab', the diagnostic lab is assumed
 #          to belong to the PI of the paper associated with the data.
@@ -1352,7 +1390,7 @@ BsalData_all <- df %>%
   filter(!(country == "Switzerland" | country == "United Kingdom")) %>%
   mutate(posSite = as.factor(posSite)) %>%
   dplyr::select(continent:Lon, Site:posSite, date_m2:date, richness:iucn_rwr, sppAbun:siteAbun,
-                materialSampleID, genus:rangeStatus, redListCategory, lifeStage, sex,
+                materialSampleID, genus:establishmentMeans, redListCategory, lifeStage, sex,
                 individualCount, diseaseTested:BsalDetected, fatal:sampleRemarks, temp_m2:projectId) %>%
 #         In the absence of a listed 'diagnosticLab', the diagnostic lab is assumed
 #          to belong to the PI of the paper associated with the data.
