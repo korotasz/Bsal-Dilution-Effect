@@ -778,8 +778,6 @@ st_write(locs, file.path(dir, shppath, "admData.gpkg"), append = F, delete_layer
 
 rm(locs, iucn_info)
 
-
-
 ## Make sure columns that have categorical data are uniform in coding
 df <- df %>%
   # code all NA values as 'False'
