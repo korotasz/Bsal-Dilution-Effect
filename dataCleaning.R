@@ -251,13 +251,13 @@ china <- china %>%
          establishmentMeans = nativeStatus,
          specimenFate = specimenDisposition,
          locationRemarks = sampleRemarks,
-         eventRemarks = comments) %>%
+         organismRemarks = comments) %>%
   mutate(continent = "Asia",
          EPSG = NA,
          coordinateUncertaintyInMeters = NA,
          georeferenceProtocol = NA,
          locationID = NA,
-         organismRemarks = NA,
+         eventRemarks = NA,
          principalInvestigator = "Frank Pasmans", # Last author on Yuan et al. 2018 paper
          associatedReferences = "Yuan et al. 2018",
          basisOfRecord = "LivingSpecimen",
@@ -368,7 +368,7 @@ vietnam <- vietnam %>%
   left_join(., vietnam_coords, by = c("ADM1", "ADM2", "N_start", "E_start", "N_end", "E_end"), keep = F) %>%
   rename(specimenFate = specimenDisposition,
          locationRemarks = sampleRemarks,
-         eventRemarks = comments,
+         organismRemarks = comments,
          establishmentMeans = nativeStatus) %>%
   mutate(continent = "Asia",
          locality = NA,
@@ -376,7 +376,7 @@ vietnam <- vietnam %>%
          coordinateUncertaintyInMeters = NA,
          georeferenceProtocol = NA,
          locationID = NA,
-         organismRemarks = NA,
+         eventRemarks = NA,
          principalInvestigator = "Nguyen",
          associatedReferences = "Laking et al. 2017",
   # Create new sample IDs based on row number -- Did not use original sample IDs here to avoid confusion:
@@ -596,6 +596,12 @@ df <- df %>%
   left_join(., adminlvls, by = c("continent", "LatLon"), relationship = "many-to-one", keep = F) %>%
   relocate(c(continent, country, ADM0, ADM1, ADM2), .before = LatLon) %>%
   separate(LatLon, c("Lat", "Lon"), sep = ", ") %>%
+  mutate(organismRemarks = case_when(country == "China" | country == "Vietnam" ~ NA,
+                                     eventRemarks == "dead specimen found in the wild" ~ eventRemarks,
+                                     TRUE ~ organismRemarks),
+         eventRemarks = case_when(eventRemarks == "dead specimen found in the wild" ~ "unknown",
+                                  is.na(eventRemarks) ~ "unknown",
+                                  TRUE ~ eventRemarks)) %>%
   glimpse()
 
 
@@ -665,7 +671,7 @@ locality_spr <- df %>%
   dplyr::select(Site, date, locationRemarks) %>%
   na.omit(.) %>%
   mutate(locationRemarks = case_when(locationRemarks == "Ss, Ia Lh, Bb, Rt" ~ "Ss, Ia, Lh, Bb, Rt",
-                                     TRUE ~ locationRemarks)) %>%
+                                  TRUE ~ locationRemarks)) %>%
   group_by(Site, date) %>%
   distinct() %>% # remove duplicate rows
   ungroup()
@@ -681,7 +687,11 @@ locality_spr$locality_rich<- rowSums(!is.na(subset))
 
 df <- df %>%
   # species richness at a site on the date of sampling
-  left_join(., locality_spr, by = c("Site", "date", "locationRemarks"))
+  left_join(., locality_spr, by = c("Site", "date", "locationRemarks")) %>%
+  # If local species pool was not specified, 'locality_rich' = 'richness,'
+  # (i.e., #spp at the time of the sampling event)
+  mutate(locality_rich = case_when(is.na(locality_rich) ~ richness,
+                                            TRUE ~ locality_rich))
 
 
 ### > IUCN richness .csv (data processed in QGIS) ------------------------------
@@ -902,7 +912,7 @@ weather_m <- weather %>%
 # rm(weather)
 
 ## Python v3.12.0 used to download .nc4 files from NASA's EarthData data repository for each date and location.
-## PyQGIS Python v3.9.5 used to process data in QGIS v3.28.3-Firenze.
+## PyQGIS Python v3.9.5 used to process data in QGIS v3.26.2 "Buenos Aires".
 
 ## Import DAILY temperature & soil moisture data from NASA's EarthData website (citation below) ----
 #  Li, B., H. Beaudoing, and M. Rodell, NASA/GSFC/HSL (2020), GLDAS Catchment Land Surface Model L4 daily 0.25 x 0.25 degree GRACE-DA1 V2.2,
@@ -1012,116 +1022,116 @@ df <- df %>%
   relocate(c(richness, sppAbun, siteAbun), .after = Site) %>%
   relocate(c(wk1_start, t4, date), .after = date_m1) %>%
   relocate(c(temp_wk3, temp_wk2, temp_wk1, temp_d4, temp_d,
-             sMoist_wk3, sMoist_wk2, sMoist_wk1, sMoist_d4, sMoist_d), .after = sampleRemarks)
+             sMoist_wk3, sMoist_wk2, sMoist_wk1, sMoist_d4, sMoist_d), .after = basisOfRecord)
 
 rm(avg_soilMoist, avg_temp, daily_SM, daily_temp, gldas_daily, soilMoisture, start_dates, temperature, weather, weather_d, weatherData)
-## Import MONTHLY temperature, precip, & soil moisture data from NASA's EarthData website (citation below) ----
-# Li, B., H. Beaudoing, and M. Rodell, NASA/GSFC/HSL (2020), GLDAS Catchment Land Surface Model L4 monthly 1.0 x 1.0 degree V2.1, Greenbelt, Maryland, USA,
-#   Goddard Earth Sciences Data and Information Services Center (GES DISC), Accessed: [2024-04-01], 10.5067/FOUXNLXFAZNY
-# Rodell, M., P.R. Houser, U. Jambor, J. Gottschalck, K. Mitchell, C. Meng, K. Arsenault, B. Cosgrove, J. Radakovich, M. Bosilovich, J.K. Entin,
-#   J.P. Walker, D. Lohmann, and D. Toll, 2004: The Global Land Data Assimilation System, Bull. Amer. Meteor. Soc., 85, 381-394, doi:10.1175/BAMS-85-3-381
-gldas_monthly <- read.csv("monthly_weather.csv", header = T, encoding = "UTF-8")
-
-gldas_monthly <- gldas_monthly %>%
-  mutate(day = as.integer(case_match(day, "true" ~ "1", .default = day)),
-         month = as.integer(case_match(month, "true" ~ "1", .default = month))) %>%
-  unite(c("year", "month", "day"), sep = "-", col = "date", remove = F) %>%
-  rename(soilMoisture = "SOILMOIST_kgm.21",
-         # precip = "PRECIP_kgm.2s.11",
-         temp = "SURFTEMP_K1")
-
-
-## Separate and process temperature data ---------------------------------------
-temp_m <- gldas_monthly %>%
-  dplyr::select(Lat, Lon, date, timepoint, temp) %>%
-  # exclude rows with sM and precip data, as well as any NAs in the temp data
-  drop_na() %>%
-  group_by(Lat, Lon, timepoint) %>%
-  distinct_all() %>%
-  # assign row # for matching purposes
-  mutate(row = row_number(),
-         date = as.Date(date, format = "%Y-%m-%d"),
-         # Convert temp from K to C
-         temp = as.numeric(temp - 273.15)) %>%
-  dplyr::group_by(Lat, Lon, timepoint) %>%
-  pivot_wider(names_from = timepoint, values_from = c(date, temp)) %>%
-  rename(date_m2 = "date_t60",
-         date_m1 = "date_t30",
-         temp_m2 = "temp_t60",
-         temp_m1 = "temp_t30")
-
-## Separate and process soil moisture data -------------------------------------
-gldas_monthly <- gldas_monthly %>%
-  dplyr::select(Lat, Lon, date, timepoint, soilMoisture) %>%
-  drop_na() %>%
-  group_by(Lat, Lon, timepoint) %>%
-  distinct_all() %>%
-  mutate(row = row_number(),
-         date = as.Date(date, format = "%Y-%m-%d")) %>%
-  dplyr::group_by(Lat, Lon, timepoint) %>%
-  pivot_wider(names_from = timepoint, values_from = c(date, soilMoisture)) %>%
-  rename(date_m2 = "date_t60",
-         date_m1 = "date_t30",
-         sMoist_m2 = "soilMoisture_t60",
-         sMoist_m1 = "soilMoisture_t30")
-
-# # Convert precipitation rate kg/m^2/s to mm/month
-# for(i in 1:nrow(gldas_monthly)){
-#   if(gldas_monthly[i, 8] == 31){
-#     gldas_monthly[i, 9] <- gldas_monthly[i, 9] * (31*24*60*60)}
+# ## Import MONTHLY temperature, precip, & soil moisture data from NASA's EarthData website (citation below) ----
+# # Li, B., H. Beaudoing, and M. Rodell, NASA/GSFC/HSL (2020), GLDAS Catchment Land Surface Model L4 monthly 1.0 x 1.0 degree V2.1, Greenbelt, Maryland, USA,
+# #   Goddard Earth Sciences Data and Information Services Center (GES DISC), Accessed: [2024-04-01], 10.5067/FOUXNLXFAZNY
+# # Rodell, M., P.R. Houser, U. Jambor, J. Gottschalck, K. Mitchell, C. Meng, K. Arsenault, B. Cosgrove, J. Radakovich, M. Bosilovich, J.K. Entin,
+# #   J.P. Walker, D. Lohmann, and D. Toll, 2004: The Global Land Data Assimilation System, Bull. Amer. Meteor. Soc., 85, 381-394, doi:10.1175/BAMS-85-3-381
+# gldas_monthly <- read.csv("monthly_weather.csv", header = T, encoding = "UTF-8")
 #
-#   else if(gldas_monthly[i, 8] == 30){
-#     gldas_monthly[i, 9] <- gldas_monthly[i, 9] * (30*24*60*60)}
+# gldas_monthly <- gldas_monthly %>%
+#   mutate(day = as.integer(case_match(day, "true" ~ "1", .default = day)),
+#          month = as.integer(case_match(month, "true" ~ "1", .default = month))) %>%
+#   unite(c("year", "month", "day"), sep = "-", col = "date", remove = F) %>%
+#   rename(soilMoisture = "SOILMOIST_kgm.21",
+#          # precip = "PRECIP_kgm.2s.11",
+#          temp = "SURFTEMP_K1")
 #
-#   else if(gldas_monthly[i, 8] == 28){
-#     gldas_monthly[i, 9] <- gldas_monthly[i, 9] * (28*24*60*60)}
 #
-#   else if(gldas_monthly[i, 8] == 29){
-#     gldas_monthly[i, 9] <- gldas_monthly[i, 9] * (29*24*60*60)}
-#
-#   else if(is.na(gldas_monthly[i, 8]) == TRUE){
-#     gldas_monthly[i, 9] <- NA}
-# }
-#
-# precip_m <- gldas_monthly %>%
-#   dplyr::select(decimalLatitude, decimalLongitude, date, timepoint, precip) %>%
+# ## Separate and process temperature data ---------------------------------------
+# temp_m <- gldas_monthly %>%
+#   dplyr::select(Lat, Lon, date, timepoint, temp) %>%
+#   # exclude rows with sM and precip data, as well as any NAs in the temp data
 #   drop_na() %>%
-#   group_by(decimalLatitude, decimalLongitude, timepoint) %>%
+#   group_by(Lat, Lon, timepoint) %>%
+#   distinct_all() %>%
+#   # assign row # for matching purposes
+#   mutate(row = row_number(),
+#          date = as.Date(date, format = "%Y-%m-%d"),
+#          # Convert temp from K to C
+#          temp = as.numeric(temp - 273.15)) %>%
+#   dplyr::group_by(Lat, Lon, timepoint) %>%
+#   pivot_wider(names_from = timepoint, values_from = c(date, temp)) %>%
+#   rename(date_m2 = "date_t60",
+#          date_m1 = "date_t30",
+#          temp_m2 = "temp_t60",
+#          temp_m1 = "temp_t30")
+#
+# ## Separate and process soil moisture data -------------------------------------
+# gldas_monthly <- gldas_monthly %>%
+#   dplyr::select(Lat, Lon, date, timepoint, soilMoisture) %>%
+#   drop_na() %>%
+#   group_by(Lat, Lon, timepoint) %>%
 #   distinct_all() %>%
 #   mutate(row = row_number(),
 #          date = as.Date(date, format = "%Y-%m-%d")) %>%
-#   dplyr::group_by(decimalLatitude, decimalLongitude, timepoint) %>%
-#   pivot_wider(names_from = timepoint, values_from = c(date, precip)) %>%
-#   rename(date_m2 = "date_date_t2",
-#          date_m1 = "date_date_t1",
-#          date = "date_date",
-#          precip_m2 = "precip_date_t2",
-#          precip_m1 = "precip_date_t1",
-#          precip_m = "precip_date",
-#          Lat = decimalLatitude,
-#          Lon = decimalLongitude) %>%
-#   # convert mm to cm to match precip climate data
-#   mutate(precip_m2 = precip_m2*0.1,
-#          precip_m1 = precip_m1*0.1,
-#          precip_m = precip_m*0.1)
-
-
-# Add temp and precip data back into gldas_monthly df in preparation to add it back to the main df.
-gldas_monthly <- gldas_monthly %>%
-  # left_join(., precip_m, by = c("Lat", "Lon", "date", "date_m1", "date_m2", "row")) %>%
-  left_join(., temp_m, by = c("Lat", "Lon", "date_m1", "date_m2", "row")) %>%
-  subset(., select = -c(row))
-
-## Add monthly weather data to main dataframe ----------------------------------
-df <- df %>%
-  left_join(., gldas_monthly, by = c("Lat", "Lon", "date_m1", "date_m2")) %>%
-  relocate(c(temp_m2, temp_m1), .before = temp_wk3) %>%
-  relocate(c(sMoist_m2, sMoist_m1), .before = sMoist_wk3) %>%
-  relocate(c(temp_m2, temp_m1, temp_wk3, temp_wk2, temp_wk1, temp_d4, temp_d,
-             sMoist_m2, sMoist_m1, sMoist_wk3, sMoist_wk2, sMoist_wk1, sMoist_d4, sMoist_d),
-           .after = sampleRemarks)
-
-rm(weather_m, temp_m, gldas_monthly)
+#   dplyr::group_by(Lat, Lon, timepoint) %>%
+#   pivot_wider(names_from = timepoint, values_from = c(date, soilMoisture)) %>%
+#   rename(date_m2 = "date_t60",
+#          date_m1 = "date_t30",
+#          sMoist_m2 = "soilMoisture_t60",
+#          sMoist_m1 = "soilMoisture_t30")
+#
+# # # Convert precipitation rate kg/m^2/s to mm/month
+# # for(i in 1:nrow(gldas_monthly)){
+# #   if(gldas_monthly[i, 8] == 31){
+# #     gldas_monthly[i, 9] <- gldas_monthly[i, 9] * (31*24*60*60)}
+# #
+# #   else if(gldas_monthly[i, 8] == 30){
+# #     gldas_monthly[i, 9] <- gldas_monthly[i, 9] * (30*24*60*60)}
+# #
+# #   else if(gldas_monthly[i, 8] == 28){
+# #     gldas_monthly[i, 9] <- gldas_monthly[i, 9] * (28*24*60*60)}
+# #
+# #   else if(gldas_monthly[i, 8] == 29){
+# #     gldas_monthly[i, 9] <- gldas_monthly[i, 9] * (29*24*60*60)}
+# #
+# #   else if(is.na(gldas_monthly[i, 8]) == TRUE){
+# #     gldas_monthly[i, 9] <- NA}
+# # }
+# #
+# # precip_m <- gldas_monthly %>%
+# #   dplyr::select(decimalLatitude, decimalLongitude, date, timepoint, precip) %>%
+# #   drop_na() %>%
+# #   group_by(decimalLatitude, decimalLongitude, timepoint) %>%
+# #   distinct_all() %>%
+# #   mutate(row = row_number(),
+# #          date = as.Date(date, format = "%Y-%m-%d")) %>%
+# #   dplyr::group_by(decimalLatitude, decimalLongitude, timepoint) %>%
+# #   pivot_wider(names_from = timepoint, values_from = c(date, precip)) %>%
+# #   rename(date_m2 = "date_date_t2",
+# #          date_m1 = "date_date_t1",
+# #          date = "date_date",
+# #          precip_m2 = "precip_date_t2",
+# #          precip_m1 = "precip_date_t1",
+# #          precip_m = "precip_date",
+# #          Lat = decimalLatitude,
+# #          Lon = decimalLongitude) %>%
+# #   # convert mm to cm to match precip climate data
+# #   mutate(precip_m2 = precip_m2*0.1,
+# #          precip_m1 = precip_m1*0.1,
+# #          precip_m = precip_m*0.1)
+#
+#
+# # Add temp and precip data back into gldas_monthly df in preparation to add it back to the main df.
+# gldas_monthly <- gldas_monthly %>%
+#   # left_join(., precip_m, by = c("Lat", "Lon", "date", "date_m1", "date_m2", "row")) %>%
+#   left_join(., temp_m, by = c("Lat", "Lon", "date_m1", "date_m2", "row")) %>%
+#   subset(., select = -c(row))
+#
+# ## Add monthly weather data to main dataframe ----------------------------------
+# df <- df %>%
+#   left_join(., gldas_monthly, by = c("Lat", "Lon", "date_m1", "date_m2")) %>%
+#   relocate(c(temp_m2, temp_m1), .before = temp_wk3) %>%
+#   relocate(c(sMoist_m2, sMoist_m1), .before = sMoist_wk3) %>%
+#   relocate(c(temp_m2, temp_m1, temp_wk3, temp_wk2, temp_wk1, temp_d4, temp_d,
+#              sMoist_m2, sMoist_m1, sMoist_wk3, sMoist_wk2, sMoist_wk1, sMoist_d4, sMoist_d),
+#            .after = sampleRemarks)
+#
+# rm(weather_m, temp_m, gldas_monthly)
 
 
 # Combine BdDetected and BsalDetected into one "diseaseDetected" column --------
@@ -1284,6 +1294,7 @@ wclim <- tmin_df %>%
 rm(tmin_cropped, tmin_df, tavg_cropped, tavg_df, tmax_cropped, tmax_df, bio_cropped, bio_df, latlon_id, prec_cropped, prec_df)
 
 df <- df %>%
+  mutate(month = as.numeric(month)) %>%
   left_join(., wclim, by = c("Lat", "Lon", "month", "continent", "country", "ADM0", "ADM1", "ADM2"), keep = F) %>%
   relocate(c(tmin, tavg, tmax, prec, bio1:bio19), .after = sMoist_d)
 
@@ -1313,7 +1324,8 @@ Bsalpos <- df %>%
          scientific != "Tylototriton yangi") %>%        # 9 obs
     group_by(Site) %>%
   # The site associated with this observation has tested positive (1) for Bsal at some point, or has never (0) tested positive for Bsal
-    mutate(posSite = ifelse(sum(as.numeric(BsalDetected)) != 0, 1, 0))
+    mutate(posSite = case_when(BsalDetected != "0" ~ "1",
+                               TRUE~ BsalDetected))
 
 ## Double checking #s
 nBsalPos <- aggregate(individualCount ~ BsalDetected+scientific, data = Bsalpos, sum) %>%
@@ -1323,60 +1335,56 @@ rm(nBsalPos)
 # Add all data back into 'df' data frame, even sites that are negative
 df <- Bsalpos %>%
   relocate(c(posSite), .after = Site) %>%
+  mutate(associatedReferences = case_when(is.na(associatedReferences) ~ "not specified",
+                                          associatedReferences == "Trier unpublished?" ~ "Trier Unpublished",
+                                          associatedReferences == "Dahlbeck et al. 2018" ~ "Dalbeck et al. 2018",
+                                          associatedReferences == "unpublished" ~ "Bosch Unpublished",
+                                          associatedReferences == "Böning unpublished" ~ "Böning Unpublished",
+                                          associatedReferences == "Lötters et al. 2020 & Böning et al. 2023" ~ "Böning et al. 2023; Lötters et al. 2020",
+                                          TRUE ~ associatedReferences)) %>%
   # subset(., select = -c(date_m1, date_m2, wk1_start, t4, year, month, day)) %>%
   rename(tmin_wc = tmin, tmax_wc = tmax, tavg_wc = tavg, prec_wc = prec, bio1_wc = bio1, bio2_wc = bio2, bio3_wc = bio3, bio4_wc = bio4, bio5_wc = bio5, bio6_wc = bio6,
          bio7_wc = bio7, bio8_wc = bio8, bio9_wc = bio9, bio10_wc = bio10, bio11_wc = bio11, bio12_wc = bio12, bio13_wc = bio13, bio14_wc = bio14, bio15_wc = bio15, bio16_wc = bio16,
          bio17_wc = bio17, bio18_wc = bio18, bio19_wc = bio19) %>%
-  relocate(c(iucn_rich, iucn_rwr), .after = richness)
+  relocate(c(iucn_rich, locality_rich), .after = richness)
 
 rm(Bsalpos, extent, i)
 ## Create 'cbind' dataset ------------------------------------------------------
 # Return data frame containing all observations from countries that had confirmed Bsal positive sites (will separate out Bsal+ and Bsal- sites later)
 BsalData_cbind <- df %>%
-  filter(!(country == "Switzerland" | country == "United Kingdom")) %>%
   group_by(Site, date, scientific) %>%
-  mutate(nPos_FS = sum(BsalDetected != 0 & scientific == "Salamandra salamandra"),
-         nNeg_FS = sum(BsalDetected == 0 & scientific == "Salamandra salamandra"),
-         nDead_FS = sum(fatal != 0 & scientific == "Salamandra salamandra", na.rm = T),
-         nAlive_FS = sum(fatal == 0 & scientific == "Salamandra salamandra", na.rm = T),
+  mutate(nPos_FS = sum(BsalDetected != "0" & scientific == "Salamandra salamandra"),
+         nNeg_FS = sum(BsalDetected == "0" & scientific == "Salamandra salamandra"),
+         nDead_FS = sum(fatal != "0" & scientific == "Salamandra salamandra", na.rm = T),
+         nAlive_FS = sum(fatal == "0" & scientific == "Salamandra salamandra", na.rm = T),
          nFatalUnk_FS = sum(is.na(fatal) & scientific == "Salamandra salamandra"),
-         nPos_all = sum(BsalDetected != 0),
-         nNeg_all = sum(BsalDetected == 0),
-         nDead_all = sum(fatal != 0, na.rm = T),
-         nAlive_all = sum(fatal == 0, na.rm = T),
+         nPos_all = sum(BsalDetected != "0"),
+         nNeg_all = sum(BsalDetected == "0"),
+         nDead_all = sum(fatal != "0", na.rm = T),
+         nAlive_all = sum(fatal == "0", na.rm = T),
          nFatalUnk_all = sum(is.na(fatal)),
-         nPos_all_noFS = sum(BsalDetected != 0 & scientific != "Salamandra salamandra"),
-         nNeg_all_noFS = sum(BsalDetected == 0 & scientific != "Salamandra salamandra"),
-         nDead_all_noFS = sum(fatal != 0 & scientific != "Salamandra salamandra", na.rm = T),
-         nAlive_all_noFS = sum(fatal == 0 & scientific != "Salamandra salamandra", na.rm = T),
+         nPos_all_noFS = sum(BsalDetected != "0" & scientific != "Salamandra salamandra"),
+         nNeg_all_noFS = sum(BsalDetected == "0" & scientific != "Salamandra salamandra"),
+         nDead_all_noFS = sum(fatal != "0" & scientific != "Salamandra salamandra", na.rm = T),
+         nAlive_all_noFS = sum(fatal == "0" & scientific != "Salamandra salamandra", na.rm = T),
          nFatalUnk_all_noFS = sum(is.na(fatal)),
-         posSite = as.factor(posSite)) %>%
+         posSite = as.factor(posSite),
+         EPSG = "EPSG_4326",
+         # In the absence of a sample 'collectorList', the 'collector' is assumed to be
+         #  the first author of the paper associated with the data.
+         collectorList = case_when(country == "China" ~ "Z. Yuan; J. Zhou; J. Wang; S. Hou; Y. Duan; X. Liu;
+                                                X. Chen; P. Wei; Y. Zhang; K. Wang; J. Shi",
+                                   country == "Vietnam" ~ "A. Laking; H.N. Ngo; T.T. Nguyen",
+                                   TRUE ~ collectorList)) %>%
   slice(1) %>%
   ungroup() %>%
-  relocate(c(nPos_FS, nNeg_FS, nDead_FS, nAlive_FS, nFatalUnk_FS, nPos_all, nNeg_all, nDead_all, nAlive_all, nFatalUnk_all,
-             nPos_all_noFS, nNeg_all_noFS, nDead_all_noFS, nAlive_all_noFS, nFatalUnk_all_noFS), .after = establishmentMeans) %>%
-  dplyr::select(continent, country, Lat, Lon, Site, posSite, date, richness:iucn_rwr, sppAbun:siteAbun,
-                genus, scientific:establishmentMeans, redListCategory, nPos_FS:nFatalUnk_all_noFS,temp_m2:bio19_wc,
-                diagnosticLab, principalInvestigator, collectorList, expeditionCode) %>%
-#         In the absence of a listed 'diagnosticLab', the diagnostic lab is assumed
-#          to belong to the PI of the paper associated with the data.
-  mutate(diagnosticLab = case_when(country == "Switzerland" ~ "Catenazzi",
-                                   country == "Spain" & collectorList == "Jaime Bosch" ~ "An Martel",
-                                   country == "Vietnam" ~ "Nguyen/Pasmans",
-                                   country == "China" ~ "Nguyen",
-                                   TRUE ~ diagnosticLab),
-#         In the absence of a sample 'collectorList', the 'collector' is assumed to be
-#          the first author of the paper associated with the data.
-         collectorList = case_when(country == "China" ~ "Z. Yuan; J. Zhou; J. Wang; S. Hou; Y. Duan; X. Liu;
-                                                         X. Chen; P. Wei; Y. Zhang; K. Wang; J. Shi",
-                                   country == "Vietnam" ~ "A. Laking; H.N. Ngo; T.T. Nguyen",
-                                   TRUE ~ collectorList),
-#         In the absence of an 'expeditionCode', the expedition was assigned one with the
-#          format [first author's last name]_[year(s) collected]
-         expeditionCode = case_when(collectorList == "Jaime Bosch" ~ "Bosch_2021",
-                                    country == "China" ~ "Yuan_2016-2017",
-                                    country == "Vietnam" ~ "Laking_2016",
-                                    TRUE ~ expeditionCode))
+  relocate(c(nPos_FS:nFatalUnk_all_noFS), .after = establishmentMeans) %>%
+  dplyr::select(continent, country, ADM1:Lon, Site, posSite, date, richness:siteAbun,
+                genus, scientific:establishmentMeans, redListCategory, nPos_FS:nFatalUnk_all_noFS,
+                temp_wk3:bio19_wc, diagnosticLab:eventRemarks, collectorList:associatedReferences)
+
+
+
 
 
 BsalData_cbind <- with(BsalData_cbind, BsalData_cbind[order(Site, scientific), ])
@@ -1385,38 +1393,45 @@ BsalData_cbind <- with(BsalData_cbind, BsalData_cbind[order(Site, scientific), ]
 ## Create dataset with all samples listed as individual rows -------------------
 # (thought this might be good to have just as a 'catch-all' for what we've done)
 BsalData_all <- df %>%
-  filter(!(country == "Switzerland" | country == "United Kingdom")) %>%
-  mutate(posSite = as.factor(posSite)) %>%
-  dplyr::select(continent:Lon, Site:posSite, date_m2:date, richness:iucn_rwr, sppAbun:siteAbun,
-                materialSampleID, genus:establishmentMeans, redListCategory, lifeStage, sex,
-                individualCount, diseaseTested:BsalDetected, fatal:sampleRemarks, temp_m2:projectId) %>%
-#         In the absence of a listed 'diagnosticLab', the diagnostic lab is assumed
-#          to belong to the PI of the paper associated with the data.
-  mutate(diagnosticLab = case_when(country == "Switzerland" ~ "Catenazzi",
-                                   country == "Spain" & collectorList == "Jaime Bosch" ~ "An Martel",
-                                   country == "Vietnam" ~ "Nguyen/Pasmans",
-                                   country == "China" ~ "Nguyen",
-                                   TRUE ~ diagnosticLab),
+  mutate(posSite = as.factor(posSite),
 #         In the absence of a sample 'collectorList', the 'collector' is assumed to be
 #          the first author of the paper associated with the data.
          collectorList = case_when(country == "China" ~ "Z. Yuan; J. Zhou; J. Wang; S. Hou; Y. Duan; X. Liu;
                                                          X. Chen; P. Wei; Y. Zhang; K. Wang; J. Shi",
                                    country == "Vietnam" ~ "A. Laking; H.N. Ngo; T.T. Nguyen",
-                                   TRUE ~ collectorList),
-#         In the absence of an 'expeditionCode', the expedition was assigned one with the
-#          format [first author's last name]_[year(s) collected]
-         expeditionCode = case_when(collectorList == "Jaime Bosch" ~ "Bosch_2021",
-                                    country == "China" ~ "Yuan_2016-2017",
-                                    country == "Vietnam" ~ "Laking_2016",
-                                    TRUE ~ expeditionCode))
+                                   TRUE ~ collectorList))
 
 
+
+## Total # sites each species was present at in each country
+totalSites <- df %>%
+  dplyr::select(country, Site, scientific) %>%
+  group_by(country, scientific, Site) %>%
+  unique() %>%
+  ungroup() %>%
+  group_by(country, scientific) %>%
+  summarise(n = n())
+
+posSites <- df %>%
+  dplyr::select(Site, country, posSite, scientific) %>%
+  filter(posSite == "1") %>%
+  group_by(country, scientific) %>%
+  unique() %>%
+  ungroup()   %>%
+  group_by(country, scientific) %>%
+  summarise(n = n())
+
+tmp <- df %>%
+  filter(country == "Germany" | country == "Spain")
+range(tmp$Site)
 ## Double check everything matches
-BsalData_cbind %>% dplyr::select(country, scientific, susceptibility, nPos_all, nNeg_all) %>%
+BsalData_cbind %>%
+  dplyr::select(country, scientific,  susceptibility, nPos_all, nNeg_all) %>%
   group_by(country, susceptibility, scientific) %>%
   summarise(nPos = sum(nPos_all), nNeg = sum(nNeg_all),
             n = sum(nPos_all, nNeg_all)) %>%
   print(n = 38)
+
 
 
 BsalData_all %>% dplyr::select(country, scientific, susceptibility, individualCount, BsalDetected) %>%
