@@ -11,16 +11,15 @@ This chapter of my dissertation leveraged publicly available data, supplemented 
 |  ***renv*** R package | 1.0.5                                                             | **HARD Requirement for this project:** Used for version control of software and packages. |
 |              R Studio | 2024.06.05+764 'Chocolate Cosmos'                                 | 
 |                Python | 3.12.0                                                            | Python is only needed if you plan on running the *datasetFetcher.py* script in the weatherSampling folder. |
-|           QGIS/PyQGIS | QGIS v3.26.2 'Buenos Aires' / Python v3.12.0                      | PyQGIS/QGIS are only needed if you plan on running the *rastersampling.py* script in the weather sampling folder. |
-|                
+|           QGIS/PyQGIS | QGIS v3.26.2 'Buenos Aires' / Python v3.9.5                      | PyQGIS/QGIS are only needed if you plan on running the *rastersampling.py* script in the weather sampling folder. |
 
-    - More information about ***renv*** can be found [here](https://rstudio.github.io/renv/articles/renv.html). 
-    - All other info regarding package versions can be found in the [renv.lock](https://github.com/korotasz/Chapter-2-Analyses/blob/main/renv.lock) file.
+- More information about ***renv*** can be found [here](https://rstudio.github.io/renv/articles/renv.html). 
+- All other info regarding package versions can be found in the [renv.lock](https://github.com/korotasz/Chapter-2-Analyses/blob/main/renv.lock) file.
 
 ### Using the Code
 ![fork](https://ubc-library-rc.github.io/intro-git/content/figures/git-collaboration_2.png)
 <span style="font-size:10pt;">(image credit: UBC Library Research Commons)</span>
-1. Please **fork** this repo if you intend to use or modify any of the code to avoid future merge conflicts. Forking will allow you to make changes to your own copy of the repository without affecting any of the files in this repository. This github.io page has an excellent section explaining both the 'why' and 'how' of [forking repositories](https://ubc-library-rc.github.io/intro-git/content/05_collab_on_github.html#:~:text=top%20right%20corner.-,Clone%20the%20fork%20to%20your%20own%20computer,with%20your%20preferred%20text%20editor.).
+1. Please **fork** this repo if you intend to use or modify any of the code to avoid future merge conflicts. Forking will allow you to make changes to your own copy of the repository without affecting any of the files in this repository. [This github.io page](https://ubc-library-rc.github.io/intro-git/content/05_collab_on_github.html#:~:text=top%20right%20corner.-,Clone%20the%20fork%20to%20your%20own%20computer,with%20your%20preferred%20text%20editor.) has an excellent section explaining both the 'why' and 'how' of forking repositories.
 
 2. After you have forked this repository, you may then **clone** the forked repository to your local system. Cloning forked repositories may be done [from Git Bash](https://docs.github.com/en/get-started/quickstart/fork-a-repo#cloning-your-forked-repository) or from **Command Prompt**. In either case, the syntax is the same for cloning repositories:
    ```
