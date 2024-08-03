@@ -8,8 +8,8 @@ This chapter of my dissertation leveraged publicly available data, supplemented 
 |    Program/Package    |                             Version                               |                           Comments                       |
 | --------------------- | ----------------------------------------------------------------- | ---------------------------------------------------------|
 |                     R | 4.3.3 (2024-02-29 ucrt) 'Angel Food Cake'                         | This specific version of R is needed to run the R scripts properly and cannot be superceded by newer versions of R without causing significant issues to the code. | 
-|              R Studio | 2024.06.05+764 'Chocolate Cosmos'                                 | 
 |  ***renv*** R package | 1.0.5                                                             | **HARD Requirement for this project:** Used for version control of software and packages. |
+|              R Studio | 2024.06.05+764 'Chocolate Cosmos'                                 | 
 |                Python | 3.12.0                                                            | Python is only needed if you plan on running the *datasetFetcher.py* script in the weatherSampling folder. |
 |           QGIS/PyQGIS | QGIS v3.26.2 'Buenos Aires' / Python v3.12.0                      | PyQGIS/QGIS are only needed if you plan on running the *rastersampling.py* script in the weather sampling folder. |
 |                
