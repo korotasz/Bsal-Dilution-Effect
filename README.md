@@ -5,11 +5,16 @@ This chapter of my dissertation leveraged publicly available data, supplemented 
 
 ## Getting Started
 ### Project Requirements
-**Requirements** to run the code for this project include:
-- R version 4.3.3 (2024-02-29 ucrt) 'Angel Food Cake'
-- R Studio version 2024.06.05+764 'Chocolate Cosmos'
-- ***renv*** R package version 1.0.5
-    - This package was used for version control of packages used in this project. More information about ***renv*** can be found [here](https://rstudio.github.io/renv/articles/renv.html). 
+|    Program/Package    |                             Version                               |                           Comments                       |
+| --------------------- | ----------------------------------------------------------------- | ---------------------------------------------------------|
+|                     R | 4.3.3 (2024-02-29 ucrt) 'Angel Food Cake'                         | This specific version of R is needed to run the R scripts properly and cannot be superceded by newer versions of R without causing significant issues to the code. | 
+|              R Studio | 2024.06.05+764 'Chocolate Cosmos'                                 | 
+|  ***renv*** R package | 1.0.5                                                             | **HARD Requirement for this project:** Used for version control of software and packages. |
+|                Python | 3.12.0                                                            | Python is only needed if you plan on running the *datasetFetcher.py* script in the weatherSampling folder. |
+|           QGIS/PyQGIS | QGIS v3.26.2 'Buenos Aires' / Python v3.12.0                      | PyQGIS/QGIS are only needed if you plan on running the *rastersampling.py* script in the weather sampling folder. |
+|                
+
+    - More information about ***renv*** can be found [here](https://rstudio.github.io/renv/articles/renv.html). 
     - All other info regarding package versions can be found in the [renv.lock](https://github.com/korotasz/Chapter-2-Analyses/blob/main/renv.lock) file.
 
 ### Using the Code
