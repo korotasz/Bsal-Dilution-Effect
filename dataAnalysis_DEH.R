@@ -1,22 +1,16 @@
-## Project utilized the 'renv' package for better code reproducibility
+## GETTING STARTED -------------------------------------------------------------
+## Please review the program version requirements in the .README document associated with this GitHub repository.
+## 1. Make sure you have the correct version of R (4.3.3 "Angel Food Cake") loaded for this session.
 
-#  *** ONLY NEED TO DO THIS ONCE; I HAVE ALREADY DONE THIS FOR THIS PROJ. ***
-## Create a project-local environment to ensure code reproducibility
-# setwd(file.path(dir))
-## Initialize the project
-# renv::init() # this also activates the project
+## 2. Load 'renv'
+require(renv)
 
+## 3. Restore project dependencies from the renv lockfile ('renv.lock'). You should get a message that
+##    no issues have been found and that the project is in a consistent state.
+# renv::restore()
 
-## Save the state of the project (including package versions); only need to re-run this
-##  if you update packages/introduce new packages in this project.
-#renv::settings$snapshot.type("explicit") # records and reflects latest proj. changes in "renv.lock" file
-
-
-## IF THIS IS YOUR FIRST TIME RUNNING THIS PROJECT: ----------------------------
-## Run the following lines:
-# require(renv)
-# setwd(dirname(rstudioapi::getActiveDocumentContext()$path)) # set working directory to activate project
-# renv::activate() # activate project
+## If step 3 does give an error, try running:
+# renv::init(repos = "https://packagemanager.posit.co/cran/2023-10-13") # (should install the correct versions of maptools, rgdal, and sp)
 
 ## These packages need to be loaded first (commented out pckgs only need to be run once)
 # remotes::install_version("Rttf2pt1", version = "1.3.8") # install this version, latest ver. not compatible
@@ -37,14 +31,13 @@ extrafont::loadfonts(device = "all", quiet = T) # plot fonts
 # remotes::install_version("Matrix", version = "1.6-1.1")
 
 ## Packages --------------------------------------------------------------------
-### > Visualization Packages----------------------------------------------------
+### Visualization Packages------------------------------------------------------
 pckgs <- c("ggsignif", # adds labels to significant groups
              "ggpubr", # stat_compare_means()
             "ggbreak", # create axis breaks in ggplots
              "gtools", # signif. value styling
            # "ggiraphExtra", # make an interactive plot
-         "kableExtra", # table styling
-               "renv", # environment lock
+         # "kableExtra", # table styling
              "ggtext", # for text type/arrangements w/ ggplot2
            "Rttf2pt1", # to use with the extrafont package
            "ggthemes", # contains 'scales', 'themes', and 'geoms' packages
@@ -73,7 +66,7 @@ pckgs <- c("ggsignif", # adds labels to significant groups
            "webshot2", # converts html files to png
              "magick", # image_read() -- needed for cowplot::draw_image
               "Hmisc", # binconf() provides CI of binomial distribution
-### > Analysis Packages --------------------------------------------------------
+### Analysis Packages --------------------------------------------------------
           "tidyverse", # data wrangling/manipulation
             "glmmTMB", # glmmTMB()
            "multcomp", # glht()
@@ -243,12 +236,10 @@ countries <- worldmap %>%
   st_transform(., crs = epsg27704)
 
 #### a. Data overview: Europe --------------------------------------------------
-eu <- data.frame(label = paste("(n = ", sum(n), ")", sep = ""))
-
-  mapLabels %>%
+eu <-  mapLabels %>%
   filter(country == "Germany" | country == "Spain") %>%
-  mutate(total = sum(n))
-  plyr::mutate(label = paste("(n = ", sum(n), ")", sep = ""))
+  mutate(total = sum(n)) %>%
+  plyr::mutate(label = paste("(n = ", n, ")", sep = ""))
 
 
 map_bounds(-8, 15, 34, 56, crs = epsg27704)
@@ -258,8 +249,8 @@ europe_map <- ggplot() +
   geom_sf(data = countries, aes(fill = sovereignt), col = "gray40", fill = "#B2BEB5", show.legend = F) +
   geom_sf(data = obs, aes(geometry = jittered, fill = BsalDetected, shape = BsalDetected),
           alpha = 0.3, size = 4, stroke = 1, color = "gray30", show.legend = "point") +
-  geom_sf_label(data = eu, aes(label = paste(label)),  nudge_x = 400000,  nudge_y = 430000,
-                size = 7, fontface = "bold", label.size = NA, alpha = 0.5) +
+  # geom_sf_label(data = eu, aes(label = paste(label)),  nudge_x = 400000,  nudge_y = 430000,
+  #               size = 7, fontface = "bold", label.size = NA, alpha = 0.5) +
   scale_fill_manual(values = c("gray40", "#b30000"), guide = "none") +
   scale_shape_manual(values = c(21, 24), guide = "none") +
   coord_sf(xlim = c(2903943, 5277030), # c(-9, 15)
@@ -373,8 +364,8 @@ esp_map <- ggplot() +
 esp_map
 
 
-# ggsave("Spain.pdf", esp_map, device = cairo_pdf, path = file.path(dir, figpath, "/maps"),
-#        width = 2000, height = 2000, scale = 2, units = "px", dpi = 300, limitsize = F)
+ggsave("Spain.pdf", esp_map, device = cairo_pdf, path = file.path(dir, figpath, "/maps"),
+       width = 2000, height = 2000, scale = 2, units = "px", dpi = 300, limitsize = F)
 
 
 ### Figure 1. Data distribution maps(combined) ---------------------------------
