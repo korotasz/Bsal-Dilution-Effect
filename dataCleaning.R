@@ -1493,7 +1493,7 @@ BsalData_all %>% dplyr::select(country, scientific, susceptibility, individualCo
 setwd(file.path(dir, csvpath))
 ## File for all* data -- samples listed as individual rows; nothing is summarized:
 #     *Bsal positive countries only
-write.csv(BsalData_all, file = "BsalData_all.csv", row.names = FALSE)
+write.csv(df, file = "BsalData_all.csv", row.names = FALSE)
 
 ## File for cbind dataset (organized for binomial models):
 write.csv(BsalData_cbind, file = "BsalData_cbind.csv", row.names = FALSE)
