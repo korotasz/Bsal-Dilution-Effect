@@ -84,6 +84,7 @@ dir <- dirname(rstudioapi::getActiveDocumentContext()$path)
 csvpath <- (path.expand("/csvFiles"))
 shppath <- (path.expand("/csvFiles/shapefiles"))
 weatherpath <- (path.expand("/weatherSampling"))
+analysespath <- path.expand("/markdownFiles")
 
 ### Read in .csv files----------------------------------------------------------
 setwd(file.path(dir, csvpath))
@@ -1413,7 +1414,7 @@ df <- df %>%
 ## Create 'cbind' dataset ------------------------------------------------------
 setwd(file.path(dir))
 # Return data frame containing all observations from countries that had confirmed Bsal positive sites (will separate out Bsal+ and Bsal- sites later)
-BsalData_cbind <- df %>%
+dcbind_all <- df %>%
   group_by(Site, date, scientific) %>%
   mutate(nPos_FS = sum(BsalDetected != "0" & scientific == "Salamandra salamandra"),
          nNeg_FS = sum(BsalDetected == "0" & scientific == "Salamandra salamandra"),
@@ -1446,7 +1447,48 @@ BsalData_cbind <- df %>%
                 temp_wk3:bio19_wc, diagnosticLab:dataConfidence, collectorList:associatedReferences)
 
 
-BsalData_cbind <- with(BsalData_cbind, BsalData_cbind[order(Site, scientific), ])
+dcbind_all <- with(dcbind_all, dcbind_all[order(Site, scientific), ])
+
+# Return data frame containing all observations from countries that had confirmed Bsal positive sites (will separate out Bsal+ and Bsal- sites later)
+dcbind_all <- df %>%
+  filter(dataCon)
+  group_by(Site, date, scientific) %>%
+  mutate(nPos_FS = sum(BsalDetected != "0" & scientific == "Salamandra salamandra"),
+         nNeg_FS = sum(BsalDetected == "0" & scientific == "Salamandra salamandra"),
+         nDead_FS = sum(fatal != "0" & scientific == "Salamandra salamandra", na.rm = T),
+         nAlive_FS = sum(fatal == "0" & scientific == "Salamandra salamandra", na.rm = T),
+         nFatalUnk_FS = sum(is.na(fatal) & scientific == "Salamandra salamandra"),
+         nPos_all = sum(BsalDetected != "0"),
+         nNeg_all = sum(BsalDetected == "0"),
+         nDead_all = sum(fatal != "0", na.rm = T),
+         nAlive_all = sum(fatal == "0", na.rm = T),
+         nFatalUnk_all = sum(is.na(fatal)),
+         nPos_all_noFS = sum(BsalDetected != "0" & scientific != "Salamandra salamandra"),
+         nNeg_all_noFS = sum(BsalDetected == "0" & scientific != "Salamandra salamandra"),
+         nDead_all_noFS = sum(fatal != "0" & scientific != "Salamandra salamandra", na.rm = T),
+         nAlive_all_noFS = sum(fatal == "0" & scientific != "Salamandra salamandra", na.rm = T),
+         nFatalUnk_all_noFS = sum(is.na(fatal)),
+         posSite = as.factor(posSite),
+         EPSG = "EPSG_4326",
+         # In the absence of a sample 'collectorList', the 'collector' is assumed to be
+         #  the first author of the paper associated with the data.
+         collectorList = case_when(country == "China" ~ "Z. Yuan; J. Zhou; J. Wang; S. Hou; Y. Duan; X. Liu;
+                                                X. Chen; P. Wei; Y. Zhang; K. Wang; J. Shi",
+                                   country == "Vietnam" ~ "A. Laking; H.N. Ngo; T.T. Nguyen",
+                                   TRUE ~ collectorList)) %>%
+  slice(1) %>%
+  ungroup() %>%
+  relocate(c(nPos_FS:nFatalUnk_all_noFS), .after = establishmentMeans) %>%
+  dplyr::select(continent, country, ADM1:Lon, Site, posSite, date, richness:siteAbun,
+                genus, scientific:establishmentMeans, redListCategory, nPos_FS:nFatalUnk_all_noFS,
+                temp_wk3:bio19_wc, diagnosticLab:dataConfidence, collectorList:associatedReferences)
+
+
+dcbind_all <- with(dcbind_all, dcbind_all[order(Site, scientific), ])
+
+
+
+
 
 
 ## Total # sites each species was present at in each country
@@ -1472,7 +1514,7 @@ df %>%
 
 
 ## Double check everything matches
-BsalData_cbind %>%
+dcbind_all %>%
   dplyr::select(country, scientific,  susceptibility, nPos_all, nNeg_all) %>%
   group_by(country, susceptibility, scientific) %>%
   summarise(nPos = sum(nPos_all), nNeg = sum(nNeg_all),
@@ -1490,13 +1532,13 @@ BsalData_all %>% dplyr::select(country, scientific, susceptibility, individualCo
 
 
 ## Export 'cleaned' datasets for data analysis ---------------------------------
-setwd(file.path(dir, csvpath))
+setwd(file.path(dir, analysespath))
 ## File for all* data -- samples listed as individual rows; nothing is summarized:
 #     *Bsal positive countries only
 write.csv(df, file = "BsalData_all.csv", row.names = FALSE)
 
 ## File for cbind dataset (organized for binomial models):
-write.csv(BsalData_cbind, file = "BsalData_cbind.csv", row.names = FALSE)
+write.csv(dcbind_all, file = "dcbind_all.csv", row.names = FALSE)
 
 
 ## Export data for collaborators to xlsx sheet:
