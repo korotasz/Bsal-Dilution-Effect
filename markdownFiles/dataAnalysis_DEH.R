@@ -139,7 +139,9 @@ dcbind_all <- read.csv("Bsal_cbind_all.csv", header = T, encoding = "UTF-8") %>%
   mutate_at(c("temp_d", "sMoist_d",
               "bio1_wc", "bio12_wc", "tavg_wc", "prec_wc"),
             ~(scale(., center = T, scale = T %>% as.numeric))) %>%
-  mutate(year = year(date))
+  mutate(year = year(date),
+         locality = case_when(is.na(locality) ~ ADM2,
+                              TRUE ~ locality))
 
 ## Define general ggplot theme for plot uniformity -----------------------------
 ak_theme <- theme_ipsum(base_family = "Segoe UI Light") +
@@ -383,30 +385,40 @@ esp_map
 
 ## II. Testing assumptions of the dilution effect hypothesis -------------------
 ### a. Hosts differ in their reservoir competence. -----------------------------
-sampSize <- d %>%
-  dplyr::select(country, ADM0, Lat, Lon, Site, diseaseTested,
-                BsalDetected, BdDetected, individualCount) %>%
-  plyr::mutate(BsalDetected = as.factor(dplyr::recode(BsalDetected,
-                                                      "1" = "Bsal positive",
-                                                      "0" = "Bsal negative"))) %>%
-  group_by(country, Site, BsalDetected) %>%
-  summarise(n = n()) %>%
-  ungroup()
+# sampSize <- d %>%
+#   dplyr::select(country, Site, Lat, Lon,  diseaseTested,
+#                 BsalDetected, BdDetected, individualCount) %>%
+#   plyr::mutate(BsalDetected = as.factor(dplyr::recode(BsalDetected,
+#                                                       "1" = "Bsal positive",
+#                                                       "0" = "Bsal negative"))) %>%
+#   group_by(country, Site, BsalDetected) %>%
+#   summarise(n = n()) %=>%
+#   ungroup()
+
+host_summary <- dcbind_all %>%
+  subset(., select = c(country, locality, Site, posSite, date, scientific, susceptibility, nPos_all, nNeg_all))
 
 
-deu <- sampSize %>%
+deu_hosts <- host_summary %>%
   filter(country == "Germany") %>%
-  plyr::mutate(BsalDetected = as.factor(dplyr::recode(BsalDetected,
-                                                      "Bsal positive" = "Pos", "Bsal negative" = "Neg"))) %>%
-  pivot_wider(names_from = BsalDetected, id_cols = Site, values_from = n) %>%
-  mutate(Pos = case_when(is.na(Pos) ~ 0,
-                         TRUE ~ Pos),
-         Neg = case_when(is.na(Neg) ~ 0,
-                         TRUE ~ Neg)) %>%
-  group_by(Site) %>%
-  mutate(pop = sum(Pos, Neg),
-         sitePrev = round((Pos/pop)*100, 2))
-print(deu$sitePrev) # observed prevalence at each site
+  subset(., select = c(country, locality, Site, scientific, susceptibility, nPos_all, nNeg_all)) %>%
+  rename(Pos = nPos_all, Neg = nNeg_all) %>%
+  group_by(country, locality, Site, scientific, susceptibility) %>%
+  summarise(totalPos = sum(Pos),
+         totalNeg = sum(Neg),
+         total = sum(Pos, Neg)) %>%
+  distinct()
+#   plyr::mutate(BsalDetected = as.factor(dplyr::recode(BsalDetected,
+#                                                       "Bsal positive" = "Pos", "Bsal negative" = "Neg"))) %>%
+#   pivot_wider(names_from = BsalDetected, id_cols = Site, values_from = n) %>%
+#   mutate(Pos = case_when(is.na(Pos) ~ 0,
+#                          TRUE ~ Pos),
+#          Neg = case_when(is.na(Neg) ~ 0,
+#                          TRUE ~ Neg)) %>%
+#   group_by(Site) %>%
+#   mutate(pop = sum(Pos, Neg),
+#          sitePrev = round((Pos/pop)*100, 2))
+# print(deu$sitePrev) # observed prevalence at each site
 
 esp <- sampSize %>%
   filter(country == "Spain") %>%
