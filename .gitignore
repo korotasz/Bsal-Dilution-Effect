@@ -1,5 +1,4 @@
-figures/*
-markdownFiles/*
+markdownFiles/figures/*
 weatherSampling/weatherProcessing_monthly.R
 
 .Rhistory
