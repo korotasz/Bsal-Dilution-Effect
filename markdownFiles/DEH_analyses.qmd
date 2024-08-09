@@ -1,7 +1,6 @@
 ---
-title: "Ch. 2: Testing the Dilution Effect Hypothesis in the amphibian-Bsal system"
-lightbox: true
-author: "Alexis Korotasz"
+title: "*Batrachochytrium salamandrivorans* prevalence is associated positively with host density and negatively with host richness across European amphibian communities"
+author: Alexis Korotasz 
 date: "`r Sys.Date()`"
 format: 
   html:
@@ -9,6 +8,7 @@ format:
       light: minty
       dark: darkly
     link-external-newwindow: true
+    link-external-icon: true
     embed-resources: true
     smooth-scroll: true
     anchor-sections: true
@@ -16,45 +16,44 @@ format:
     code-fold: true
     code-tools: true
     code-copy: hover
-    code-summary: "code"
+    code-summary: "code </>"
+    code-overflow: wrap
+    code-links:
+      - text: Project Repository
+        icon: github
+        href: https://github.com/korotasz/Chapter-2-Analyses
     toc: true
     toc-location: left
-    toc_depth: 3
+    toc_depth: 6
+    freeze: auto
     fig-align: center
     fig-cap-location: bottom
     tbl-cap-location: top
+    css: bootstrap.css
+    lightbox: true
 
-    
-## This would be cool but only if everyone made a profile
-#    comments:
-#      hypothesis: 
-#        theme: clean
-editor: source
+  
+
+
 ---
+```{r}
+#| echo: false
+#| output: false
 
-```{r setup, include = FALSE}
-knitr::opts_chunk$set(message = FALSE, warning = FALSE, echo = TRUE)
-## Set working directory
-knitr::opts_knit$set(root.dir = dirname(rstudioapi::getActiveDocumentContext()$path))
+## Set working directory 
+knitr::opts_knit$set(root.dir = dirname("C:/Users/alexi/Development/Chapter-2-Analyses/markdownFiles"))
 
-#remotes::install_version("Rttf2pt1", version = "1.3.8") # install this version, latest ver. not compatible
-#remotes::install_github("gorkang/html2latex") # convert sjPlot::tab_model() hmtl table to tex and pdf in .Rmd docs
-#extrafont::font_import("C:/Windows/Fonts") # load fonts before ggplot2; only need to do this once
-require(pacman)
-require(rstudioapi) # Set working directory to current file location
-require(extrafontdb)
-require(extrafont) 
+## Load packages that will be used throughout -- others will be loaded and unloaded througout the document
+library(pacman)
+library(extrafontdb)
+library(extrafont) 
 extrafont::loadfonts(device = "all", quiet = T) # plot fonts 
-
 ## Packages --------------------------------------------------------------------
 ### > Visualization Packages----------------------------------------------------
 pckgs <- c("ggsignif", # adds labels to significant groups
              "ggpubr", # stat_compare_means()
             "ggbreak", # create axis breaks in ggplots
              "gtools", # signif. value styling
-           # "ggiraphExtra", # make an interactive plot
-         "kableExtra", # table styling
-               "renv", # environment lock
              "ggtext", # for text type/arrangements w/ ggplot2
            "Rttf2pt1", # to use with the extrafont package
            "ggthemes", # contains 'scales', 'themes', and 'geoms' packages
@@ -66,23 +65,24 @@ pckgs <- c("ggsignif", # adds labels to significant groups
          "hrbrthemes", # plot colors
        "RColorBrewer", # plot colors
             "viridis", # plot colors
-             "scales", # plot customization
            "eurostat", # obtain spatial data from europe
             "geodata", # obtain geographic data (world map)
       "rnaturalearth", # obtain spatial polygons that can be used with sf
                  "sf", # mapping
           "ggspatial", # north arrow and scale bar
             "mapproj", # apply map projection
-         "scatterpie", # add pie charts to maps
        "multcompView", # cld.emmGrid()
+             "sjPlot", # plot_model(), tab_model()
+           #     "ragg", # converts plots to tiff files
+           # "webshot2", # converts html files to png
+           #   "magick", # image_read() -- needed for cowplot::draw_image
+              "Hmisc", # binconf() provides CI of binomial distribution
+### > Markdown Packages --------------------------------------------------------
+          "htmltools", # visualizes model outputs as html tables
           "latex2exp", # allows use of LaTeX in R
                "glue", # allows concatenation of LaTeX and R syntax
-             "sjPlot", # plot_model(), tab_model()
-               "ragg", # converts plots to tiff files
-          "htmltools", # visualizes model outputs as html tables
-           "webshot2", # converts html files to png
-             "magick", # image_read() -- needed for cowplot::draw_image
-              "Hmisc", # binconf() provides CI of binomial distribution
+           # "ggiraphExtra", # make an interactive plot
+         "kableExtra", # table styling
 ### > Analysis Packages --------------------------------------------------------
           "tidyverse", # data wrangling/manipulation
             "glmmTMB", # glmmTMB()
@@ -99,12 +99,6 @@ pckgs <- c("ggsignif", # adds labels to significant groups
 
 ## Load packages
 pacman::p_load(pckgs, character.only = T)
-#### IF RENV CANNOT INSTALL/LOAD PACKAGES, USE CODE BELOW TO NAVIGATE TO OTHER .libPaths() OUTSIDE OF PROJECT.
-## Home computer:
-# renv::hydrate(packages = c(pckgs, "pacman"), sources = c("C:/Users/alexi/AppData/Local/R/win-library/4.3", "C:/Program Files/R/R-4.3.1/library"))
-## Work computer
-# renv::hydrate(packages = c(pckgs, "pacman"), sources = c("C:/Users/Alexis/AppData/Local/R/win-library/4.3", "C:/Program Files/R/R-4.3.1/library"))
-
 
 ## Functions -------------------------------------------------------------------
 map_bounds <- function(x1, x2, y1, y2, crs){
@@ -127,10 +121,38 @@ flip <- function(data) {
   new
 }
 
-## Read in .csv files-----------------------------------------------------------
-# setwd(file.path(dirname(rstudioapi::getActiveDocumentContext()$path)))
-d <- read.csv("BsalData_all.csv", header = T, encoding = "UTF-8")
-dcbind <- read.csv("BsalData_cbind.csv", header = T, encoding = "UTF-8")
+## Read in .csv files and prep data --------------------------------------------
+## All data -- not meant for analyses, just visualization.
+d <- read.csv("BsalData_all.csv", header = T, encoding = "UTF-8") %>%
+  filter(continent == "Europe") %>% 
+  # transform vars
+  mutate(logsppAbun = log(sppAbun + 1),
+         logsiteAbun = log(siteAbun + 1),
+         scientific = as.factor(scientific),
+         susceptibility = as.factor(susceptibility)) %>%
+  relocate(c(logsppAbun, logsiteAbun), .after = sppAbun)
+
+
+## 'dcbind' dataset is what will be used to run our models
+dcbind_all <- read.csv("Bsal_cbind_all.csv", header = T, encoding = "UTF-8") %>%
+  filter(continent == "Europe") %>% 
+  # transform vars
+  mutate(logsppAbun = log(sppAbun + 1),
+         logsiteAbun = log(siteAbun + 1),
+         scientific = as.factor(scientific),
+         susceptibility = as.factor(susceptibility)) %>%
+  relocate(c(logsppAbun, logsiteAbun), .after = sppAbun)
+
+dcbind_scaled <- dcbind_all %>% 
+  ## Data prep for cbind models: drop rows with NA vals in weather data & scale relevant vars
+  #   bio1_wc = "annual mean temperature" | bio12_wc = annual precipitation
+  tidyr::drop_na(., any_of(c("temp_d", "sMoist_d", "tmin_wc:bio1_wc", "bio12_wc"))) %>%
+  mutate_at(c("temp_d", "sMoist_d",
+              "bio1_wc", "bio12_wc", "tavg_wc", "prec_wc"),
+            ~(scale(., center = T, scale = T %>% as.numeric))) %>%
+  mutate(year = year(date),
+         locality = case_when(is.na(locality) ~ ADM2,
+                              TRUE ~ locality))
 
 
 ## Define general ggplot theme for plot uniformity -----------------------------
@@ -148,7 +170,7 @@ ak_theme <- theme_ipsum(base_family = "Segoe UI Light") +
         plot.tag = element_text(size = 36, face = "bold"),
         plot.title = element_text(size = 42, hjust = 0.5, face = "plain"),
         plot.subtitle = element_markdown(size = 12, face = "plain"),
-        plot.margin = margin(1, 1, 1.5, 1.2, "cm"),
+        # plot.margin = margin(1, 1, 1.5, 1.2, "cm"),
         plot.caption = element_markdown(hjust = 1, size = 14, face = "plain"),
         plot.caption.position = "plot",
         legend.position = "top",
@@ -163,64 +185,77 @@ ak_theme <- theme_ipsum(base_family = "Segoe UI Light") +
 
 
 
-# log transform vars
-d <- d %>%
-  mutate(logsppAbun = log(sppAbun + 1),
-         logsiteAbun = log(siteAbun + 1),
-         scientific = as.factor(scientific),
-         susceptibility = as.factor(susceptibility)) %>%
-  relocate(c(logsppAbun, logsiteAbun), .after = sppAbun)
 
-dcbind <- dcbind %>%
-  mutate(logsppAbun = log(sppAbun + 1),
-         logsiteAbun = log(siteAbun + 1),
-         scientific = as.factor(scientific),
-         susceptibility = as.factor(susceptibility)) %>%
-  relocate(c(logsppAbun, logsiteAbun), .after = sppAbun)
-
-
-## Vector of cleaner labels for model output table
+## Clean labels for model output in a table ------------------------------------
 nicelabs <- c(`(Intercept)` = "Intercept",
-              richness = "Richness",
+              richness = "Relative richness",
+              iucn_rich = "Richness estimate (IUCN)",
+              locality_rich = "Richness estimate (local species pool)",
+              logsppAbun = "log(Species abundance)",
               logsiteAbun = "log(Site abundance)",
               "richness:logsiteAbun" = "Richness:log(Site abundance)",
-              temp_t0 = "Temperature",
-              soilM_t0 = "Soil moisture",
+              temp_d = "Temperature",
+              soilM_d = "Soil moisture",
               "temp_d:sMoist_d" = "Temp:Soil moisture")
-
 
 ```
 
-# Data overview {.tabset}
+## Abstract
 
-<font size = "5"> **Inclusion Criteria** </font>
+1.  Amphibians are one of the most threatened vertebrate taxa on the planet and a prominent driver of these declines is chytridiomycosis, a fungal disease caused by *Batrachochytrium dendrobatidis* (Bd) and, more recently, *Batrachochytrium salamandrivorans* (Bsal). Since its discovery, the known range of Bsal has rapidly expanded, devastating salamander populations across Europe.
+2.  Research thus far has shown that temperature and moisture play a major role in the persistence of Bsal in the environment and that susceptibility to Bsal varies among species. However, little is known about host community composition and richness as drivers of Bsal prevalence.
+3.  To investigate how community structure (i.e., host abundance and richness) affects Bsal prevalence, we compiled and analyzed publicly available data on the swabbing of **2,909 amphibians** from **45 Bsal positive sites** across Europe comprised of some combination of **14 unique species**.
+4.  We show that the amphibian-Bsal system meets several pre-requisites for a dilution effect, which describes a negative host biodiversity-disease relationship. Namely, there is variation in host competence and, despite Bsal being associated with host declines, the most abundant species were the least resistant and most competent hosts of Bsal. On average across all communities, Bsal prevalence was associated positively with host density and negatively with host richness, supporting density-dependent transmission and a dilution effect. Additionally, a dilution effect was observed for fire salamanders (*Salamandra salamandra*), the species experiencing the greatest declines from Bsal in Europe. However, for fire salamanders, Bsal prevalence was associated negatively with host density, presumably because Bsal is causing population declines in this species.
+5.  These results suggest that conserving salamander species could reduce Bsal transmission and Bsal-induced salamander population declines.
 
-**To be included in our final data set for analyses, the data needed to meet the following criteria:**
+**Keywords:** amphibian, Bsal, chytridiomycosis, dilution effect, disease ecology, salamander
 
-1.  Data **must** be from within the known range of Bsal<font size = "2.5">
-    -   Observations that were negative and from outside of the current known range of Bsal were excluded from analyses. </font>
-2.  Only wild observations were included<font size = "2.5">
-    -   Domestic animals (*e.g.* pets) and preserved samples (*e.g.* museum specimen) were excluded. </font>
-3.  Each observation must include an associated latitude and longitude<font size = "3">
-    -   Unique combinations of lat/lon were used to assign Site #s.
-    -   Unique combinations of lat/lon/date used to obtain weather data included in models. </font>
+## Data exploration
+### Checking for outliers
+```{r}
+#| label: outlierCheck
+#| echo: true
+
+posSites <- dcbind_all %>% 
+  filter(posSite == "1")
+
+## Reduce data size to capture most important variables
+posSites_reduced <- posSites %>% 
+  separate_wider_delim(., cols = date, delim = "-", names = c("year", "month", "day")) %>% 
+  mutate(year = as.numeric(year),
+         month = as.numeric(month),
+         day = as.numeric(day)) %>% 
+  subset(., select = c(Site, year, month, day, richness, iucn_rich, locality_rich, logsppAbun, logsiteAbun, nPos_all, nNeg_all, temp_d, sMoist_d, bio1_wc, bio12_wc))
+
+## Call boxplot function to check for outliers
+DataExplorer::plot_boxplot(posSites_reduced, by = "Site")
+
+## Look closer at 'nPos_all'
+rstatix::identify_outliers(posSites_reduced, nPos_all) # Be aware of the extreme outlier -- not going to do anything about it now
+
+```
+### Static Maps
+
+Europe polygons were re-projected to EPSG:27704 (WGS84/Equi7 Europe) for mapping purposes. These projections were made as a part of [a larger project](https://github.com/TUW-GEO/Equi7Grid)/[paper](https://doi.org/10.1016/j.cageo.2014.07.005) to optimize handling remote-sensing data, with each continent having their own centroid.
+
+```{r}
+#| label: staticMaps
+#| echo: false
+#| fig-show: hold
+ 
 
 
-## Static map
+epsg27704 <- crs('+proj=aeqd +lat_0=53 +lon_0=24 +x_0=5837287.81977 +y_0=2121415.69617 +datum=WGS84 +units=m +no_defs')
 
-```{r staticMap, fig.width = 24, fig.height = 12, fig.fullwidth = TRUE, fig.fullheight = TRUE, echo = FALSE}
-# Summarise number of observations from each country
 obs <- d %>%
-  dplyr::select(country, ADM0, decimalLatitude, decimalLongitude, diseaseTested,
-                BsalDetected, BdDetected, individualCount) %>%
+  dplyr::select(country, ADM0, Lat, Lon, BsalDetected, individualCount) %>%
   plyr::mutate(BsalDetected = as.factor(dplyr::recode(BsalDetected,
-                                                      "1" = "Bsal positive", 
+                                                      "1" = "Bsal positive",
                                                       "0" = "Bsal negative"))) %>%
+  st_as_sf(., coords = c("Lon", "Lat"), crs = 4326) %>%
+  mutate(jittered = sf::st_jitter(geometry, 0.25)) %>%
   arrange(BsalDetected)
 
-# plotting individual points on map
-obs_transformed <- st_as_sf(obs, coords = c("decimalLongitude", "decimalLatitude"), crs = 4326) %>%
-  st_transform(., crs = 3035)
 
 # summarise data
 sampSize <- obs %>%
@@ -228,802 +263,163 @@ sampSize <- obs %>%
   summarise(n = n())
 
 # Get the coordinates of each country
-country_lookup <- read.csv("countries.csv", stringsAsFactors = F)
+country_lookup <- read.csv("markdownFiles/countries.csv", stringsAsFactors = F)
 names(country_lookup)[1] <- "country_code"
 
 
 # Combine summarised data
-mapLabels <- merge(x = sampSize, y = country_lookup, 
-              by.x = "country", by.y = "name", all.x = T)
-mapLabels <- st_as_sf(mapLabels, coords = c("longitude", "latitude"), crs = 4326) %>%
-  st_transform(., crs = 3035)
-
+mapLabels <- merge(x = sampSize, y = country_lookup,
+                   by.x = "country", by.y = "name", all.x = T) %>%
+  st_as_sf(., coords = c("longitude", "latitude"), crs = 4326)
 
 # Obtain world map
-worldmap <- ne_countries(scale = "medium", type = "map_units", returnclass = "sf")
+worldmap <- ne_countries(scale = "medium", type = "map_units", returnclass = "sf") %>%
+  st_transform(., crs = 4326)
 
-# Polygons are re-projected to the EPSG:3035 (Lambert Azimuthal Equal Area Projection) 
-# This projection covers all of Europe (on- and off-shore), is based on the GCS ETRS 89,
-# and has been used in the EU's INSPIRE directive. In other words, it is well established.
-# Coordinates are displayed in meters and must be translated back into decimal degrees.
+# Summarise the number of observations from each Bsal+ country and plot individual points on a map.
+obs <- obs %>%
+  filter(country == "Germany" | country == "Spain") %>%
+  st_transform(., crs = epsg27704)
+
+# Create country labels for maps
+labs <- mapLabels %>%
+  filter(country == "Germany" | country == "Spain") %>%
+  st_transform(geometry, crs = epsg27704)
+
+# Subset country polygons for base maps
 europe <- worldmap %>%
   filter(continent == "Europe" & !name %in% c("Russia")) %>%
-  st_transform(., crs = 3035) 
+  st_transform(., crs = epsg27704)
 
-# Specify countries with Bsal field sampling efforts
-countriesSampled <- worldmap %>% 
-  filter(sovereignt %in% c("Spain", "Switzerland", "Germany", "United Kingdom") 
-         & !name %in% c("Guernsey", "Isle of Man", "Jersey", "N. Ireland", 
-                        "Scotland", "Wales", "Anguilla", "Bermuda", "Br. Indian Ocean Ter.",
-                        "Cayman Is.",  "Falkland Is.", "Montserrat", "Pitcairn Is.",
-                        "S. Geo. and S. Sandw. Is.", "Saint Helena", "Turks and Caicos Is.",
-                        "British Virgin Is.")) %>%
-  st_transform(., crs = 3035) 
+# Subset polygons for Bsal+ countries
+countries <- worldmap %>%
+  filter(sovereignt %in% c("Spain", "Germany")) %>%
+  st_transform(., crs = epsg27704)
 
 
-# Map
+# Europe -----------------------------------------------------------------------
+eu <-  labs %>%
+  filter(country == "Germany" | country == "Spain") %>%
+  # mutate(total = sum(n)) %>%
+  plyr::mutate(label = paste(country))
+
+
+#map_bounds(-8, 15, 34, 56, crs = epsg27704)
+
 europe_map <- ggplot() +
   geom_sf(data = europe, col = "gray40", fill = "#ECECEC", show.legend = F) +
-  geom_sf(data = countriesSampled, aes(fill = sovereignt), col = "gray40", fill = "#B2BEB5", show.legend = F) +
-  geom_sf(data = obs_transformed, aes(geometry = geometry, fill = BsalDetected, shape = BsalDetected),
+  geom_sf(data = countries, aes(fill = sovereignt), col = "gray40", fill = "#B2BEB5", show.legend = F) +
+  geom_sf(data = obs, aes(geometry = jittered, fill = BsalDetected, shape = BsalDetected),
           alpha = 0.3, size = 4, stroke = 1, color = "gray30", show.legend = "point") +
-  geom_sf_text(data = countriesSampled, aes(label = name), position = "identity", size = 5) +
+  geom_sf_label(data = eu, aes(label = paste(label)),
+                size = 7, fontface = "bold", label.size = NA, alpha = 0.5) +
   scale_fill_manual(values = c("gray40", "#b30000"), guide = "none") +
   scale_shape_manual(values = c(21, 24), guide = "none") +
-  coord_sf(xlim = c(2652777.0489846086, 4632884.549024921), # c(-16, 15)
-           ylim = c(1615336.1806950625, 3665962.1500697937)) + # c(37, 56)
-  annotation_scale(location = "br", width_hint = 0.5, text_cex = 2, text_face = "plain",
+  coord_sf(xlim = c(2903943, 5277030), # c(-9, 15)
+           ylim = c(625595.8, 2491036)) + # c(34, 56)
+  annotation_scale(location = "br", width_hint = 0.5, text_cex = 2.5, text_face = "plain",
                    pad_y = unit(0.5, "cm")) +
-  annotation_north_arrow(location = "bl", which_north = "true", 
-                         height = unit(1.5, "cm"), width = unit(1.5, "cm"),
-                         pad_x = unit(0, "cm"), pad_y = unit(0, "cm"),
+  annotation_north_arrow(location = "bl", which_north = "true",
+                         height = unit(2.5, "cm"), width = unit(2.5, "cm"),
+                         pad_x = unit(0.25, "cm"), pad_y = unit(0.25, "cm"),
+                         style = north_arrow_fancy_orienteering(line_width = 1.8, text_size = 18)) +
+  ak_theme + theme(legend.title = element_blank(),
+                   legend.position = "top",
+                   legend.spacing = unit(1, 'cm'),
+                   legend.key.size = unit(1,"cm"),
+                   legend.text = element_text(size = 38, hjust = 0,
+                                              margin = margin(l = 5, r = 30, unit = "pt")),
+                   axis.text.x = element_text(size = 38, angle = 45, vjust = 0.5),
+                   axis.title.x = element_blank(),
+                   axis.text.y = element_text(size = 38, face = "plain"),
+                   axis.title.y = element_blank()) +
+  guides(fill = guide_legend(override.aes = list(color = c("gray40", "#b30000"),
+                                                 shape = c(21, 24),
+                                                 size = c(7, 7),
+                                                 alpha = c(1, 1))))
+
+
+europe_map
+# Germany ----------------------------------------------------------------------
+g <- mapLabels %>% filter(country == "Germany") %>%
+  plyr::mutate(label = paste(country, " (n = ", n, ")", sep = ""))
+
+#map_bounds(7.5, 14.5, 46.5, 55.5, crs = epsg27704)
+
+deu_map <- ggplot() +
+  geom_sf(data = europe, col = "gray40", fill = "#ECECEC", show.legend = F) +
+  geom_sf(data = countries, aes(fill = sovereignt), col = "gray40", fill = "#B2BEB5", show.legend = F) +
+  # geom_sf_label(data = g, aes(label = paste(label)),  nudge_x = 400000,  nudge_y = 430000,
+  #               size = 14, fontface = "bold", label.size = NA, alpha = 0.5) +
+  geom_sf(data = obs, aes(geometry = jittered, fill = BsalDetected, shape = BsalDetected),
+          alpha = 0.3, size = 4, stroke = 1, color = "gray30", show.legend = "point") +
+  scale_fill_manual(values = c("gray40", "#b30000"), guide = "none") +
+  scale_shape_manual(values = c(21, 24), guide = "none") +
+  coord_sf(xlim = c(4452875, 5238551), # c(7.5, 14.5)
+           ylim = c(1540088, 2435744)) + # c(46.5, 55.5)
+  annotation_scale(location = "br", width_hint = 0.5, text_cex = 2.5, text_face = "plain",
+                   pad_y = unit(0.5, "cm")) +
+  annotation_north_arrow(location = "bl", which_north = "true",
+                         height = unit(2.5, "cm"), width = unit(2.5, "cm"),
+                         pad_x = unit(0.25, "cm"), pad_y = unit(0.25, "cm"),
                          style = north_arrow_fancy_orienteering(line_width = 1.8, text_size = 18)) +
   ak_theme + theme(legend.title = element_blank(),
                    legend.position = "top",
                    legend.spacing = unit(1, "cm"), # Space legend labels
                    legend.key.size = unit(1,"cm"),
-                   legend.text.align = 0,
-                   legend.text = element_text(size = 28, hjust = 0),
-                   axis.text.x = element_text(size = 28),
+                   legend.text = element_text(size = 32, hjust = 0,
+                                              margin = margin(l = 5, r = 30, unit = "pt")),
+                   axis.text.x = element_text(size = 32, angle = 45, vjust = 0.5),
+                   axis.title.x = element_blank(),
+                   axis.text.y = element_text(size = 32, face = "plain"),
+                   axis.title.y = element_blank()) +
+  guides(fill = guide_legend(override.aes = list(color = c("gray40", "#b30000"),
+                                                 shape = c(21, 24),
+                                                 size = c(5, 5),
+                                                 alpha = c(1, 1))))
+
+
+#### c. Spain ------------------------------------------------------------------
+s <- mapLabels %>% filter(country == "Spain") %>%
+  plyr::mutate(label = paste(country, " (n = ", n, ")", sep = ""))
+
+#map_bounds(-9, 3.75, 34.25, 46.5, crs = epsg27704)
+
+esp_map <- ggplot() +
+  geom_sf(data = europe, col = "gray40", fill = "#ECECEC", show.legend = F) +
+  geom_sf(data = countries, aes(fill = sovereignt), col = "gray40", fill = "#B2BEB5", show.legend = F) +
+  # geom_sf_label(data = s, aes(label = paste(label)), nudge_x = 400000, nudge_y = 250000,
+  #               size = 12, fontface = "bold", label.size = NA, alpha = 0.5) +
+  geom_sf(data = obs, aes(geometry = jittered, fill = BsalDetected, shape = BsalDetected),
+          alpha = 0.3, size = 4, stroke = 1, color = "gray30", show.legend = "point") +
+  scale_fill_manual(values = c("gray40", "#b30000"), guide = "none") +
+  scale_shape_manual(values = c(21, 24), guide = "none") +
+  coord_sf(xlim = c(2860148, 4298549), # c(-9, 4)
+           ylim = c(690856.1, 1606424)) + # c(34.25, 46.5)
+  annotation_scale(location = "br", width_hint = 0.5, text_cex = 2.5, text_face = "plain",
+                   pad_y = unit(0.5, "cm"), pad_x = unit(3.25, "cm")) +
+  annotation_north_arrow(location = "bl", which_north = "true",
+                         height = unit(2.5, "cm"), width = unit(2.5, "cm"),
+                         pad_x = unit(0.25, "cm"), pad_y = unit(0.25, "cm"),
+                         style = north_arrow_fancy_orienteering(line_width = 1.8, text_size = 18)) +
+  ak_theme + theme(legend.title = element_blank(),
+                   legend.position = "top",
+                   legend.spacing = unit(1, "cm"), # Space legend labels
+                   legend.key.size = unit(1,"cm"),
+                   legend.text = element_text(size = 28, hjust = 0,
+                                              margin = margin(l = 5, r = 30, unit = "pt")),
+                   axis.text.x = element_text(size = 28, angle = 45, vjust = 0.5),
                    axis.title.x = element_blank(),
                    axis.text.y = element_text(size = 28, face = "plain"),
                    axis.title.y = element_blank()) +
   guides(fill = guide_legend(override.aes = list(color = c("gray40", "#b30000"),
-                                                 shape = c(21, 24), 
-                                                 size = c(5, 5),
-                                                 alpha = c(1, 1))))
-
-
-## Germany map
-g <- mapLabels %>% filter(country == "Germany") %>%
-  plyr::mutate(label = paste(country, " (n = ", n, ")", sep = ""))
-
-deu_map <- ggplot() +
-  geom_sf(data = europe, col = "gray40", fill = "#ECECEC", show.legend = F) +
-  geom_sf(data = countriesSampled, aes(fill = sovereignt), col = "gray40", fill = "#B2BEB5", show.legend = F) +
-  geom_sf_label(data = g, aes(label = paste(label)), nudge_x = -130000, nudge_y = 400000,
-                size = 7, fontface = "bold", label.size = NA, alpha = 0.5) +
-  geom_sf(data = obs_transformed, aes(geometry = geometry, fill = BsalDetected, shape = BsalDetected),
-          alpha = 0.3, size = 4, stroke = 1, color = "gray30", show.legend = "point") +
-  scale_fill_manual(values = c("gray40", "#b30000"), guide = "none") +
-  scale_shape_manual(values = c(21, 24), guide = "none") +
-  coord_sf(xlim = c(4031004.6092165913, 4662450.609393332), # c(5, 15)
-           ylim = c(2742165.4171582675, 3505801.4326768997)) + # c(47.5, 54.4)
-  annotation_scale(location = "br", width_hint = 0.5, text_cex = 2, text_face = "plain",
-                   pad_y = unit(0.5, "cm")) +
-  annotation_north_arrow(location = "bl", which_north = "true", 
-                         height = unit(1.5, "cm"), width = unit(1.5, "cm"),
-                         pad_x = unit(0, "cm"), pad_y = unit(0, "cm"),
-                         style = north_arrow_fancy_orienteering(line_width = 1.8, text_size = 18)) +
-  ak_theme + theme(legend.title = element_blank(),
-                   legend.position = "top",
-                   legend.spacing = unit(1, "cm"), # Space legend labels
-                   legend.key.size = unit(1,"cm"),
-                   legend.text.align = 0,
-                   legend.text = element_text(size = 28, hjust = 0),
-                   axis.text.x = element_text(size = 24),
-                   axis.title.x = element_blank(),
-                   axis.text.y = element_text(size = 24, face = "plain"),
-                   axis.title.y = element_blank()) +
-  guides(fill = guide_legend(override.aes = list(color = c("gray40", "#b30000"),
-                                                 shape = c(21, 24), 
-                                                 size = c(5, 5),
-                                                 alpha = c(1, 1))))
-
-
-## Spain map
-s <- mapLabels %>% filter(country == "Spain") %>%
-  plyr::mutate(label = paste(country, " (n = ", n, ")", sep = ""))
-
-esp_map <- ggplot() +
-  geom_sf(data = europe, col = "gray40", fill = "#ECECEC", show.legend = F) +
-  geom_sf(data = countriesSampled, aes(fill = sovereignt), col = "gray40", fill = "#B2BEB5", show.legend = F) +
-  geom_sf_label(data = s, aes(label = paste(label)), nudge_x = -170000, nudge_y = 520000,
-                 size = 7, fontface = "bold", label.size = NA, alpha = 0.5) +
-  geom_sf(data = obs_transformed, aes(geometry = geometry, fill = BsalDetected, shape = BsalDetected),
-          alpha = 0.3, size = 4, stroke = 1, color = "gray30", show.legend = "point") +
-  scale_fill_manual(values = c("gray40", "#b30000"), guide = "none") +
-  scale_shape_manual(values = c(21, 24), guide = "none") +
-  coord_sf(xlim = c(2762860.9104916425, 3804910.3673174703), # c(-6, 4.5)
-           ylim = c(1396746.8807063631, 2550763.7938421355)) + # c(33.5, 45)
-  annotation_scale(location = "br", width_hint = 0.5, text_cex = 2, text_face = "plain",
-                   pad_y = unit(0.5, "cm")) +
-  annotation_north_arrow(location = "bl", which_north = "true", 
-                         height = unit(1.5, "cm"), width = unit(1.5, "cm"),
-                         pad_x = unit(0, "cm"), pad_y = unit(0, "cm"),
-                         style = north_arrow_fancy_orienteering(line_width = 1.8, text_size = 18)) +
-  ak_theme + theme(legend.title = element_blank(),
-                   legend.position = "top",
-                   legend.spacing = unit(1, "cm"), # Space legend labels
-                   legend.key.size = unit(1,"cm"),
-                   legend.text.align = 0,
-                   legend.text = element_text(size = 28, hjust = 0),
-                   axis.text.x = element_text(size = 24),
-                   axis.title.x = element_blank(),
-                   axis.text.y = element_text(size = 24, face = "plain"),
-                   axis.title.y = element_blank()) +
-  guides(fill = guide_legend(override.aes = list(color = c("gray40", "#b30000"),
-                                                 shape = c(21, 24), 
+                                                 shape = c(21, 24),
                                                  size = c(5, 5),
                                                  alpha = c(1, 1))))
 
 
 
-## Switzerland map
-swz <- mapLabels %>% filter(country == "Switzerland") %>%
-  plyr::mutate(label = paste(country, " (n = ", n, ")", sep = ""))
-
-che_map <- ggplot() +
-  geom_sf(data = europe, col = "gray40", fill = "#ECECEC", show.legend = F) +
-  geom_sf(data = countriesSampled, aes(fill = sovereignt), col = "gray40", fill = "#B2BEB5", show.legend = F) +
-  geom_sf_label(data = swz, aes(label = paste(label)), nudge_x = -50000, nudge_y = 120000,
-                size = 7, fontface = "bold", label.size = NA, alpha = 0.5, inherit.aes = F) +
-  geom_sf(data = obs_transformed, aes(geometry = geometry, fill = BsalDetected, shape = BsalDetected),
-          alpha = 0.3, size = 4, stroke = 1, color = "gray30", show.legend = "point") +
-  scale_fill_manual(values = c("gray40", "#b30000"), guide = "none") +
-  scale_shape_manual(values = c(21, 24), guide = "none") +
-  coord_sf(xlim = c(4010139.011070984, 4359878.636359634), # c(6, 11)
-           ylim = c(2498679.761531601, 2765224.576573791)) + # c(45.75, 48)
-  # scale_y_continuous(breaks = c(46, 47, 48),
-  #                    limits = c(45.75, 48)) +
-  annotation_scale(location = "br", width_hint = 0.5, text_cex = 2, text_face = "plain",
-                   pad_y = unit(0.5, "cm")) +
-  annotation_north_arrow(location = "bl", which_north = "true", 
-                         height = unit(1.5, "cm"), width = unit(1.5, "cm"),
-                         pad_x = unit(0, "cm"), pad_y = unit(0, "cm"),
-                         style = north_arrow_fancy_orienteering(line_width = 1.8, text_size = 18)) +
-  ak_theme + theme(legend.title = element_blank(),
-                   legend.position = "top",
-                   legend.spacing = unit(1, "cm"), # Space legend labels
-                   legend.key.size = unit(1,"cm"),
-                   legend.text.align = 0,
-                   legend.text = element_text(size = 28, hjust = 0),
-                   axis.text.x = element_text(size = 24),
-                   axis.title.x = element_blank(),
-                   axis.text.y = element_text(size = 24, face = "plain"),
-                   axis.title.y = element_blank()) +
-  guides(fill = guide_legend(override.aes = list(color = c("gray40", "#b30000"),
-                                                 shape = c(21, 24), 
-                                                 size = c(5, 5),
-                                                 alpha = c(1, 1))))
-
-## UK map
-uk <- mapLabels %>% filter(country == "United Kingdom") %>%
-  plyr::mutate(country = as.factor(dplyr::recode(country,
-                                                      "United Kingdom" = "England"))) %>%
-  plyr::mutate(label = paste(country, " (n = ", n, ")", sep = "")) 
-
-gbr_map <- ggplot() +
-  geom_sf(data = europe, col = "gray40", fill = "#ECECEC", show.legend = F) +
-  geom_sf(data = countriesSampled, aes(fill = sovereignt), col = "gray40", fill = "#B2BEB5", show.legend = F) +
-  geom_sf_label(data = uk, aes(label = paste(label)), nudge_x = -140000, nudge_y = 0,
-                size = 7, fontface = "bold", label.size = NA, alpha = 0.5) +
-  geom_sf(data = obs_transformed, aes(geometry = geometry, fill = BsalDetected, shape = BsalDetected),
-          alpha = 0.3, size = 4, stroke = 1, color = "gray30", show.legend = "point") +
-  scale_fill_manual(values = c("gray40", "#b30000"), guide = "none") +
-  scale_shape_manual(values = c(21, 24), guide = "none") +
-  coord_sf(xlim = c(3184199.4221568545, 3819948.287940598), # c(5, 11)
-           ylim = c(3083054.5969610764, 3670734.0742844036)) +
-  annotation_scale(location = "br", width_hint = 0.5, text_cex = 2, text_face = "plain",
-                   pad_y = unit(0.5, "cm")) +
-  annotation_north_arrow(location = "bl", which_north = "true", 
-                         height = unit(1.5, "cm"), width = unit(1.5, "cm"),
-                         pad_x = unit(0, "cm"), pad_y = unit(0, "cm"),
-                         style = north_arrow_fancy_orienteering(line_width = 1.8, text_size = 18)) +
-  ak_theme + theme(legend.title = element_blank(),
-                   legend.position = "top",
-                   legend.spacing = unit(1, "cm"), # Space legend labels
-                   legend.key.size = unit(1,"cm"),
-                   legend.text.align = 0,
-                   legend.text = element_text(size = 28, hjust = 0),
-                   axis.text.x = element_text(size = 24),
-                   axis.title.x = element_blank(),
-                   axis.text.y = element_text(size = 24, face = "plain"),
-                   axis.title.y = element_blank()) +
-  guides(fill = guide_legend(override.aes = list(color = c("gray40", "#b30000"),
-                                                 shape = c(21, 24), 
-                                                 size = c(5, 5),
-                                                 alpha = c(1, 1))))
-
-
-fig1a <- europe_map + theme(plot.tag.position = c(0.92, 0.88)) 
-fig1b <- gbr_map + theme(plot.tag.position = c(0.95, 0.78)) 
-fig1c <- esp_map + theme(plot.tag.position = c(0.95, 0.95)) 
-fig1d <- deu_map + theme(plot.tag.position = c(0.96, 0.82)) 
-fig1e <- che_map + theme(plot.tag.position = c(0.96, 0.92))
-
-p <- ggplot() + labs(x = "Longitude", y = "Latitude") + ak_theme + theme(plot.margin = margin(0, 0, 0, 0, "cm"),
-                                                                         panel.spacing.y = unit(0,"cm"))
-x_axis <- cowplot::get_plot_component(p, "xlab-b") 
-y_axis <- cowplot::get_plot_component(p, "ylab-l") 
-
-layout <- "
-#AAA
-BAAA
-#AAA
-##C#
-"
-
-
-fig1_map <- ((fig1b/fig1c)|(fig1a)|(fig1d/fig1e)) +
-  plot_annotation(tag_levels = list(c("B", "C", "A", "D", "E"))) +
-  plot_layout(guides = "collect",
-              widths = c(1, 2, 1),
-              heights = c(1, 2, 1)) &
-  theme(plot.margin = margin(0.25, 0.25, 0, -0.5, "cm"),
-        legend.position = "top",
-        legend.box.margin = margin(0, 1, 1, 1, "cm"),
-        legend.text = element_text(margin = margin(r = 1, unit = "cm")),
-        legend.title = element_blank())
-
-
-fig1_map_annotated <- wrap_plots(wrap_elements(fig1_map), ggdraw(y_axis), ggdraw(x_axis)) +
-  plot_layout(widths = c(.15, 2.25),
-              heights = c(2.25, 0.25),
-              design = layout) + theme(plot.margin = margin(0.25, 0.25, 0.25, 0.25, "cm"))
- 
-fig1_map_annotated
-```
-
-**Fig. 1.1** This map displays **A)** the overall distribution of Bsal positive and negative cases in our data across Europe after processing. **B)** England (n = 84) had the fewest observations by far, while both **C)** Spain (n = 759) and **D)** Germany (n = 4641) had the greatest number of observations out of any countries in our data set, followed by **E)** Switzerland (n = 510). The only countries that had positive cases of Bsal were Germany and Spain with a reported Bsal prevalence of 5.93% and 23.98%, respectively. Although Switzerland and England did not record any positive cases of Bsal, we still included the data in our initial set of analyses when testing prerequisites of the Dilution Effect Hypothesis (Section 2.2.1 below).
-
-## Interactive map {.active}
-
-```{r interactiveMap, output.width = "100%", echo = FALSE}
-#### Map Specific Packages ####
-map_pckgs <- c("tidyverse",
-               "htmltools",
-               "htmlwidgets", # save leaflet output as html file
-               "stars", # spatiotemporal data handling
-               "RColorBrewer",
-               "ggspatial", # north arrow and scale bar,
-               "raster", # raster data handling
-               "sf", # vector data handling
-               "sp", 
-               "leaflet", # making interactive maps
-               "leaftime", # add time scale to map
-               "geojsonio",
-               "geojsonlint",
-               "ggpubr"# validate GeoJSON and display it on a map
-)
-
-## Load packages
-pacman::p_load(map_pckgs, character.only = T)
-d_map <- d
-d_map <- d %>%
-  mutate(color = case_when(
-    susceptibility == "1" ~ "Resistant",
-    susceptibility == "2" ~ "Tolerant",
-    susceptibility == "3" ~ "Susceptible"
-  ),
-  fatalStatus = case_when(
-    fatal == "1" ~ "Dead",
-    fatal == "0" ~ "Alive",
-    is.na(fatal) == T ~ "Unk")
-  )
-
-## Interactive Map
-map_pckgs <- c("tidyverse",
-               "htmltools",
-               "htmlwidgets", # save leaflet output as html file
-               "stars", # spatiotemporal data handling
-               "RColorBrewer",
-               "ggspatial", # north arrow and scale bar,
-               "raster", # raster data handling
-               "sf", # vector data handling
-               "sp", 
-               "leaflet", # making interactive maps
-               "leaftime", # add time scale to map
-               "geojsonio",
-               "geojsonlint",
-               "ggpubr"# validate GeoJSON and display it on a map
-)
-
-## Load packages
-pacman::p_load(map_pckgs, character.only = T)
-mapData <- d
-mapData <- d %>%
-  mutate(color = case_when(
-    susceptibility == "1" ~ "Resistant",
-    susceptibility == "2" ~ "Tolerant",
-    susceptibility == "3" ~ "Susceptible"
-  ),
-  fatalStatus = case_when(
-    fatal == "1" ~ "Dead",
-    fatal == "0" ~ "Alive",
-    is.na(fatal) == T ~ "Unk")
-  )
-
-## Interactive Map
-pal <- colorFactor(palette = c("#b30000", "#548078", "#E3A630"), 
-                   domain = c("Susceptible", "Resistant", "Tolerant"),
-                   ordered = TRUE) # marker colors
-cols <- c("#b30000", "#548078", "#E3A630") # legend
-labs <- c("Susceptible", "Resistant", "Tolerant") # legend
-#d_geo <- geojsonio::geojson_json(d, lat = "decimalLatitude", lon = "decimalLongitude")
-
-map <- leaflet(data = mapData) %>%
-  addProviderTiles(provider = "Stamen.TonerLite", group = "Basic Map") %>%
-  addProviderTiles(provider = "Esri.WorldImagery", group = "World Imagery") %>%
-  addLayersControl(baseGroups = c("Basic Map", "World Imagery")) %>%
-  addCircleMarkers(lng = mapData$decimalLongitude, lat = mapData$decimalLatitude,
-                   radius = 10,
-                   color = ~pal(mapData$color),
-                   fillOpacity = ifelse(mapData$fatalStatus == "Alive", 1, 0.5),
-                   stroke = FALSE,
-                   clusterOptions = markerClusterOptions(),
-                   label = mapData$scientific,
-                   labelOptions = labelOptions(direction = "auto", offset = c(0,0),
-                                               style = list("color" = "black",
-                                                            "font-family" = "sans-serif",
-                                                            "font-style" = "italic",
-                                                            "font-weight" = "bold",
-                                                            "box-shadow" = "1px 1px rgba(0,0,0,0.25)",
-                                                            "font-size" = "12px",
-                                                            "padding" = "4px"
-                                               )),
-                   popup = paste("<b>Site:</b>", mapData$Site, "<br>",
-                                 "<b>Bsal Detected:</b>", ifelse(mapData$BsalDetected == 1, "Yes", "No"), "<br>",
-                                 "<b>Bd Detected:</b>", ifelse(mapData$BdDetected == 1, "Yes", "No"), "<br>",
-                                 "<b>Status:</b>", mapData$fatalStatus)) %>%
-  setView(lat = 47.81757743622691, lng = 6.5171597480332135, zoom = 4) %>%
-  addLegend(position = "bottomleft",
-            colors = ~cols,
-            labels = ~labs,
-            title = paste("Bsal Susceptibility"),
-            opacity = 0.75) %>%
-  addScaleBar(position = "bottomleft",
-              options = scaleBarOptions(maxWidth = 100,
-                                        metric = TRUE,
-                                        updateWhenIdle = TRUE))
-map
-```
-
-**Fig. 1.2** This interactive map displays the approximate location of each observation in our final dataset at the finest taxonomic scale available (primarily at the species level but, in some cases, at the genus level). All observations include the associated site number and susceptibility level of the organism. When available, we also included an organism's morbidity status (*i.e.*, whether they tested positive for Bsal, Bd, or both) and their mortality status (*i.e.*, whether they were found alive or dead^1^).
-
-<p><small><sup>1</sup>Dead animals or animals whose mortality status is unknown are marked with opaque circles. Animals who are alive are denoted with solid circles.</small></p>
-
-# Testing assumptions of the Dilution Effect Hypothesis
-
-## Host species differ in their reservoir competence.
-
-```{r hostCompetence, fig.width = 14, fig.height = 8, fig.fullwidth = TRUE, fig.fullheight = TRUE, echo = FALSE, eval = TRUE}
-prev <- d %>%
-  group_by(scientific) %>%
-  mutate(ncas_Bsal = sum(BsalDetected == 1), # number of pos. Bsal cases
-         npop = sum(individualCount)) %>% # pop size (total # individuals/spp.)
-  drop_na(date) %>%
-  ungroup() %>%
-  mutate(Bsal_prev = (ncas_Bsal/npop)*100) %>% # prevalence as a percentage
-  dplyr::select(scientific, susceptibility, ncas_Bsal, Bsal_prev, npop) %>%
-  unique() %>%
-  dplyr::mutate(row_id = row_number()) %>%
-  relocate(row_id, .before = scientific)
-
-
-# Use binconf function to sample binomial distribution and get CIs for prevalence
-bsal_ci <- binconf(prev$ncas_Bsal, prev$npop, method = "exact", return.df = T)
-
-sampSize <- d %>%
-  dplyr::select(country, ADM0, decimalLatitude, decimalLongitude, diseaseTested,
-                BsalDetected, BdDetected, individualCount) %>%
-  plyr::mutate(BsalDetected = as.factor(dplyr::recode(BsalDetected,
-                                                      "1" = "Bsal positive", 
-                                                      "0" = "Bsal negative"))) %>%
-  group_by(country, BsalDetected) %>%
-  summarise(n = n()) %>%
-  ungroup()
-
-
-deu <- sampSize %>%
-  filter(country == "Germany") %>%
-  plyr::mutate(BsalDetected = as.factor(dplyr::recode(BsalDetected,
-                                                      "Bsal positive" = "Pos", "Bsal negative" = "Neg"))) %>%
-  pivot_wider(names_from = BsalDetected, values_from = n) %>%
-  mutate(pop = sum(Pos, Neg),
-         prev = round((Pos/pop)*100, 2))
-# print(deu$prev) # prevalence
-
-esp <- sampSize %>%
-  filter(country == "Spain") %>%
-  plyr::mutate(BsalDetected = as.factor(dplyr::recode(BsalDetected,
-                                                      "Bsal positive" = "Pos", "Bsal negative" = "Neg"))) %>%
-  pivot_wider(names_from = BsalDetected, values_from = n) %>%
-  mutate(pop = sum(Pos, Neg),
-         prev = round((Pos/pop)*100, 2))
-# print(esp$prev) # prevalence
-
-
-# Convert binconf point estimates + CIs to percentages for plotting
-bsal_ci <-  bsal_ci %>%
-  plyr::mutate(PointEst = round((PointEst*100), 1),
-               Lower = round((Lower*100), 1),
-               Upper = round((Upper*100), 1)) %>%
-  dplyr::mutate(row_id = row_number()) %>%
-  relocate(row_id, .before = PointEst)
-
-
-# Join with original 'prev' dataset, so we can plot actual vs expected
-prev <- prev %>% 
-  left_join(., bsal_ci, by = "row_id")
-
-prev_binconf_plot <- ggplot(prev, aes(scientific, sapply(PointEst, FUN = function(x) ifelse(x == 0.0, round(x, 0), x)), 
-                                          colour = susceptibility,
-                                          label = paste(PointEst,"%"))) +
-  geom_point(aes(colour = susceptibility), size = 5) +
-  geom_errorbar(aes(ymin = Lower, ymax = Upper, colour = susceptibility), width = 0.5, linewidth = 1, show.legend = F) +
-  geom_text(aes(colour = susceptibility, x = (as.numeric(scientific) + 0.05), y = Upper + 5),
-            size = 6, fontface = "bold", alpha = 0.75, show.legend = F) +
-  labs(x = "Species",
-       y = "Disease prevalence (%)") + 
-  coord_flip(clip = "off") +
-  scale_colour_manual(name = "Susceptibility",
-                      values = c("#548078", "#E3A630", "#b30000"),
-                      labels = c("Resistant", "Tolerant", "Susceptible"),
-                      guide = "none") +
-  scale_y_continuous(labels = seq(0, 60, 20),
-                     breaks = seq(0, 60, 20),
-                     limits = c(0, 67)) +
-  scale_x_discrete(expand = expansion(mult = c(0, 0.01), add = c(1, 0.25))) +
-  ak_theme + theme(axis.text.y = element_text(face = "italic"),
-                   legend.position = "top",
-                   legend.key.size = unit(0, "cm"),
-                   legend.box = "horizontal",
-                   legend.text = element_text(margin = margin(r = 1, unit = "cm"), size = 24),
-                   legend.title = element_blank()) +
-  guides(colour = guide_legend(override.aes = list(color = c("#548078", "#E3A630", "#b30000"),
-                                                   shape = c(15, 15, 15),
-                                                   size = c(10, 10, 10))))
-
-prev_binconf_plot
-
 
 ```
 
-**Fig. 2a** Point estimates for Bsal prevalence by species, presented as a percent. 95% CIs were calculated using the *Hmisc* package in R. Susceptibility to Bsal is denoted here by color (Red = 'Susceptible'; Yellow = 'Tolerant'; Blue = 'Resistant'). There is variation in both host susceptibility and disease prevalence among species in our data set.
 
-## The most susceptible species are also the most abundant, while the least susceptible species are the least abundant. {.tabset}
-
-### Species abundance at a given site
-
-```{r model1a, eval = TRUE}
-model_2b <- glmmTMB(logsppAbun ~ scientific + (1|Site),
-               data = d,
-               control = glmmTMBControl(optimizer = optim,
-                                        optArgs = list(method = "BFGS")))
-summary(model_2b)
-Anova(model_2b)
-
-```
-
-```{r m1a_plot, fig.width = 14, fig.height = 8, fig.fullwidth = TRUE, fig.fullheight = TRUE, echo = FALSE, eval = TRUE}
-spavg <- d %>%
-  dplyr::select(scientific, sppAbun, Site) # subset relevant data
-spavg <- aggregate(sppAbun ~ scientific, spavg, mean) # aggregate by Site, & spp. and summarise
-names(spavg)[names(spavg) == 'sppAbun'] <- 'avg_sppAbun'
-
-textcol <- d %>%
-  dplyr::select(scientific, susceptibility, Site) %>% # subset relevant data
-  mutate(Site = as.factor(Site)) %>%
-  group_by(scientific) %>%
-  mutate(No.Sites = length(unique(Site))) %>%
-  ungroup() %>%
-  dplyr::select(!Site) %>%
-  unique() %>%
-  left_join(., spavg, by = "scientific")
-
-
-m2b_predict <- ggpredict(model_2b, terms = "scientific") %>%
-  dplyr::rename("scientific" = "x",
-         "logsppAbun" = "predicted",
-         "expectedAbun" = "group") %>%
-  left_join(., textcol, by = "scientific") %>%
-  plyr::mutate(expectedAbun = exp(logsppAbun),
-               conf.low = exp(conf.low),
-               conf.high = exp(conf.high),
-               susceptibility = as.factor(susceptibility))
-
-
-# xhat <- TeX(r"($\hat{X}_{\textit{a}} =)") ## LaTeX formula: $\hat{X}_{\textit{a}} = ## THIS ALSO WORKS, BUT WILL TRY USING LATEX EXP BELOW
-TeXlabl <- glue::glue("$\\textbf{\\hat{x}_{\\textit{a}}} =}}", .open = "{{") # THIS WORKS
-xhat <- latex2exp::TeX(TeXlabl, output = "expression")
-
-# Create color coded labels for graph annotation
-# Resistant
-df1 <- m2b_predict %>%
-  filter(susceptibility == "1")
-
-# Tolerant
-df2 <- m2b_predict %>% 
-  filter(susceptibility == "2") 
-
-# Susceptible
-df3 <- m2b_predict %>% 
-  filter(susceptibility == "3") 
-
-
-m2b_plot <- ggplot(m2b_predict, aes(x = scientific, label = round(expectedAbun,0))) +
-  geom_point(aes(y = expectedAbun, colour = susceptibility), size = 5) +
-  # geom_point(aes(y = avg_sppAbun colour = susceptibility), size = 5, shape = 1) +
-  geom_errorbar(aes(ymin = conf.low, ymax = conf.high, colour = susceptibility), width = 0.5, linewidth = 1) +
-  geom_text(aes(colour = susceptibility, x = (as.numeric(scientific) + 0.05), y = conf.high + 3), 
-            size = 6, fontface = "bold", alpha = 0.75) +
-  annotate(geom = "text", x = (as.numeric(df1$scientific) + 0.1), y = (df1$conf.high + 1.5),
-           label = paste(xhat), parse = TRUE, size = 6, color = "#548078", alpha = 0.75) +
-  annotate(geom = "text", x = (as.numeric(df2$scientific) + 0.1), y = (df2$conf.high + 1.5),
-           label = paste(xhat), parse = TRUE, size = 6, color = "#E3A630", alpha = 0.75) +
-  annotate(geom = "text", x = (as.numeric(df3$scientific) + 0.1), y = (df3$conf.high + 1.5),
-           label = paste(xhat), parse = TRUE, size = 6, color = "#b30000", alpha = 0.75) +
-  coord_flip(clip = "off") +
-  ylab("Abundance") +
-  xlab("Species") + 
-  scale_colour_manual(name = "Susceptibility",
-                      values = c("#548078", "#E3A630", "#b30000"),
-                      labels = c("Resistant", "Tolerant", "Susceptible"),
-                      guide = "none") +
-  scale_y_continuous(labels = seq(0, 20, 5),
-                     breaks = seq(0, 20, 5),
-                     limits = c(0, 22)) +
-  scale_x_discrete(expand = expansion(mult = c(0, 0.01), add = c(1, 0.25))) +
-  ak_theme + theme(axis.text.y = element_text(face = "italic"),
-                   legend.position = "top",
-                   legend.key.size = unit(0, "cm"),
-                   legend.box = "horizontal",
-                   legend.text = element_text(margin = margin(r = 1, unit = "cm"), size = 24),
-                   legend.title = element_blank()) +
-  guides(colour = guide_legend(override.aes = list(color = c("#548078", "#E3A630", "#b30000"),
-                                                   shape = c(15, 15, 15),
-                                                   size = c(10, 10, 10))))
-
-
-m2b_plot
-
-```
-
-**Fig. 2b** Predicted species abundance ($\hat{\text{x}}_{\textit{a}}$) at a given site and sampling occurrence. There were significant differences in estimated densities among species at a site ($\chi^2$ = 1437.2; *p* \< 0.001) ranging from 1-15 individuals, depending on the species. Error bars represent 95% confidence intervals.
-
-### Host susceptibility and abundance
-
-```{r model1c, eval = TRUE}
-model_2c <- glmmTMB(logsppAbun ~ susceptibility + (1|Site),
-               data = d,
-               control = glmmTMBControl(optimizer = optim,
-                                        optArgs = list(method = "BFGS")))
-summary(model_2c)
-Anova(model_2c)
-```
-
-```{r m1c_plot, fig.width = 12, fig.height = 7, fig.fullwidth = TRUE, fig.fullheight = TRUE, echo = FALSE, eval = TRUE}
-m2c_predict <- ggpredict(model_2c, terms = c("susceptibility")) %>%
-  dplyr::rename("susceptibility" = "x",
-       "group" = "group") %>%
-  mutate(susceptibility = as.factor(susceptibility),
-         predicted = exp(as.numeric(predicted)),
-         conf.high = exp(as.numeric(conf.high)),
-         conf.low = exp(as.numeric(conf.low)))
-
-m2c_rug <- d %>%
-  group_by(susceptibility) %>%
-  summarise(n = n())
-
-m2c_predict <- merge(m2c_predict, m2c_rug)
-
-comparisons <- list(c())
-
-m2c_plot <- ggplot(m2c_predict, aes(susceptibility, predicted, color = susceptibility)) +
-  geom_point(size = 5) +
-  geom_errorbar(aes(ymin = conf.low, ymax = conf.high), width = 0.2, linewidth = 1) +
-  geom_richtext(aes(y = (conf.high + 1), label = paste0("n<span style = 'font-size:15pt'><sub>*obs*</sub> </span>= ", n)), 
-                alpha = 0.75, size = 8, label.size = NA, fill = NA, fontface = "bold", show.legend = F) +
-  annotate("text", x = 3, y = 6.75, label = "***", size = 10, fontface = "bold", 
-           colour = "#b30000") +
-  scale_x_discrete(labels = c("Resistant", "Tolerant", "Susceptible")) +
-  ylab("Species abundance") + 
-  xlab("Susceptibility level") +
-  scale_y_continuous(limits = c(0,9),
-                   breaks = seq(0, 8, 2)) +
-  scale_colour_manual(name = "Susceptibility",
-                      values = c("#548078", "#E3A630", "#b30000"),
-                      labels = c("Resistant", "Tolerant", "Susceptible"),
-                      guide = "none") + 
-  ak_theme + theme(axis.text.y = element_text(size = 26, face = "plain"),
-                   legend.position = "top",
-                   legend.key.size = unit(0, "cm"),
-                   legend.box = "horizontal",
-                   legend.text = element_text(margin = margin(r = 1, unit = "cm"), size = 24),
-                   legend.title = element_blank()) +
-  guides(colour = guide_legend(override.aes = list(color = c("#548078", "#E3A630", "#b30000"),
-                                                   shape = c(15, 15, 15),
-                                                   size = c(10, 10, 10))))
-
-m2c_plot
-
-```
-
-**Fig. 2c** Each species was categorized as *Resistant* (*i.e.*, no to low infection and no clinical signs of disease), *Tolerant* (*i.e.*, low infection loads with low or variable mortality) or *Susceptible* (i.e., High infection loads resulting in consistently high mortality). Error bars represent 95% confidence intervals and ${n}_{\textit{obs}}$ represents the total number of animals from our data in each susceptibility category. In total, there were 10 species classified as 'Resistant', 4 species classified as 'Tolerant', and 4 species classified as 'Susceptible." **Species abundance was significantly associated with susceptibility**, with Bsal-susceptible species found at **significantly higher densities** ($\chi^2$ = 641.43; *p* \< 0.001), than either Bsal-tolerant or Bsal-resistant species.
-
-# Testing the Dilution Effect Hypothesis {.tabset}
-
-## 'All species' cbind model
-
-```{r dataPrep, eval = TRUE, echo = FALSE}
-# Drop rows with NA vals in weather data
-dcbindScaled <- dcbind %>% 
-  tidyr::drop_na(., any_of(c(21:36))) %>%
-  filter(country == "Germany" | country == "Spain")
-
-```
-
-```{r allsppModel, eval = TRUE}
-m_all <- glmmTMB(cbind(nPos_all, nNeg_all) ~ richness*logsiteAbun +
-                    temp_d*sMoist_d + (1|scientific),
-                  data = dcbindScaled, family = "binomial", na.action = "na.fail",
-                  control = glmmTMBControl(optimizer = optim,
-                                           optArgs = list(method = "BFGS")))
-
-summary(m_all)
-Anova(m_all)
-```
-
-**Table 1.1** This table shows the results of the "all species" model. There was a significant negative interaction between richness and site abundance ($\chi^2$ = 4.1251, *p* = 0.042), meaning that as abundance increased, richness tended to decrease and vice versa.
-
-```{r Table1.1, echo = FALSE, eval = TRUE, comment = FALSE}
-tab_model(m_all, show.obs = T, collapse.ci = T, show.intercept = F, 
-          show.icc = F, show.ngroups = F, show.re.var = F, show.r2 = F,
-          dv.labels = "All species model", 
-          string.pred = "Terms",
-          string.p = "P-Value",
-          show.p = T,
-          pred.labels = nicelabs)
-
-```
-
-```{r m_allPlot, fig.width = 12, fig.height = 7, fig.fullwidth = TRUE, fig.fullheight = TRUE, echo = FALSE, eval = TRUE}
-##      Prevalence by Abundance & Richness Plots for 'All spp.' model
-m_all_predict <- ggpredict(m_all,  terms = c("richness", "logsiteAbun")) %>%
-  dplyr::rename("richness" = "x",
-         "logsiteAbun" = "group") %>%
-  plyr::mutate(richness = as.numeric(as.character(richness)),
-               logsiteAbun = as.numeric(as.character(logsiteAbun)),
-               # Convert scaled prediction to original data scale:
-               siteAbun = as.factor(round(exp(as.numeric(logsiteAbun)), 0)))
-
-
-m_all_plot <- ggplot(m_all_predict, aes(x = richness, y = predicted, 
-                                        colour = siteAbun)) +
-  geom_line(aes(linetype = siteAbun), linewidth = 1) +
-  geom_rug(data = dcbindScaled, aes(x = richness, y = 0), sides = "b", 
-           alpha = 0.5, position = position_jitter(width = 0.4, height = 0.1), 
-           inherit.aes = F, na.rm = T) +
-  labs(x = "Species richness",
-       y = "Bsal prevalence (%)",
-       linetype = "Site abundance",
-       colour = "Site abundance") +
-  #  geom_ribbon(aes(x = richness, ymin = conf.low, ymax = conf.high, 
-  #              fill = siteAbun), alpha = 0.2, colour = NA, show.legend = F) +
-  scale_linetype_manual(values = c("solid", "longdash", "twodash")) +
-  scale_color_grey(start = 0.8, end = 0.2) +
-  scale_x_continuous(labels = seq(0, 10, 1), 
-                     breaks = seq(0, 10, 1)) +
-  scale_y_continuous(labels = scales::percent_format(accuracy = 1), 
-                     breaks = seq(0, .05, 0.01), 
-                     limits = c(0, 0.05),
-                     minor_breaks = seq(0, 0.05, 0.01)) + 
-  ak_theme + theme(axis.text.y = element_text(face = "plain"),
-                   legend.text = element_text(margin = margin(r = 1, unit = "cm"), size = 20, hjust = -1),
-                   legend.title = element_text(size = 20, face = "bold", vjust = -0.5),
-                   legend.background = element_rect(fill = alpha ("white", 0.75), color = NA),
-                   legend.direction = "horizontal", 
-                   legend.position = c(0.5, 0.9),
-                   legend.spacing.y = unit(0, "cm")) + 
-    guides(colour = guide_legend("Site-level abundance", title.position = "top", title.hjust = 0.5),
-           linetype = guide_legend("Site-level abundance", title.position = "top", title.hjust = 0.5))
-
-
-m_all_plot
-
-```
-
-**Fig. 3a** When considering all species and controlling for temperature and soil moisture, we found that Bsal prevalence was negatively associated with richness and positively associated with abundance ($\chi^2$ = 4.1251; *p* = 0.042). Tick marks on the x-axis represent the number of sites corresponding to richness.
-
-## Fire salamander cbind model
-
-```{r FSModel, eval = TRUE}
-## Subset data even further to only include Fire Salamanders
-FSdata <- dcbindScaled %>%
-  filter(scientific == "Salamandra salamandra")
-
-m_FS <- glmmTMB(cbind(nPos_FS, nNeg_FS) ~  richness + logsiteAbun + temp_d*sMoist_d + (1|scientific),
-                data = FSdata, family = "binomial",
-                control = glmmTMBControl(optimizer = optim, 
-                                         optArgs = list(method = "BFGS")))
-
-
-summary(m_FS)
-Anova(m_FS)
-
-```
-
-**Table 1.2** This table shows the results of the "fire salamander" model. While there was no significant interaction between richness and site abundance, as with the "all species model," Bsal prevalence was negatively associated with species richness (*p* = 0.009), meaning that as richness increased, Bsal prevalence tended to decrease.
-
-```{r Table1.2, echo = FALSE, eval = TRUE, comment = FALSE}
-tab_model(m_FS, show.obs = T, collapse.ci = T, show.intercept = F, 
-          show.icc = F, show.ngroups = F, show.re.var = F, show.r2 = F,
-          dv.labels = "Fire salamander model",
-          string.pred = "Terms",
-          string.p = "P-Value",
-          show.p = T,
-          pred.labels = nicelabs)
-
-```
-
-```{r m_FSPlot, fig.width = 12, fig.height = 7, fig.fullwidth = TRUE, fig.fullheight = TRUE, echo = FALSE, eval = TRUE}
-##      Prevalence by Abundance & Richness Plots for 'fire salamander' model
-fs_img <- magick::image_read("firesalamander.png") # add image
-
-m_FS_predict <- ggpredict(m_FS,  terms = c("richness", "logsiteAbun")) %>%
-  dplyr::rename("richness" = "x",
-         "logsiteAbun" = "group") %>%
-  plyr::mutate(richness = as.numeric(as.character(richness)),
-               logsiteAbun = as.numeric(as.character(logsiteAbun)),
-               # Convert scaled prediction to original data scale:
-               siteAbun = as.factor(round(exp(as.numeric(logsiteAbun)), 0)))
-
-m_FS_plot <- ggplot(m_FS_predict, aes(x = richness , y = predicted, colour = siteAbun)) +
-  geom_line(aes(linetype = siteAbun), linewidth = 1) +
-  geom_rug(data = FSdata, aes(x = richness, y = 0), sides = "b", alpha = 0.5,
-           position = position_jitter(width = 0.4, height = 0.1), inherit.aes = F, na.rm = T) +
-  labs(x = "Species richness",
-       y = "Bsal prevalence (%)",
-       linetype = "Site abundance",
-       colour = "Site abundance") +
-  # geom_ribbon(aes(x = richness, ymin = conf.low, ymax = conf.high, fill = sppAbun), alpha = 0.2, colour = NA, show.legend = F) +
-  scale_linetype_manual(values = c("solid", "longdash", "twodash")) +
-  scale_color_grey(start = 0.8, end = 0.2) +
-  scale_x_continuous(labels = seq(0, 10, 1), 
-                     breaks = seq(0, 10, 1)) +
-  scale_y_continuous(labels = scales::percent_format(accuracy = 1), 
-                     breaks = seq(0, 0.12, 0.04), 
-                     limits = c(0, 0.12),
-                     minor_breaks = seq(0, 0.12, 0.01)) +
-   ak_theme + theme(axis.text.y = element_text(face = "plain"),
-                   legend.text = element_text(margin = margin(r = 1, unit = "cm"), size = 20, hjust = -1),
-                   legend.title = element_text(size = 20, face = "bold", vjust = -0.5),
-                   legend.background = element_rect(fill = alpha ("white", 0.75), color = NA),
-                   legend.direction = "horizontal", 
-                   legend.position = c(0.5, 0.9),
-                   legend.spacing.y = unit(0, "cm")) + 
-    guides(colour = guide_legend("Site-level abundance", title.position = "top", title.hjust = 0.5),
-           linetype = guide_legend("Site-level abundance", title.position = "top", title.hjust = 0.5))
-
-
-
-m_FS_plot_w_img <- ggdraw(m_FS_plot) + draw_image(image = magick::image_read("firesalamander.png"), x = 0.42, y = 0.35, scale = 0.2)
-
-m_FS_plot_w_img
-
-```
-
-**Fig. 3b** There was no significant interaction between richness and site abundance in the 'fire salamander only' model. However, both the main effects of richness ($\chi^2$ = 6.8165; *p* = 0.009) and site-abundance ($\chi^2$ = 7.9547; *p* = 0.004) were significant. Tick marks on the x-axis represent the number of sites where fire salamanders are present, corresponding to richness.
-
-# Conclusions

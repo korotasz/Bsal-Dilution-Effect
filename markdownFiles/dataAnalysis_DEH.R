@@ -36,8 +36,8 @@ pckgs <- c("ggsignif", # adds labels to significant groups
              "ggpubr", # stat_compare_means()
             "ggbreak", # create axis breaks in ggplots
              "gtools", # signif. value styling
-           # "ggiraphExtra", # make an interactive plot
-         # "kableExtra", # table styling
+     # "ggiraphExtra", # make an interactive plot
+       # "kableExtra", # table styling
              "ggtext", # for text type/arrangements w/ ggplot2
            "Rttf2pt1", # to use with the extrafont package
            "ggthemes", # contains 'scales', 'themes', and 'geoms' packages
@@ -249,9 +249,9 @@ countries <- worldmap %>%
 
 #### a. Data overview: Europe --------------------------------------------------
 eu <-  labs %>%
-  # filter(country == "Germany" | country == "Spain") %>%
-  mutate(total = sum(n)) %>%
-  plyr::mutate(label = paste("(n = ", n, ")", sep = ""))
+  filter(country == "Germany" | country == "Spain") %>%
+  # mutate(total = sum(n)) %>%
+  plyr::mutate(label = paste(country))
 
 
 map_bounds(-8, 15, 34, 56, crs = epsg27704)
@@ -261,8 +261,9 @@ europe_map <- ggplot() +
   geom_sf(data = countries, aes(fill = sovereignt), col = "gray40", fill = "#B2BEB5", show.legend = F) +
   geom_sf(data = obs, aes(geometry = jittered, fill = BsalDetected, shape = BsalDetected),
           alpha = 0.3, size = 4, stroke = 1, color = "gray30", show.legend = "point") +
-  # geom_sf_label(data = eu, aes(label = paste(label)),  nudge_x = 400000,  nudge_y = 430000,
-  #               size = 7, fontface = "bold", label.size = NA, alpha = 0.5) +
+  geom_sf_label(data = eu, aes(label = paste(label)),
+  # nudge_x = 400000,  nudge_y = 430000,
+                size = 7, fontface = "bold", label.size = NA, alpha = 0.5) +
   scale_fill_manual(values = c("gray40", "#b30000"), guide = "none") +
   scale_shape_manual(values = c(21, 24), guide = "none") +
   coord_sf(xlim = c(2903943, 5277030), # c(-9, 15)
