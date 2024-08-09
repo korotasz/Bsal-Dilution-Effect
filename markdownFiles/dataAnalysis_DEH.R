@@ -124,6 +124,16 @@ d <- read.csv("BsalData_all.csv", header = T, encoding = "UTF-8") %>%
          susceptibility = as.factor(susceptibility)) %>%
   relocate(c(logsppAbun, logsiteAbun), .after = sppAbun)
 
+## only data I am confident about
+d_conf <- read.csv("BsalData_OK.csv", header = T, encoding = "UTF-8") %>%
+  # transform vars
+  mutate(logsppAbun = log(sppAbun + 1),
+         logsiteAbun = log(siteAbun + 1),
+         scientific = as.factor(scientific),
+         susceptibility = as.factor(susceptibility)) %>%
+  relocate(c(logsppAbun, logsiteAbun), .after = sppAbun)
+
+
 
 ## 'dcbind' dataset is what will be used to run our models
 dcbind_all <- read.csv("Bsal_cbind_all.csv", header = T, encoding = "UTF-8") %>%
@@ -132,9 +142,23 @@ dcbind_all <- read.csv("Bsal_cbind_all.csv", header = T, encoding = "UTF-8") %>%
          logsiteAbun = log(siteAbun + 1),
          scientific = as.factor(scientific),
          susceptibility = as.factor(susceptibility)) %>%
-  relocate(c(logsppAbun, logsiteAbun), .after = sppAbun) %>%
+  relocate(c(logsppAbun, logsiteAbun), .after = sppAbun)
+
+
+## 'dcbind' dataset is what will be used to run our models
+dcbind_conf <- read.csv("Bsal_cbind_OK.csv", header = T, encoding = "UTF-8") %>%
+  # transform vars
+  mutate(logsppAbun = log(sppAbun + 1),
+         logsiteAbun = log(siteAbun + 1),
+         scientific = as.factor(scientific),
+         susceptibility = as.factor(susceptibility)) %>%
+  relocate(c(logsppAbun, logsiteAbun), .after = sppAbun)
+
+
 ## Data prep for cbind models: drop rows with NA vals in weather data & scale relevant vars
 #   bio1_wc = "annual mean temperature" | bio12_wc = annual precipitation
+dcbindScaled <- dcbind_all %>%
+  filter(continent == "Europe") %>%
   tidyr::drop_na(., any_of(c("temp_d", "sMoist_d", "tmin_wc:bio1_wc", "bio12_wc"))) %>%
   mutate_at(c("temp_d", "sMoist_d",
               "bio1_wc", "bio12_wc", "tavg_wc", "prec_wc"),
@@ -142,6 +166,18 @@ dcbind_all <- read.csv("Bsal_cbind_all.csv", header = T, encoding = "UTF-8") %>%
   mutate(year = year(date),
          locality = case_when(is.na(locality) ~ ADM2,
                               TRUE ~ locality))
+
+
+dcbindScaled_conf <- dcbind_conf %>%
+  filter(continent == "Europe") %>%
+  tidyr::drop_na(., any_of(c("temp_d", "sMoist_d", "tmin_wc:bio1_wc", "bio12_wc"))) %>%
+  mutate_at(c("temp_d", "sMoist_d",
+              "bio1_wc", "bio12_wc", "tavg_wc", "prec_wc"),
+            ~(scale(., center = T, scale = T %>% as.numeric))) %>%
+  mutate(year = year(date),
+         locality = case_when(is.na(locality) ~ ADM2,
+                              TRUE ~ locality))
+
 
 ## Define general ggplot theme for plot uniformity -----------------------------
 ak_theme <- theme_ipsum(base_family = "Segoe UI Light") +
@@ -261,9 +297,8 @@ europe_map <- ggplot() +
   geom_sf(data = countries, aes(fill = sovereignt), col = "gray40", fill = "#B2BEB5", show.legend = F) +
   geom_sf(data = obs, aes(geometry = jittered, fill = BsalDetected, shape = BsalDetected),
           alpha = 0.3, size = 4, stroke = 1, color = "gray30", show.legend = "point") +
-  geom_sf_label(data = eu, aes(label = paste(label)),
-  # nudge_x = 400000,  nudge_y = 430000,
-                size = 7, fontface = "bold", label.size = NA, alpha = 0.5) +
+  # geom_sf_label(data = eu, aes(label = paste(label)),
+  #               size = 7, fontface = "bold", label.size = NA, alpha = 0.5) +
   scale_fill_manual(values = c("gray40", "#b30000"), guide = "none") +
   scale_shape_manual(values = c(21, 24), guide = "none") +
   coord_sf(xlim = c(2903943, 5277030), # c(-9, 15)
@@ -383,43 +418,36 @@ esp_map
 # ggsave("Spain.pdf", esp_map, device = cairo_pdf, path = file.path(dir, figpath, "/maps"),
 #        width = 2000, height = 1500, scale = 2, units = "px", dpi = 300, limitsize = F)
 
-
+rm(deu_map, esp_map, eu, europe, europe_map, g, labs, mapLabels, obs, worldmap, sampSize,
+   countries, country_lookup, s)
 ## II. Testing assumptions of the dilution effect hypothesis -------------------
 ### a. Hosts differ in their reservoir competence. -----------------------------
-# sampSize <- d %>%
-#   dplyr::select(country, Site, Lat, Lon,  diseaseTested,
-#                 BsalDetected, BdDetected, individualCount) %>%
-#   plyr::mutate(BsalDetected = as.factor(dplyr::recode(BsalDetected,
-#                                                       "1" = "Bsal positive",
-#                                                       "0" = "Bsal negative"))) %>%
-#   group_by(country, Site, BsalDetected) %>%
-#   summarise(n = n()) %=>%
-#   ungroup()
-
-host_summary <- dcbind_all %>%
-  subset(., select = c(country, locality, Site, posSite, date, scientific, susceptibility, nPos_all, nNeg_all))
+sampSize <- d %>%
+  # filter(continent == "Europe") %>%
+  subset(., select = c(country, Site, Lat, Lon,  diseaseTested,
+                BsalDetected, BdDetected, individualCount)) %>%
+  plyr::mutate(BsalDetected = as.factor(dplyr::recode(BsalDetected,
+                                                      "1" = "Bsal positive",
+                                                      "0" = "Bsal negative"))) %>%
+  group_by(country, Site, BsalDetected) %>%
+  summarise(n = n()) %>%
+  ungroup()
 
 
-deu_hosts <- host_summary %>%
+deu <- sampSize %>%
   filter(country == "Germany") %>%
-  subset(., select = c(country, locality, Site, scientific, susceptibility, nPos_all, nNeg_all)) %>%
-  rename(Pos = nPos_all, Neg = nNeg_all) %>%
-  group_by(country, locality, Site, scientific, susceptibility) %>%
-  summarise(totalPos = sum(Pos),
-         totalNeg = sum(Neg),
-         total = sum(Pos, Neg)) %>%
-  distinct()
-#   plyr::mutate(BsalDetected = as.factor(dplyr::recode(BsalDetected,
-#                                                       "Bsal positive" = "Pos", "Bsal negative" = "Neg"))) %>%
-#   pivot_wider(names_from = BsalDetected, id_cols = Site, values_from = n) %>%
-#   mutate(Pos = case_when(is.na(Pos) ~ 0,
-#                          TRUE ~ Pos),
-#          Neg = case_when(is.na(Neg) ~ 0,
-#                          TRUE ~ Neg)) %>%
-#   group_by(Site) %>%
-#   mutate(pop = sum(Pos, Neg),
-#          sitePrev = round((Pos/pop)*100, 2))
-# print(deu$sitePrev) # observed prevalence at each site
+  plyr::mutate(BsalDetected = as.factor(dplyr::recode(BsalDetected,
+                                                      "Bsal positive" = "Pos", "Bsal negative" = "Neg"))) %>%
+  pivot_wider(names_from = BsalDetected, id_cols = Site, values_from = n) %>%
+  mutate(Pos = case_when(is.na(Pos) ~ 0,
+                         TRUE ~ Pos),
+         Neg = case_when(is.na(Neg) ~ 0,
+                         TRUE ~ Neg)) %>%
+  group_by(Site) %>%
+  mutate(pop = sum(Pos, Neg),
+         sitePrev = round((Pos/pop)*100, 2))
+print(deu$sitePrev) # observed prevalence at each site
+
 
 esp <- sampSize %>%
   filter(country == "Spain") %>%
@@ -435,43 +463,16 @@ esp <- sampSize %>%
          sitePrev = round((Pos/pop)*100, 2))
 print(esp$sitePrev) # observed prevalence at each site
 
-chn <- sampSize %>%
-  filter(country == "China") %>%
-  plyr::mutate(BsalDetected = as.factor(dplyr::recode(BsalDetected,
-                                                      "Bsal positive" = "Pos", "Bsal negative" = "Neg"))) %>%
-  pivot_wider(names_from = BsalDetected, id_cols = Site, values_from = n) %>%
-  mutate(Pos = case_when(is.na(Pos) ~ 0,
-                         TRUE ~ Pos),
-         Neg = case_when(is.na(Neg) ~ 0,
-                         TRUE ~ Neg)) %>%
-  group_by(Site) %>%
-  mutate(pop = sum(Pos, Neg),
-         sitePrev = round((Pos/pop)*100, 2))
-print(chn$sitePrev) # observed prevalence at each site
-
-vnm <- sampSize %>%
-  filter(country == "Vietnam") %>%
-  plyr::mutate(BsalDetected = as.factor(dplyr::recode(BsalDetected,
-                                                      "Bsal positive" = "Pos", "Bsal negative" = "Neg"))) %>%
-  pivot_wider(names_from = BsalDetected, id_cols = Site, values_from = n) %>%
-  mutate(Pos = case_when(is.na(Pos) ~ 0,
-                         TRUE ~ Pos),
-         Neg = case_when(is.na(Neg) ~ 0,
-                         TRUE ~ Neg)) %>%
-  group_by(Site) %>%
-  mutate(pop = sum(Pos, Neg),
-         sitePrev = round((Pos/pop)*100, 2))
-print(vnm$sitePrev) # observed prevalence at each site
-
 ## Observed species prevalence
 prev <- d %>%
+  filter(posSite == "1") %>%
   group_by(scientific) %>%
   mutate(ncas_Bsal = sum(BsalDetected == 1), # number of observed Bsal+ cases
          npop = sum(individualCount)) %>% # pop size (total # individuals/spp.)
   drop_na(date) %>%
   ungroup() %>%
   mutate(Bsal_prev = (ncas_Bsal/npop)*100) %>% # prevalence as a percentage
-  dplyr::select(scientific, susceptibility, ncas_Bsal, Bsal_prev, npop) %>%
+  subset(., select = c(scientific, susceptibility, ncas_Bsal, Bsal_prev, npop)) %>%
   unique() %>%
   dplyr::mutate(row_id = row_number()) %>%
   relocate(row_id, .before = scientific)
@@ -500,34 +501,41 @@ bsal_bayesci <-  bsal_bayesci %>%
 
 # Join with original 'prev' dataset, so we can plot actual vs expected
 prev <- prev %>%
-  left_join(., bsal_ci, by = "row_id") %>%
+ left_join(., bsal_ci, by = "row_id") %>%
   left_join(., bsal_bayesci, by = "row_id") %>%
   plyr::arrange(., scientific)
 
 prev_bayes_plot <- ggplot(prev, aes(scientific, sapply(mean, FUN = function(x) ifelse(x == 0.0, round(x, 0), x)),
-                                          colour = susceptibility,
-                                          label = paste(mean,"%"))) +
-  geom_point(size = 5) +
-  geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.5, linewidth = 1) +
-  geom_text(aes(colour = susceptibility, x = (as.numeric(scientific) + 0.05), y = upper + 5),
-            size = 6, fontface = "bold", alpha = 0.75) +
+                                      colour = susceptibility,
+                                      label = paste(mean,"%"))) +
+  geom_point(aes(colour = susceptibility), size = 5) +
+  geom_errorbar(aes(ymin = lower, ymax = upper, colour = susceptibility), width = 0.5, linewidth = 1, show.legend = F) +
+  geom_text(aes(colour = susceptibility, x = (c(1:25) + 0.05), y = upper + 5),
+            size = 6, fontface = "bold", alpha = 0.75, show.legend = F) +
+  labs(x = "Species",
+       y = "Disease prevalence (%)") +
   coord_flip(clip = "off") +
-  ylab("Disease prevalence (%)") +
-  xlab("Species") +
   scale_colour_manual(name = "Susceptibility",
                       values = c("#548078", "#E3A630", "#b30000"),
                       labels = c("Resistant", "Tolerant", "Susceptible"),
                       guide = "none") +
-  scale_y_continuous(labels = seq(0, 50, 10),
-                     breaks = seq(0, 50, 10),
-                     limits = c(0, 51)) +
+  scale_y_continuous(labels = seq(0, 100, 20),
+                     breaks = seq(0, 100, 20),
+                     limits = c(0, 100)) +
   scale_x_discrete(expand = expansion(mult = c(0, 0.01), add = c(1, 0.25))) +
   ak_theme + theme(axis.text.y = element_text(face = "italic"),
-                   legend.title = element_blank())
+                   legend.position = "top",
+                   legend.key.size = unit(0, "cm"),
+                   legend.box = "horizontal",
+                   legend.text = element_text(margin = margin(r = 1, unit = "cm"), size = 24),
+                   legend.title = element_blank()) +
+  guides(colour = guide_legend(override.aes = list(color = c("#548078", "#E3A630", "#b30000"),
+                                                   shape = c(15, 15, 15),
+                                                   size = c(10, 10, 10))))
 
 prev_bayes_plot
 
-ggsave("prev_bayes_plot.pdf", prev_bayes_plot, device = cairo_pdf, path = file.path(dir, figpath),
+ggsave("prev_bayes_plot_all.pdf", prev_bayes_plot, device = cairo_pdf, path = file.path(dir, figpath),
          width = 2600, height = 2000, scale = 1.5, units = "px", dpi = 300, limitsize = F)
 
 # rm(prev_bayes_plot, bsal_bayesci, bsal_ci, chn, deu, esp, prev, sampSize, vnm)
@@ -535,23 +543,40 @@ ggsave("prev_bayes_plot.pdf", prev_bayes_plot, device = cairo_pdf, path = file.p
 ### b. The most susceptible species are the most abundant ----------------------
 #### > All data ----------------------------------------------------------------
 ##### i. Including fire salamanders --------------------------------------------
+d_noFS <- d %>%
+  filter(scientific != "Salamandra salamandra")
+
+d_eu_noFS <- d %>%
+  filter(continent == "Europe" & scientific != "Salamandra salamandra")
+
+d_conf_noFS <- d_conf %>%
+  filter(scientific != "Salamandra salamandra")
+
+d_conf_eu <- d_conf %>%
+  filter(continent == "Europe")
+
+d_conf_eu_noFS <- d_conf %>%
+  filter(continent == "Europe" & scientific != "Salamandra salamandra")
+
 m2b <- glmmTMB(logsppAbun ~ scientific + (1|Site),
-               data = d,
+               data = d_conf_eu,
                control = glmmTMBControl(optimizer = optim,
                                         optArgs = list(method = "BFGS")))
 
 
 summary(m2b)
 Anova(m2b)
-## post-hoc test for multiple comparison of means
-# m2b_post.hoc <- glht(m2b, linfct = mcp(scientific = "Tukey")) %>%
-#   broom::tidy() %>%
-#   dplyr::select(-(term)) %>%
-#   dplyr::mutate(signif = gtools::stars.pval(adj.p.value)) %>%
-#   kableExtra::kbl(digits = 2) %>%
-#   kableExtra::kable_styling()
-#
-# m2bpost.hoc
+# post-hoc test for multiple comparison of means
+
+
+m2b_post.hoc <- glht(m2b, linfct = mcp(scientific = "Tukey")) %>%
+  broom::tidy() %>%
+  dplyr::select(-(term)) %>%
+  dplyr::mutate(signif = gtools::stars.pval(adj.p.value)) %>%
+  kableExtra::kbl(digits = 2) %>%
+  kableExtra::kable_styling()
+
+m2bpost.hoc
 
 # Subset observed abundance
 obs_abun <- d %>%
@@ -640,7 +665,7 @@ m2b_plot
 rm(df1, df2, df3, obs_abun, m2b_plot, m2b_predict, textcol)
 ##### ii. Excluding fire salamanders -------------------------------------------
 m2b_noFS <- glmmTMB(logsppAbun ~ scientific + (1|Site),
-                    data = filter(d, scientific != "Salamandra salamandra"),
+                    data = filter(d_conf, scientific != "Salamandra salamandra"),
                     control = glmmTMBControl(optimizer = optim,
                                              optArgs = list(method = "BFGS")))
 
@@ -1020,7 +1045,7 @@ m2c_plot
 rm(m2c_predict, m2c_plot, mcLabs, n, post.hoc)
 ##### ii. Excluding fire salamanders -------------------------------------------
 m2c_noFS <- glmmTMB(logsppAbun ~ susceptibility + (1|Site),
-                    data = filter(d, scientific != "Salamandra salamandra"),
+                    data = filter(d_eu, scientific != "Salamandra salamandra"),
                     control = glmmTMBControl(optimizer = optim,
                                              optArgs = list(method = "BFGS")))
 summary(m2c_noFS)
@@ -1345,7 +1370,7 @@ ggsave("fig2_combined.pdf", fig2combined, device = cairo_pdf, path = file.path(d
 ##### > Relative richness (derived from dataset) -------------------------------
 all_EU_RR <- glmmTMB(cbind(nPos_all, nNeg_all) ~ richness*logsiteAbun +
                     temp_d*sMoist_d + (1|country) + (1|scientific),
-                  data = filter(dcbindScaled, continent == "Europe"),
+                  data = filter(dcbindScaled_conf, continent == "Europe"),
                   family = "binomial", na.action = "na.fail",
                   control = glmmTMBControl(optimizer = optim,
                                            optArgs = list(method = "BFGS")))
@@ -1425,6 +1450,18 @@ testSpatialAutocorrelation(recalc.resid2, x = coords$Lon, y = coords$Lat)
 # observed = 0.0204701, expected = -0.0035336, sd = 0.0211485, p-value = 0.2564
 # alternative hypothesis: Distance-based autocorrelation
 
+##### > Locality richness (From collaborators) -------------------------------
+all_EU_LR <- glmmTMB(cbind(nPos_all, nNeg_all) ~ locality_rich*logsiteAbun +
+                       temp_d*sMoist_d + (1|country) + (1|scientific),
+                     data = filter(dcbindScaled_conf, continent == "Europe"),
+                     family = "binomial", na.action = "na.fail",
+                     control = glmmTMBControl(optimizer = optim,
+                                              optArgs = list(method = "BFGS")))
+
+summary(all_EU_LR)
+Anova(all_EU_LR) # richness:logsiteAbun and soil moisture are highly significant
+
+
 
 ##  Prevalence by Abundance & Richness Plots for 'All spp.' model
 all_EU_RR_pred <- ggpredict(all_EU_RR,  terms = c("richness", "logsiteAbun")) %>%
@@ -1467,7 +1504,7 @@ all_EU_RR_plot
 ##### > IUCN Richness estimate --------------------------------------------------
 EU_iucnR <- glmmTMB(cbind(nPos_all, nNeg_all) ~ iucn_rich*logsiteAbun +
                        temp_d*sMoist_d + (1|country) + (1|scientific),
-                     data = filter(dcbindScaled, continent == "Europe"),
+                     data = filter(dcbindScaled_conf, continent == "Europe"),
                     family = "binomial", na.action = "na.fail",
                     control = glmmTMBControl(optimizer = optim,
                                              optArgs = list(method = "BFGS")))
@@ -1645,7 +1682,8 @@ testSpatialAutocorrelation(recalc.resid, x = coords$Lon, y = coords$Lat)
 ## Fire salamanders are still accounted for in site abundance and richness calculations
 all_RR_noFS <- glmmTMB(cbind(nPos_all_noFS, nNeg_all_noFS) ~ richness*logsiteAbun +
                          temp_d*sMoist_d + (1|scientific),
-                       data = dcbindScaled, family = "binomial", na.action = "na.fail",
+                       data = filter(dcbindScaled_conf, scientific != "Salamandra salamandra"),
+                       family = "binomial", na.action = "na.fail",
                        control = glmmTMBControl(optimizer = optim,
                                                 optArgs = list(method = "BFGS")))
 
@@ -1662,11 +1700,24 @@ recalc.resid_noFS <- recalculateResiduals(resid_noFS, group = coords$Site)
 testSpatialAutocorrelation(recalc.resid_noFS, x = coords$Lon, y = coords$Lat)
 # not spatially autocorrelated
 
+#### > Locality richness (From collaborators) -------------------------------
+all_LR_noFS <- glmmTMB(cbind(nPos_all_noFS, nNeg_all_noFS) ~ locality_rich*logsiteAbun +
+                       temp_d*sMoist_d + (1|country) + (1|scientific),
+                     data = filter(dcbindScaled_conf, scientific != "Salamandra salamandra"),
+                     family = "binomial", na.action = "na.fail",
+                     control = glmmTMBControl(optimizer = optim,
+                                              optArgs = list(method = "BFGS")))
+
+summary(all_LR_noFS)
+Anova(all_LR_noFS) # richness:logsiteAbun and soil moisture are highly significant
+
+
 #### > IUCN Richness estimate + no FS prevalence -------------------------------
 all_iucnR_noFS <- glmmTMB(cbind(nPos_all_noFS, nNeg_all_noFS) ~ iucn_rich*logsiteAbun +
                        temp_d*sMoist_d + (1|scientific),
-                     data = dcbindScaled, family = "binomial", na.action = "na.fail",
-                     control = glmmTMBControl(optimizer = optim,
+                       data = filter(dcbindScaled_conf, scientific != "Salamandra salamandra"),
+                       family = "binomial", na.action = "na.fail",
+                       control = glmmTMBControl(optimizer = optim,
                                               optArgs = list(method = "BFGS")))
 
 summary(all_iucnR_noFS)
@@ -1724,8 +1775,11 @@ webshot2::webshot(file.path(dir, figpath, "m_all.html"),
 FSdata <- dcbindScaled %>%
   filter(scientific == "Salamandra salamandra")
 
-m_FS <- glmmTMB(cbind(nPos_FS, nNeg_FS) ~  richness * logsiteAbun + temp_d*sMoist_d + (1|scientific),
-                data = FSdata, family = "binomial",
+FSdata_conf <- dcbindScaled_conf %>%
+  filter(scientific == "Salamandra salamandra")
+
+m_FS <- glmmTMB(cbind(nPos_FS, nNeg_FS) ~  richness * logsiteAbun + temp_d*sMoist_d + (1|country) + (1|scientific),
+                data = FSdata_conf, family = "binomial",
                 control = glmmTMBControl(optimizer = optim,
                                          optArgs = list(method = "BFGS")))
 
@@ -1734,8 +1788,18 @@ summary(m_FS)
 Anova(m_FS)
 
 
-m_FS_iucnR <- glmmTMB(cbind(nPos_FS, nNeg_FS) ~  iucn_rich * logsiteAbun + temp_d*sMoist_d + (1|scientific),
-                data = FSdata, family = "binomial",
+m_FS_LR <- glmmTMB(cbind(nPos_FS, nNeg_FS) ~  locality_rich * logsiteAbun + temp_d*sMoist_d + (1|country) + (1|scientific),
+                data = FSdata_conf, family = "binomial",
+                control = glmmTMBControl(optimizer = optim,
+                                         optArgs = list(method = "BFGS")))
+
+
+summary(m_FS_LR)
+Anova(m_FS_LR)
+
+
+m_FS_iucnR <- glmmTMB(cbind(nPos_FS, nNeg_FS) ~  iucn_rich * logsiteAbun + temp_d*sMoist_d + (1|country) + (1|scientific),
+                data = FSdata_conf, family = "binomial",
                 control = glmmTMBControl(optimizer = optim,
                                          optArgs = list(method = "BFGS")))
 

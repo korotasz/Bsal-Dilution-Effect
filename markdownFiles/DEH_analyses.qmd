@@ -238,13 +238,17 @@ rstatix::identify_outliers(posSites_reduced, nPos_all) # Be aware of the extreme
 
 Europe polygons were re-projected to EPSG:27704 (WGS84/Equi7 Europe) for mapping purposes. These projections were made as a part of [a larger project](https://github.com/TUW-GEO/Equi7Grid)/[paper](https://doi.org/10.1016/j.cageo.2014.07.005) to optimize handling remote-sensing data, with each continent having their own centroid.
 
-```{r}
-#| label: staticMaps
-#| echo: false
-#| fig-show: hold
- 
+```{r, staticMaps, fig.width = 24, fig.height = 12, fig.fullwidth = TRUE, fig.fullheight = TRUE, echo = FALSE}
+#| label: fig-staticMaps
+#| fig-cap: "Currently known Bsal distribution in Europe."
+#| fig-subcap:
+#|   - "The overall distribution of Bsal(+) and Bsal(-) cases in our data across Europe after data processing."
+#|   - "Germany had the greatest "
+#| layout-ncol: 2
+#| column: page
 
 
+This map displays **A)** the overall distribution of Bsal positive and negative cases in our data across Europe after processing. **B)** England (n = 84) had the fewest observations by far, while both **C)** Spain (n = 759) and **D)** Germany (n = 4641) had the greatest number of observations out of any countries in our data set, followed by **E)** Switzerland (n = 510). The only countries that had positive cases of Bsal were Germany and Spain with a reported Bsal prevalence of 5.93% and 23.98%, respectively. Although Switzerland and England did not record any positive cases of Bsal, we still included the data in our initial set of analyses when testing prerequisites of the Dilution Effect Hypothesis (Section 2.2.1 below).
 epsg27704 <- crs('+proj=aeqd +lat_0=53 +lon_0=24 +x_0=5837287.81977 +y_0=2121415.69617 +datum=WGS84 +units=m +no_defs')
 
 obs <- d %>%
@@ -298,6 +302,7 @@ countries <- worldmap %>%
 
 
 # Europe -----------------------------------------------------------------------
+
 eu <-  labs %>%
   filter(country == "Germany" | country == "Spain") %>%
   # mutate(total = sum(n)) %>%
@@ -418,8 +423,445 @@ esp_map <- ggplot() +
                                                  alpha = c(1, 1))))
 
 
+::: {layout="[[1,1], [1]]"}
 
+
+:::
+```
+
+These maps display @staticMaps-1 plots in @fig-mpg show the relationship between city and highway mileage for 38 popular models of cars.
+In @fig-mpg-1 the points are colored by the number of cylinders while in @fig-mpg-2 the points are colored by engine displacement.
+
+
+
+## Testing assumptions of the Dilution Effect Hypothesis
+
+### Host species differ in their reservoir competence.
+
+```{r}
+#| label: hostCompetence
+#| fig-width: 100%
+#| echo: false
+#| eval: true
+#| fig-cap: Point estimates for Bsal prevalence by species, presented as a percent. Confidence intervals were calculated using  *Hmisc* package in R. Susceptibility to Bsal is denoted here by color (Red = 'Susceptible'; Yellow = 'Tolerant'; Blue = 'Resistant'). There is variation in both host susceptibility and disease prevalence among species in our data set.
+
+
+## Observed species prevalence
+prev <- d %>%
+  group_by(scientific) %>%
+  mutate(ncas_Bsal = sum(BsalDetected == 1), # number of observed Bsal+ cases
+         npop = sum(individualCount)) %>% # pop size (total # individuals/spp.)
+  drop_na(date) %>%
+  ungroup() %>%
+  mutate(Bsal_prev = (ncas_Bsal/npop)*100) %>% # prevalence as a percentage
+  dplyr::select(scientific, susceptibility, ncas_Bsal, Bsal_prev, npop) %>%
+  unique() %>%
+  dplyr::mutate(row_id = row_number()) %>%
+  relocate(row_id, .before = scientific)
+
+
+# Use binconf function to sample binomial distribution and get CIs for prevalence
+bsal_ci <- binconf(prev$ncas_Bsal, prev$npop, method = "exact", return.df = T)
+bsal_bayesci <- binom::binom.bayes(x = prev$ncas_Bsal, n = prev$npop, type = "highest", tol = 1e-9, maxit = 1000)
+
+# Convert binconf point estimates + CIs to percentages for plotting
+bsal_ci <-  bsal_ci %>%
+  plyr::mutate(PointEst = round((PointEst*100), 1),
+               Lower = round((Lower*100), 1),
+               Upper = round((Upper*100), 1)) %>%
+  dplyr::mutate(row_id = row_number()) %>%
+  relocate(row_id, .before = PointEst)
+
+# Convert bayesian estimates + CIs to percentages for plotting
+bsal_bayesci <-  bsal_bayesci %>%
+  plyr::mutate(mean = round((mean*100), 1),
+               lower = round((lower*100), 1),
+               upper = round((upper*100), 1)) %>%
+  dplyr::mutate(row_id = row_number()) %>%
+  relocate(row_id, .before = method)
+
+
+# Join with original 'prev' dataset, so we can plot actual vs expected
+prev <- prev %>%
+  left_join(., bsal_ci, by = "row_id") %>%
+  left_join(., bsal_bayesci, by = "row_id") %>%
+  plyr::arrange(., scientific)
+
+prev_bayes_plot <- ggplot(prev, aes(scientific, sapply(mean, FUN = function(x) ifelse(x == 0.0, round(x, 0), x)),
+                                          colour = susceptibility,
+                                          label = paste(mean,"%"))) +
+  geom_point(size = 5) +
+  geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.5, linewidth = 1) +
+  geom_text(aes(colour = susceptibility, x = (as.numeric(scientific) + 0.05), y = upper + 5),
+            size = 6, fontface = "bold", alpha = 0.75) +
+  coord_flip(clip = "off") +
+  ylab("Disease prevalence (%)") +
+  xlab("Species") +
+  scale_colour_manual(name = "Susceptibility",
+                      values = c("#548078", "#E3A630", "#b30000"),
+                      labels = c("Resistant", "Tolerant", "Susceptible"),
+                      guide = "none") +
+  scale_y_continuous(labels = seq(0, 50, 10),
+                     breaks = seq(0, 50, 10),
+                     limits = c(0, 51)) +
+  scale_x_discrete(expand = expansion(mult = c(0, 0.01), add = c(1, 0.25))) +
+  ak_theme + theme(axis.text.y = element_text(face = "italic"),
+                   legend.title = element_blank())
+
+prev_bayes_plot
 
 ```
 
 
+### The most susceptible species are also the most abundant, while the least susceptible species are the least abundant. {.tabset}
+
+#### Species abundance at a given site
+
+```{r model1a, eval = TRUE}
+model_2b <- glmmTMB(logsppAbun ~ scientific + (1|Site),
+               data = d,
+               control = glmmTMBControl(optimizer = optim,
+                                        optArgs = list(method = "BFGS")))
+summary(model_2b)
+Anova(model_2b)
+
+```
+
+```{r m1a_plot, fig.width = 14, fig.height = 8, fig.fullwidth = TRUE, fig.fullheight = TRUE, echo = FALSE, eval = TRUE}
+spavg <- d %>%
+  dplyr::select(scientific, sppAbun, Site) # subset relevant data
+spavg <- aggregate(sppAbun ~ scientific, spavg, mean) # aggregate by Site, & spp. and summarise
+names(spavg)[names(spavg) == 'sppAbun'] <- 'avg_sppAbun'
+
+textcol <- d %>%
+  dplyr::select(scientific, susceptibility, Site) %>% # subset relevant data
+  mutate(Site = as.factor(Site)) %>%
+  group_by(scientific) %>%
+  mutate(No.Sites = length(unique(Site))) %>%
+  ungroup() %>%
+  dplyr::select(!Site) %>%
+  unique() %>%
+  left_join(., spavg, by = "scientific")
+
+
+m2b_predict <- ggpredict(model_2b, terms = "scientific") %>%
+  dplyr::rename("scientific" = "x",
+         "logsppAbun" = "predicted",
+         "expectedAbun" = "group") %>%
+  left_join(., textcol, by = "scientific") %>%
+  plyr::mutate(expectedAbun = exp(logsppAbun),
+               conf.low = exp(conf.low),
+               conf.high = exp(conf.high),
+               susceptibility = as.factor(susceptibility))
+
+
+# xhat <- TeX(r"($\hat{X}_{\textit{a}} =)") ## LaTeX formula: $\hat{X}_{\textit{a}} = ## THIS ALSO WORKS, BUT WILL TRY USING LATEX EXP BELOW
+TeXlabl <- glue::glue("$\\textbf{\\hat{x}_{\\textit{a}}} =}}", .open = "{{") # THIS WORKS
+xhat <- latex2exp::TeX(TeXlabl, output = "expression")
+
+# Create color coded labels for graph annotation
+# Resistant
+df1 <- m2b_predict %>%
+  filter(susceptibility == "1")
+
+# Tolerant
+df2 <- m2b_predict %>% 
+  filter(susceptibility == "2") 
+
+# Susceptible
+df3 <- m2b_predict %>% 
+  filter(susceptibility == "3") 
+
+
+m2b_plot <- ggplot(m2b_predict, aes(x = scientific, label = round(expectedAbun,0))) +
+  geom_point(aes(y = expectedAbun, colour = susceptibility), size = 5) +
+  # geom_point(aes(y = avg_sppAbun colour = susceptibility), size = 5, shape = 1) +
+  geom_errorbar(aes(ymin = conf.low, ymax = conf.high, colour = susceptibility), width = 0.5, linewidth = 1) +
+  geom_text(aes(colour = susceptibility, x = (as.numeric(scientific) + 0.05), y = conf.high + 3), 
+            size = 6, fontface = "bold", alpha = 0.75) +
+  annotate(geom = "text", x = (as.numeric(df1$scientific) + 0.1), y = (df1$conf.high + 1.5),
+           label = paste(xhat), parse = TRUE, size = 6, color = "#548078", alpha = 0.75) +
+  annotate(geom = "text", x = (as.numeric(df2$scientific) + 0.1), y = (df2$conf.high + 1.5),
+           label = paste(xhat), parse = TRUE, size = 6, color = "#E3A630", alpha = 0.75) +
+  annotate(geom = "text", x = (as.numeric(df3$scientific) + 0.1), y = (df3$conf.high + 1.5),
+           label = paste(xhat), parse = TRUE, size = 6, color = "#b30000", alpha = 0.75) +
+  coord_flip(clip = "off") +
+  ylab("Abundance") +
+  xlab("Species") + 
+  scale_colour_manual(name = "Susceptibility",
+                      values = c("#548078", "#E3A630", "#b30000"),
+                      labels = c("Resistant", "Tolerant", "Susceptible"),
+                      guide = "none") +
+  # scale_y_continuous(labels = seq(0, 20, 5),
+  #                    breaks = seq(0, 20, 5),
+  #                    limits = c(0, 22)) +
+  # scale_x_discrete(expand = expansion(mult = c(0, 0.01), add = c(1, 0.25))) +
+  ak_theme + theme(axis.text.y = element_text(face = "italic"),
+                   legend.position = "top",
+                   legend.key.size = unit(0, "cm"),
+                   legend.box = "horizontal",
+                   legend.text = element_text(margin = margin(r = 1, unit = "cm"), size = 24),
+                   legend.title = element_blank()) +
+  guides(colour = guide_legend(override.aes = list(color = c("#548078", "#E3A630", "#b30000"),
+                                                   shape = c(15, 15, 15),
+                                                   size = c(10, 10, 10))))
+
+
+m2b_plot
+
+```
+
+**Fig. 2b** Predicted species abundance ($\hat{\text{x}}_{\textit{a}}$) at a given site and sampling occurrence. There were significant differences in estimated densities among species at a site ($\chi^2$ = 1437.2; *p* \< 0.001) ranging from 1-15 individuals, depending on the species. Error bars represent 95% confidence intervals.
+
+### Host susceptibility and abundance
+
+```{r model1c, eval = TRUE}
+model_2c <- glmmTMB(logsppAbun ~ susceptibility + (1|Site),
+               data = d,
+               control = glmmTMBControl(optimizer = optim,
+                                        optArgs = list(method = "BFGS")))
+summary(model_2c)
+Anova(model_2c)
+```
+
+```{r m1c_plot, fig.width = 12, fig.height = 7, fig.fullwidth = TRUE, fig.fullheight = TRUE, echo = FALSE, eval = TRUE}
+m2c_predict <- ggpredict(model_2c, terms = c("susceptibility")) %>%
+  dplyr::rename("susceptibility" = "x",
+       "group" = "group") %>%
+  mutate(susceptibility = as.factor(susceptibility),
+         predicted = exp(as.numeric(predicted)),
+         conf.high = exp(as.numeric(conf.high)),
+         conf.low = exp(as.numeric(conf.low)))
+
+m2c_rug <- d %>%
+  group_by(susceptibility) %>%
+  summarise(n = n())
+
+m2c_predict <- merge(m2c_predict, m2c_rug)
+
+comparisons <- list(c())
+
+m2c_plot <- ggplot(m2c_predict, aes(susceptibility, predicted, color = susceptibility)) +
+  geom_point(size = 5) +
+  geom_errorbar(aes(ymin = conf.low, ymax = conf.high), width = 0.2, linewidth = 1) +
+  geom_richtext(aes(y = (conf.high + 1), label = paste0("n<span style = 'font-size:15pt'><sub>*obs*</sub> </span>= ", n)), 
+                alpha = 0.75, size = 8, label.size = NA, fill = NA, fontface = "bold", show.legend = F) +
+  annotate("text", x = 3, y = 6.75, label = "***", size = 10, fontface = "bold", 
+           colour = "#b30000") +
+  scale_x_discrete(labels = c("Resistant", "Tolerant", "Susceptible")) +
+  ylab("Species abundance") + 
+  xlab("Susceptibility level") +
+  scale_y_continuous(limits = c(0,9),
+                   breaks = seq(0, 8, 2)) +
+  scale_colour_manual(name = "Susceptibility",
+                      values = c("#548078", "#E3A630", "#b30000"),
+                      labels = c("Resistant", "Tolerant", "Susceptible"),
+                      guide = "none") + 
+  ak_theme + theme(axis.text.y = element_text(size = 26, face = "plain"),
+                   legend.position = "top",
+                   legend.key.size = unit(0, "cm"),
+                   legend.box = "horizontal",
+                   legend.text = element_text(margin = margin(r = 1, unit = "cm"), size = 24),
+                   legend.title = element_blank()) +
+  guides(colour = guide_legend(override.aes = list(color = c("#548078", "#E3A630", "#b30000"),
+                                                   shape = c(15, 15, 15),
+                                                   size = c(10, 10, 10))))
+
+m2c_plot
+
+```
+
+**Fig. 2c** Each species was categorized as *Resistant* (*i.e.*, no to low infection and no clinical signs of disease), *Tolerant* (*i.e.*, low infection loads with low or variable mortality) or *Susceptible* (i.e., High infection loads resulting in consistently high mortality). Error bars represent 95% confidence intervals and ${n}_{\textit{obs}}$ represents the total number of animals from our data in each susceptibility category. In total, there were 10 species classified as 'Resistant', 4 species classified as 'Tolerant', and 4 species classified as 'Susceptible." **Species abundance was significantly associated with susceptibility**, with Bsal-susceptible species found at **significantly higher densities** ($\chi^2$ = 641.43; *p* \< 0.001), than either Bsal-tolerant or Bsal-resistant species.
+
+# Testing the Dilution Effect Hypothesis {.tabset}
+
+## 'All species' cbind model
+
+```{r dataPrep, eval = TRUE, echo = FALSE}
+# Drop rows with NA vals in weather data
+dcbindScaled <- dcbind %>% 
+  tidyr::drop_na(., any_of(c(21:36))) %>%
+  filter(country == "Germany" | country == "Spain")
+
+```
+
+```{r allsppModel, eval = TRUE}
+m_all <- glmmTMB(cbind(nPos_all, nNeg_all) ~ richness*logsiteAbun +
+                    temp_d*sMoist_d + (1|scientific),
+                  data = dcbindScaled, family = "binomial", na.action = "na.fail",
+                  control = glmmTMBControl(optimizer = optim,
+                                           optArgs = list(method = "BFGS")))
+
+summary(m_all)
+Anova(m_all)
+```
+
+**Table 1.1** This table shows the results of the "all species" model. There was a significant negative interaction between richness and site abundance ($\chi^2$ = 4.1251, *p* = 0.042), meaning that as abundance increased, richness tended to decrease and vice versa.
+
+```{r Table1.1, echo = FALSE, eval = TRUE, comment = FALSE}
+tab_model(m_all, show.obs = T, collapse.ci = T, show.intercept = F, 
+          show.icc = F, show.ngroups = F, show.re.var = F, show.r2 = F,
+          dv.labels = "All species model", 
+          string.pred = "Terms",
+          string.p = "P-Value",
+          show.p = T,
+          pred.labels = nicelabs)
+
+```
+
+```{r m_allPlot, fig.width = 12, fig.height = 7, fig.fullwidth = TRUE, fig.fullheight = TRUE, echo = FALSE, eval = TRUE}
+##      Prevalence by Abundance & Richness Plots for 'All spp.' model
+m_all_predict <- ggpredict(m_all,  terms = c("richness", "logsiteAbun")) %>%
+  dplyr::rename("richness" = "x",
+         "logsiteAbun" = "group") %>%
+  plyr::mutate(richness = as.numeric(as.character(richness)),
+               logsiteAbun = as.numeric(as.character(logsiteAbun)),
+               # Convert scaled prediction to original data scale:
+               siteAbun = as.factor(round(exp(as.numeric(logsiteAbun)), 0)))
+
+
+m_all_plot <- ggplot(m_all_predict, aes(x = richness, y = predicted, 
+                                        colour = siteAbun)) +
+  geom_line(aes(linetype = siteAbun), linewidth = 1) +
+  geom_rug(data = dcbindScaled, aes(x = richness, y = 0), sides = "b", 
+           alpha = 0.5, position = position_jitter(width = 0.4, height = 0.1), 
+           inherit.aes = F, na.rm = T) +
+  labs(x = "Species richness",
+       y = "Bsal prevalence (%)",
+       linetype = "Site abundance",
+       colour = "Site abundance") +
+  #  geom_ribbon(aes(x = richness, ymin = conf.low, ymax = conf.high, 
+  #              fill = siteAbun), alpha = 0.2, colour = NA, show.legend = F) +
+  scale_linetype_manual(values = c("solid", "longdash", "twodash")) +
+  scale_color_grey(start = 0.8, end = 0.2) +
+  scale_x_continuous(labels = seq(0, 10, 1), 
+                     breaks = seq(0, 10, 1)) +
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1), 
+                     breaks = seq(0, .05, 0.01), 
+                     limits = c(0, 0.05),
+                     minor_breaks = seq(0, 0.05, 0.01)) + 
+  ak_theme + theme(axis.text.y = element_text(face = "plain"),
+                   legend.text = element_text(margin = margin(r = 1, unit = "cm"), size = 20, hjust = -1),
+                   legend.title = element_text(size = 20, face = "bold", vjust = -0.5),
+                   legend.background = element_rect(fill = alpha ("white", 0.75), color = NA),
+                   legend.direction = "horizontal", 
+                   legend.position = c(0.5, 0.9),
+                   legend.spacing.y = unit(0, "cm")) + 
+    guides(colour = guide_legend("Site-level abundance", title.position = "top", title.hjust = 0.5),
+           linetype = guide_legend("Site-level abundance", title.position = "top", title.hjust = 0.5))
+
+
+m_all_plot
+
+```
+
+**Fig. 3a** When considering all species and controlling for temperature and soil moisture, we found that Bsal prevalence was negatively associated with richness and positively associated with abundance ($\chi^2$ = 4.1251; *p* = 0.042). Tick marks on the x-axis represent the number of sites corresponding to richness.
+
+## Fire salamander cbind model
+
+```{r FSModel, eval = TRUE}
+## Subset data even further to only include Fire Salamanders
+FSdata <- dcbindScaled %>%
+  filter(scientific == "Salamandra salamandra")
+
+m_FS <- glmmTMB(cbind(nPos_FS, nNeg_FS) ~  richness + logsiteAbun + temp_d*sMoist_d + (1|scientific),
+                data = FSdata, family = "binomial",
+                control = glmmTMBControl(optimizer = optim, 
+                                         optArgs = list(method = "BFGS")))
+
+
+summary(m_FS)
+Anova(m_FS)
+
+```
+
+**Table 1.2** This table shows the results of the "fire salamander" model. While there was no significant interaction between richness and site abundance, as with the "all species model," Bsal prevalence was negatively associated with species richness (*p* = 0.009), meaning that as richness increased, Bsal prevalence tended to decrease.
+
+```{r Table1.2, echo = FALSE, eval = TRUE, comment = FALSE}
+tab_model(m_FS, show.obs = T, collapse.ci = T, show.intercept = F, 
+          show.icc = F, show.ngroups = F, show.re.var = F, show.r2 = F,
+          dv.labels = "Fire salamander model",
+          string.pred = "Terms",
+          string.p = "P-Value",
+          show.p = T,
+          pred.labels = nicelabs)
+
+```
+
+```{r m_FSPlot, fig.width = 12, fig.height = 7, fig.fullwidth = TRUE, fig.fullheight = TRUE, echo = FALSE, eval = TRUE}
+##      Prevalence by Abundance & Richness Plots for 'fire salamander' model
+fs_img <- magick::image_read("firesalamander.png") # add image
+
+m_FS_predict <- ggpredict(m_FS,  terms = c("richness", "logsiteAbun")) %>%
+  dplyr::rename("richness" = "x",
+         "logsiteAbun" = "group") %>%
+  plyr::mutate(richness = as.numeric(as.character(richness)),
+               logsiteAbun = as.numeric(as.character(logsiteAbun)),
+               # Convert scaled prediction to original data scale:
+               siteAbun = as.factor(round(exp(as.numeric(logsiteAbun)), 0)))
+
+m_FS_plot <- ggplot(m_FS_predict, aes(x = richness , y = predicted, colour = siteAbun)) +
+  geom_line(aes(linetype = siteAbun), linewidth = 1) +
+  geom_rug(data = FSdata, aes(x = richness, y = 0), sides = "b", alpha = 0.5,
+           position = position_jitter(width = 0.4, height = 0.1), inherit.aes = F, na.rm = T) +
+  labs(x = "Species richness",
+       y = "Bsal prevalence (%)",
+       linetype = "Site abundance",
+       colour = "Site abundance") +
+  # geom_ribbon(aes(x = richness, ymin = conf.low, ymax = conf.high, fill = sppAbun), alpha = 0.2, colour = NA, show.legend = F) +
+  scale_linetype_manual(values = c("solid", "longdash", "twodash")) +
+  scale_color_grey(start = 0.8, end = 0.2) +
+  scale_x_continuous(labels = seq(0, 10, 1), 
+                     breaks = seq(0, 10, 1)) +
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1), 
+                     breaks = seq(0, 0.12, 0.04), 
+                     limits = c(0, 0.12),
+                     minor_breaks = seq(0, 0.12, 0.01)) +
+   ak_theme + theme(axis.text.y = element_text(face = "plain"),
+                   legend.text = element_text(margin = margin(r = 1, unit = "cm"), size = 20, hjust = -1),
+                   legend.title = element_text(size = 20, face = "bold", vjust = -0.5),
+                   legend.background = element_rect(fill = alpha ("white", 0.75), color = NA),
+                   legend.direction = "horizontal", 
+                   legend.position = c(0.5, 0.9),
+                   legend.spacing.y = unit(0, "cm")) + 
+    guides(colour = guide_legend("Site-level abundance", title.position = "top", title.hjust = 0.5),
+           linetype = guide_legend("Site-level abundance", title.position = "top", title.hjust = 0.5))
+
+
+
+m_FS_plot_w_img <- ggdraw(m_FS_plot) + draw_image(image = magick::image_read("firesalamander.png"), x = 0.42, y = 0.35, scale = 0.2)
+
+m_FS_plot_w_img
+
+```
+
+**Fig. 3b** There was no significant interaction between richness and site abundance in the 'fire salamander only' model. However, both the main effects of richness ($\chi^2$ = 6.8165; *p* = 0.009) and site-abundance ($\chi^2$ = 7.9547; *p* = 0.004) were significant. Tick marks on the x-axis represent the number of sites where fire salamanders are present, corresponding to richness.
+
+# Conclusions
+
+# Multiple Figures
+
+```{r}
+#| label: fig-mpg
+#| fig-cap: "City and highway mileage for 38 popular models of cars."
+#| fig-subcap:
+#|   - "Color by number of cylinders"
+#|   - "Color by engine displacement, in liters"
+#| layout-ncol: 2
+#| column: page
+
+ggplot(mpg, aes(x = hwy, y = cty, color = cyl)) +
+  geom_point(alpha = 0.5, size = 2) +
+  scale_color_viridis_c() +
+  theme_minimal()
+
+ggplot(mpg, aes(x = hwy, y = cty, color = displ)) +
+  geom_point(alpha = 0.5, size = 2) +
+  scale_color_viridis_c(option = "E") +
+  theme_minimal()
+
+```
+
+{{< iconify exploding-head size=Huge >}}
+
+The plots in @fig-mpg show the relationship between city and highway mileage for 38 popular models of cars. In @fig-mpg-1 the points are colored by the number of cylinders while in @fig-mpg-2 the points are colored by engine displacement.
