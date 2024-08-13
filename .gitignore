@@ -1,4 +1,7 @@
 markdownFiles/figures/*
+markdownFiles/_extensions/*
+markdownFiles/DEH_analyses_files/*
+
 weatherSampling/weatherProcessing_monthly.R
 
 .Rhistory

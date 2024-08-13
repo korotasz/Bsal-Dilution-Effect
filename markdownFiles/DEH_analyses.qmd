@@ -22,6 +22,16 @@ format:
       - text: Project Repository
         icon: github
         href: https://github.com/korotasz/Chapter-2-Analyses
+      - text: Google Drive
+        icon: google
+        href: https://drive.google.com/drive/u/0/folders/0AJIVquSfTYvKUk9PVA
+    other-links: 
+      - text: NASA GLDAS
+        icon: database-down
+        href: https://tinyurl.com/yc3ubfn3
+      - text: WorldClim (v2.1)
+        icon: database-down
+        href: https://www.worldclim.org/data/index.html#
     toc: true
     toc-location: left
     toc_depth: 6
@@ -225,7 +235,7 @@ posSites_reduced <- posSites %>%
   mutate(year = as.numeric(year),
          month = as.numeric(month),
          day = as.numeric(day)) %>% 
-  subset(., select = c(Site, year, month, day, richness, iucn_rich, locality_rich, logsppAbun, logsiteAbun, nPos_all, nNeg_all, temp_d, sMoist_d, bio1_wc, bio12_wc))
+  subset(., select = c(Site, richness, iucn_rich, locality_rich, logsppAbun, logsiteAbun, nPos_all, nNeg_all, temp_d, sMoist_d, bio1_wc, bio12_wc))
 
 ## Call boxplot function to check for outliers
 DataExplorer::plot_boxplot(posSites_reduced, by = "Site")
@@ -248,8 +258,8 @@ Europe polygons were re-projected to EPSG:27704 (WGS84/Equi7 Europe) for mapping
 #| column: page
 
 
-This map displays **A)** the overall distribution of Bsal positive and negative cases in our data across Europe after processing. **B)** England (n = 84) had the fewest observations by far, while both **C)** Spain (n = 759) and **D)** Germany (n = 4641) had the greatest number of observations out of any countries in our data set, followed by **E)** Switzerland (n = 510). The only countries that had positive cases of Bsal were Germany and Spain with a reported Bsal prevalence of 5.93% and 23.98%, respectively. Although Switzerland and England did not record any positive cases of Bsal, we still included the data in our initial set of analyses when testing prerequisites of the Dilution Effect Hypothesis (Section 2.2.1 below).
-epsg27704 <- crs('+proj=aeqd +lat_0=53 +lon_0=24 +x_0=5837287.81977 +y_0=2121415.69617 +datum=WGS84 +units=m +no_defs')
+# This map displays **A)** the overall distribution of Bsal positive and negative cases in our data across Europe after processing. **B)** England (n = 84) had the fewest observations by far, while both **C)** Spain (n = 759) and **D)** Germany (n = 4641) had the greatest number of observations out of any countries in our data set, followed by **E)** Switzerland (n = 510). The only countries that had positive cases of Bsal were Germany and Spain with a reported Bsal prevalence of 5.93% and 23.98%, respectively. Although Switzerland and England did not record any positive cases of Bsal, we still included the data in our initial set of analyses when testing prerequisites of the Dilution Effect Hypothesis (Section 2.2.1 below).
+# epsg27704 <- crs('+proj=aeqd +lat_0=53 +lon_0=24 +x_0=5837287.81977 +y_0=2121415.69617 +datum=WGS84 +units=m +no_defs')
 
 obs <- d %>%
   dplyr::select(country, ADM0, Lat, Lon, BsalDetected, individualCount) %>%
@@ -423,10 +433,10 @@ esp_map <- ggplot() +
                                                  alpha = c(1, 1))))
 
 
-::: {layout="[[1,1], [1]]"}
-
-
-:::
+# ::: {layout="[[1,1], [1]]"}
+# esp_map
+# 
+# :::
 ```
 
 These maps display @staticMaps-1 plots in @fig-mpg show the relationship between city and highway mileage for 38 popular models of cars.

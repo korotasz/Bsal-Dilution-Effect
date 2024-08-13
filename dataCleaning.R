@@ -486,10 +486,10 @@ rm(sppNames)
 dir.create(file.path(dir, shppath)) # Will give warning if path already exists
 setwd(file.path(dir, shppath))
 
-## 1. Use 'raster' pckg to get shapefiles for each country. We are using EPSG:4326 (WGS 84), as these are lat/lon data
+## 1. Use 'geodata' pckg to get shapefiles for each country. We are using EPSG:4326 (WGS 84), as these are lat/lon data
 #     that are presented in decimal degrees.
 polygon <- geodata::gadm(country = c('BEL', 'CHE', 'CHN', 'DEU', 'ESP', 'GBR', 'VNM'), level = 2,
-             path = file.path(dir, shppath), version = "latest", resolution = 1) %>%
+                         path = file.path(dir, shppath), version = "latest", resolution = 1) %>%
   sf::st_as_sf(., crs = 4326) %>%
   st_cast(., "MULTIPOLYGON")
 
