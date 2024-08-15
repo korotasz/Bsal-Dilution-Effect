@@ -261,186 +261,188 @@ Europe polygons were re-projected to EPSG:27704 (WGS84/Equi7 Europe) for mapping
 # This map displays **A)** the overall distribution of Bsal positive and negative cases in our data across Europe after processing. **B)** England (n = 84) had the fewest observations by far, while both **C)** Spain (n = 759) and **D)** Germany (n = 4641) had the greatest number of observations out of any countries in our data set, followed by **E)** Switzerland (n = 510). The only countries that had positive cases of Bsal were Germany and Spain with a reported Bsal prevalence of 5.93% and 23.98%, respectively. Although Switzerland and England did not record any positive cases of Bsal, we still included the data in our initial set of analyses when testing prerequisites of the Dilution Effect Hypothesis (Section 2.2.1 below).
 # epsg27704 <- crs('+proj=aeqd +lat_0=53 +lon_0=24 +x_0=5837287.81977 +y_0=2121415.69617 +datum=WGS84 +units=m +no_defs')
 
-obs <- d %>%
-  dplyr::select(country, ADM0, Lat, Lon, BsalDetected, individualCount) %>%
-  plyr::mutate(BsalDetected = as.factor(dplyr::recode(BsalDetected,
-                                                      "1" = "Bsal positive",
-                                                      "0" = "Bsal negative"))) %>%
-  st_as_sf(., coords = c("Lon", "Lat"), crs = 4326) %>%
-  mutate(jittered = sf::st_jitter(geometry, 0.25)) %>%
-  arrange(BsalDetected)
-
-
-# summarise data
-sampSize <- obs %>%
-  group_by(country) %>%
-  summarise(n = n())
-
-# Get the coordinates of each country
-country_lookup <- read.csv("markdownFiles/countries.csv", stringsAsFactors = F)
-names(country_lookup)[1] <- "country_code"
-
-
-# Combine summarised data
-mapLabels <- merge(x = sampSize, y = country_lookup,
-                   by.x = "country", by.y = "name", all.x = T) %>%
-  st_as_sf(., coords = c("longitude", "latitude"), crs = 4326)
-
-# Obtain world map
-worldmap <- ne_countries(scale = "medium", type = "map_units", returnclass = "sf") %>%
-  st_transform(., crs = 4326)
-
-# Summarise the number of observations from each Bsal+ country and plot individual points on a map.
-obs <- obs %>%
-  filter(country == "Germany" | country == "Spain") %>%
-  st_transform(., crs = epsg27704)
-
-# Create country labels for maps
-labs <- mapLabels %>%
-  filter(country == "Germany" | country == "Spain") %>%
-  st_transform(geometry, crs = epsg27704)
-
-# Subset country polygons for base maps
-europe <- worldmap %>%
-  filter(continent == "Europe" & !name %in% c("Russia")) %>%
-  st_transform(., crs = epsg27704)
-
-# Subset polygons for Bsal+ countries
-countries <- worldmap %>%
-  filter(sovereignt %in% c("Spain", "Germany")) %>%
-  st_transform(., crs = epsg27704)
+# obs <- d %>%
+#   dplyr::select(country, ADM0, Lat, Lon, BsalDetected, individualCount) %>%
+#   plyr::mutate(BsalDetected = as.factor(dplyr::recode(BsalDetected,
+#                                                       "1" = "Bsal positive",
+#                                                       "0" = "Bsal negative"))) %>%
+#   st_as_sf(., coords = c("Lon", "Lat"), crs = 4326) %>%
+#   mutate(jittered = sf::st_jitter(geometry, 0.25)) %>%
+#   arrange(BsalDetected)
+# 
+# 
+# # summarise data
+# sampSize <- obs %>%
+#   group_by(country) %>%
+#   summarise(n = n())
+# 
+# # Get the coordinates of each country
+# country_lookup <- read.csv("markdownFiles/countries.csv", stringsAsFactors = F)
+# names(country_lookup)[1] <- "country_code"
+# 
+# 
+# # Combine summarised data
+# mapLabels <- merge(x = sampSize, y = country_lookup,
+#                    by.x = "country", by.y = "name", all.x = T) %>%
+#   st_as_sf(., coords = c("longitude", "latitude"), crs = 4326)
+# 
+# # Obtain world map
+# worldmap <- ne_countries(scale = "medium", type = "map_units", returnclass = "sf") %>%
+#   st_transform(., crs = 4326)
+# 
+# # Summarise the number of observations from each Bsal+ country and plot individual points on a map.
+# obs <- obs %>%
+#   filter(country == "Germany" | country == "Spain") %>%
+#   st_transform(., crs = epsg27704)
+# 
+# # Create country labels for maps
+# labs <- mapLabels %>%
+#   filter(country == "Germany" | country == "Spain") %>%
+#   st_transform(geometry, crs = epsg27704)
+# 
+# # Subset country polygons for base maps
+# europe <- worldmap %>%
+#   filter(continent == "Europe" & !name %in% c("Russia")) %>%
+#   st_transform(., crs = epsg27704)
+# 
+# # Subset polygons for Bsal+ countries
+# countries <- worldmap %>%
+#   filter(sovereignt %in% c("Spain", "Germany")) %>%
+#   st_transform(., crs = epsg27704)
 
 
 # Europe -----------------------------------------------------------------------
 
-eu <-  labs %>%
-  filter(country == "Germany" | country == "Spain") %>%
-  # mutate(total = sum(n)) %>%
-  plyr::mutate(label = paste(country))
-
-
-#map_bounds(-8, 15, 34, 56, crs = epsg27704)
-
-europe_map <- ggplot() +
-  geom_sf(data = europe, col = "gray40", fill = "#ECECEC", show.legend = F) +
-  geom_sf(data = countries, aes(fill = sovereignt), col = "gray40", fill = "#B2BEB5", show.legend = F) +
-  geom_sf(data = obs, aes(geometry = jittered, fill = BsalDetected, shape = BsalDetected),
-          alpha = 0.3, size = 4, stroke = 1, color = "gray30", show.legend = "point") +
-  geom_sf_label(data = eu, aes(label = paste(label)),
-                size = 7, fontface = "bold", label.size = NA, alpha = 0.5) +
-  scale_fill_manual(values = c("gray40", "#b30000"), guide = "none") +
-  scale_shape_manual(values = c(21, 24), guide = "none") +
-  coord_sf(xlim = c(2903943, 5277030), # c(-9, 15)
-           ylim = c(625595.8, 2491036)) + # c(34, 56)
-  annotation_scale(location = "br", width_hint = 0.5, text_cex = 2.5, text_face = "plain",
-                   pad_y = unit(0.5, "cm")) +
-  annotation_north_arrow(location = "bl", which_north = "true",
-                         height = unit(2.5, "cm"), width = unit(2.5, "cm"),
-                         pad_x = unit(0.25, "cm"), pad_y = unit(0.25, "cm"),
-                         style = north_arrow_fancy_orienteering(line_width = 1.8, text_size = 18)) +
-  ak_theme + theme(legend.title = element_blank(),
-                   legend.position = "top",
-                   legend.spacing = unit(1, 'cm'),
-                   legend.key.size = unit(1,"cm"),
-                   legend.text = element_text(size = 38, hjust = 0,
-                                              margin = margin(l = 5, r = 30, unit = "pt")),
-                   axis.text.x = element_text(size = 38, angle = 45, vjust = 0.5),
-                   axis.title.x = element_blank(),
-                   axis.text.y = element_text(size = 38, face = "plain"),
-                   axis.title.y = element_blank()) +
-  guides(fill = guide_legend(override.aes = list(color = c("gray40", "#b30000"),
-                                                 shape = c(21, 24),
-                                                 size = c(7, 7),
-                                                 alpha = c(1, 1))))
-
-
-europe_map
+# eu <-  labs %>%
+#   filter(country == "Germany" | country == "Spain") %>%
+#   # mutate(total = sum(n)) %>%
+#   plyr::mutate(label = paste(country))
+# 
+# 
+# #map_bounds(-8, 15, 34, 56, crs = epsg27704)
+# 
+# europe_map <- ggplot() +
+#   geom_sf(data = europe, col = "gray40", fill = "#ECECEC", show.legend = F) +
+#   geom_sf(data = countries, aes(fill = sovereignt), col = "gray40", fill = "#B2BEB5", show.legend = F) +
+#   geom_sf(data = obs, aes(geometry = jittered, fill = BsalDetected, shape = BsalDetected),
+#           alpha = 0.3, size = 4, stroke = 1, color = "gray30", show.legend = "point") +
+#   geom_sf_label(data = eu, aes(label = paste(label)),
+#                 size = 7, fontface = "bold", label.size = NA, alpha = 0.5) +
+#   scale_fill_manual(values = c("gray40", "#b30000"), guide = "none") +
+#   scale_shape_manual(values = c(21, 24), guide = "none") +
+#   coord_sf(xlim = c(2903943, 5277030), # c(-9, 15)
+#            ylim = c(625595.8, 2491036)) + # c(34, 56)
+#   annotation_scale(location = "br", width_hint = 0.5, text_cex = 2.5, text_face = "plain",
+#                    pad_y = unit(0.5, "cm")) +
+#   annotation_north_arrow(location = "bl", which_north = "true",
+#                          height = unit(2.5, "cm"), width = unit(2.5, "cm"),
+#                          pad_x = unit(0.25, "cm"), pad_y = unit(0.25, "cm"),
+#                          style = north_arrow_fancy_orienteering(line_width = 1.8, text_size = 18)) +
+#   ak_theme + theme(legend.title = element_blank(),
+#                    legend.position = "top",
+#                    legend.spacing = unit(1, 'cm'),
+#                    legend.key.size = unit(1,"cm"),
+#                    legend.text = element_text(size = 38, hjust = 0,
+#                                               margin = margin(l = 5, r = 30, unit = "pt")),
+#                    axis.text.x = element_text(size = 38, angle = 45, vjust = 0.5),
+#                    axis.title.x = element_blank(),
+#                    axis.text.y = element_text(size = 38, face = "plain"),
+#                    axis.title.y = element_blank()) +
+#   guides(fill = guide_legend(override.aes = list(color = c("gray40", "#b30000"),
+#                                                  shape = c(21, 24),
+#                                                  size = c(7, 7),
+#                                                  alpha = c(1, 1))))
+# 
+# 
+# europe_map
 # Germany ----------------------------------------------------------------------
-g <- mapLabels %>% filter(country == "Germany") %>%
-  plyr::mutate(label = paste(country, " (n = ", n, ")", sep = ""))
-
-#map_bounds(7.5, 14.5, 46.5, 55.5, crs = epsg27704)
-
-deu_map <- ggplot() +
-  geom_sf(data = europe, col = "gray40", fill = "#ECECEC", show.legend = F) +
-  geom_sf(data = countries, aes(fill = sovereignt), col = "gray40", fill = "#B2BEB5", show.legend = F) +
-  # geom_sf_label(data = g, aes(label = paste(label)),  nudge_x = 400000,  nudge_y = 430000,
-  #               size = 14, fontface = "bold", label.size = NA, alpha = 0.5) +
-  geom_sf(data = obs, aes(geometry = jittered, fill = BsalDetected, shape = BsalDetected),
-          alpha = 0.3, size = 4, stroke = 1, color = "gray30", show.legend = "point") +
-  scale_fill_manual(values = c("gray40", "#b30000"), guide = "none") +
-  scale_shape_manual(values = c(21, 24), guide = "none") +
-  coord_sf(xlim = c(4452875, 5238551), # c(7.5, 14.5)
-           ylim = c(1540088, 2435744)) + # c(46.5, 55.5)
-  annotation_scale(location = "br", width_hint = 0.5, text_cex = 2.5, text_face = "plain",
-                   pad_y = unit(0.5, "cm")) +
-  annotation_north_arrow(location = "bl", which_north = "true",
-                         height = unit(2.5, "cm"), width = unit(2.5, "cm"),
-                         pad_x = unit(0.25, "cm"), pad_y = unit(0.25, "cm"),
-                         style = north_arrow_fancy_orienteering(line_width = 1.8, text_size = 18)) +
-  ak_theme + theme(legend.title = element_blank(),
-                   legend.position = "top",
-                   legend.spacing = unit(1, "cm"), # Space legend labels
-                   legend.key.size = unit(1,"cm"),
-                   legend.text = element_text(size = 32, hjust = 0,
-                                              margin = margin(l = 5, r = 30, unit = "pt")),
-                   axis.text.x = element_text(size = 32, angle = 45, vjust = 0.5),
-                   axis.title.x = element_blank(),
-                   axis.text.y = element_text(size = 32, face = "plain"),
-                   axis.title.y = element_blank()) +
-  guides(fill = guide_legend(override.aes = list(color = c("gray40", "#b30000"),
-                                                 shape = c(21, 24),
-                                                 size = c(5, 5),
-                                                 alpha = c(1, 1))))
+# g <- mapLabels %>% filter(country == "Germany") %>%
+#   plyr::mutate(label = paste(country, " (n = ", n, ")", sep = ""))
+# 
+# #map_bounds(7.5, 14.5, 46.5, 55.5, crs = epsg27704)
+# 
+# deu_map <- ggplot() +
+#   geom_sf(data = europe, col = "gray40", fill = "#ECECEC", show.legend = F) +
+#   geom_sf(data = countries, aes(fill = sovereignt), col = "gray40", fill = "#B2BEB5", show.legend = F) +
+#   # geom_sf_label(data = g, aes(label = paste(label)),  nudge_x = 400000,  nudge_y = 430000,
+#   #               size = 14, fontface = "bold", label.size = NA, alpha = 0.5) +
+#   geom_sf(data = obs, aes(geometry = jittered, fill = BsalDetected, shape = BsalDetected),
+#           alpha = 0.3, size = 4, stroke = 1, color = "gray30", show.legend = "point") +
+#   scale_fill_manual(values = c("gray40", "#b30000"), guide = "none") +
+#   scale_shape_manual(values = c(21, 24), guide = "none") +
+#   coord_sf(xlim = c(4452875, 5238551), # c(7.5, 14.5)
+#            ylim = c(1540088, 2435744)) + # c(46.5, 55.5)
+#   annotation_scale(location = "br", width_hint = 0.5, text_cex = 2.5, text_face = "plain",
+#                    pad_y = unit(0.5, "cm")) +
+#   annotation_north_arrow(location = "bl", which_north = "true",
+#                          height = unit(2.5, "cm"), width = unit(2.5, "cm"),
+#                          pad_x = unit(0.25, "cm"), pad_y = unit(0.25, "cm"),
+#                          style = north_arrow_fancy_orienteering(line_width = 1.8, text_size = 18)) +
+#   ak_theme + theme(legend.title = element_blank(),
+#                    legend.position = "top",
+#                    legend.spacing = unit(1, "cm"), # Space legend labels
+#                    legend.key.size = unit(1,"cm"),
+#                    legend.text = element_text(size = 32, hjust = 0,
+#                                               margin = margin(l = 5, r = 30, unit = "pt")),
+#                    axis.text.x = element_text(size = 32, angle = 45, vjust = 0.5),
+#                    axis.title.x = element_blank(),
+#                    axis.text.y = element_text(size = 32, face = "plain"),
+#                    axis.title.y = element_blank()) +
+#   guides(fill = guide_legend(override.aes = list(color = c("gray40", "#b30000"),
+#                                                  shape = c(21, 24),
+#                                                  size = c(5, 5),
+#                                                  alpha = c(1, 1))))
 
 
 #### c. Spain ------------------------------------------------------------------
-s <- mapLabels %>% filter(country == "Spain") %>%
-  plyr::mutate(label = paste(country, " (n = ", n, ")", sep = ""))
-
-#map_bounds(-9, 3.75, 34.25, 46.5, crs = epsg27704)
-
-esp_map <- ggplot() +
-  geom_sf(data = europe, col = "gray40", fill = "#ECECEC", show.legend = F) +
-  geom_sf(data = countries, aes(fill = sovereignt), col = "gray40", fill = "#B2BEB5", show.legend = F) +
-  # geom_sf_label(data = s, aes(label = paste(label)), nudge_x = 400000, nudge_y = 250000,
-  #               size = 12, fontface = "bold", label.size = NA, alpha = 0.5) +
-  geom_sf(data = obs, aes(geometry = jittered, fill = BsalDetected, shape = BsalDetected),
-          alpha = 0.3, size = 4, stroke = 1, color = "gray30", show.legend = "point") +
-  scale_fill_manual(values = c("gray40", "#b30000"), guide = "none") +
-  scale_shape_manual(values = c(21, 24), guide = "none") +
-  coord_sf(xlim = c(2860148, 4298549), # c(-9, 4)
-           ylim = c(690856.1, 1606424)) + # c(34.25, 46.5)
-  annotation_scale(location = "br", width_hint = 0.5, text_cex = 2.5, text_face = "plain",
-                   pad_y = unit(0.5, "cm"), pad_x = unit(3.25, "cm")) +
-  annotation_north_arrow(location = "bl", which_north = "true",
-                         height = unit(2.5, "cm"), width = unit(2.5, "cm"),
-                         pad_x = unit(0.25, "cm"), pad_y = unit(0.25, "cm"),
-                         style = north_arrow_fancy_orienteering(line_width = 1.8, text_size = 18)) +
-  ak_theme + theme(legend.title = element_blank(),
-                   legend.position = "top",
-                   legend.spacing = unit(1, "cm"), # Space legend labels
-                   legend.key.size = unit(1,"cm"),
-                   legend.text = element_text(size = 28, hjust = 0,
-                                              margin = margin(l = 5, r = 30, unit = "pt")),
-                   axis.text.x = element_text(size = 28, angle = 45, vjust = 0.5),
-                   axis.title.x = element_blank(),
-                   axis.text.y = element_text(size = 28, face = "plain"),
-                   axis.title.y = element_blank()) +
-  guides(fill = guide_legend(override.aes = list(color = c("gray40", "#b30000"),
-                                                 shape = c(21, 24),
-                                                 size = c(5, 5),
-                                                 alpha = c(1, 1))))
+# s <- mapLabels %>% filter(country == "Spain") %>%
+#   plyr::mutate(label = paste(country, " (n = ", n, ")", sep = ""))
+# 
+# #map_bounds(-9, 3.75, 34.25, 46.5, crs = epsg27704)
+# 
+# esp_map <- ggplot() +
+#   geom_sf(data = europe, col = "gray40", fill = "#ECECEC", show.legend = F) +
+#   geom_sf(data = countries, aes(fill = sovereignt), col = "gray40", fill = "#B2BEB5", show.legend = F) +
+#   # geom_sf_label(data = s, aes(label = paste(label)), nudge_x = 400000, nudge_y = 250000,
+#   #               size = 12, fontface = "bold", label.size = NA, alpha = 0.5) +
+#   geom_sf(data = obs, aes(geometry = jittered, fill = BsalDetected, shape = BsalDetected),
+#           alpha = 0.3, size = 4, stroke = 1, color = "gray30", show.legend = "point") +
+#   scale_fill_manual(values = c("gray40", "#b30000"), guide = "none") +
+#   scale_shape_manual(values = c(21, 24), guide = "none") +
+#   coord_sf(xlim = c(2860148, 4298549), # c(-9, 4)
+#            ylim = c(690856.1, 1606424)) + # c(34.25, 46.5)
+#   annotation_scale(location = "br", width_hint = 0.5, text_cex = 2.5, text_face = "plain",
+#                    pad_y = unit(0.5, "cm"), pad_x = unit(3.25, "cm")) +
+#   annotation_north_arrow(location = "bl", which_north = "true",
+#                          height = unit(2.5, "cm"), width = unit(2.5, "cm"),
+#                          pad_x = unit(0.25, "cm"), pad_y = unit(0.25, "cm"),
+#                          style = north_arrow_fancy_orienteering(line_width = 1.8, text_size = 18)) +
+#   ak_theme + theme(legend.title = element_blank(),
+#                    legend.position = "top",
+#                    legend.spacing = unit(1, "cm"), # Space legend labels
+#                    legend.key.size = unit(1,"cm"),
+#                    legend.text = element_text(size = 28, hjust = 0,
+#                                               margin = margin(l = 5, r = 30, unit = "pt")),
+#                    axis.text.x = element_text(size = 28, angle = 45, vjust = 0.5),
+#                    axis.title.x = element_blank(),
+#                    axis.text.y = element_text(size = 28, face = "plain"),
+#                    axis.title.y = element_blank()) +
+#   guides(fill = guide_legend(override.aes = list(color = c("gray40", "#b30000"),
+#                                                  shape = c(21, 24),
+#                                                  size = c(5, 5),
+#                                                  alpha = c(1, 1))))
 
 
 # ::: {layout="[[1,1], [1]]"}
 # esp_map
 # 
 # :::
+# These maps display @staticMaps-1 plots in @fig-mpg show the relationship between city and highway mileage for 38 popular models of cars.
+# In @fig-mpg-1 the points are colored by the number of cylinders while in @fig-mpg-2 the points are colored by engine displacement.
+
 ```
 
-These maps display @staticMaps-1 plots in @fig-mpg show the relationship between city and highway mileage for 38 popular models of cars.
-In @fig-mpg-1 the points are colored by the number of cylinders while in @fig-mpg-2 the points are colored by engine displacement.
+
 
 
 
