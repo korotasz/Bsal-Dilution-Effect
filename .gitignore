@@ -1,7 +1,3 @@
-markdownFiles/figures/*
-markdownFiles/_extensions/*
-markdownFiles/DEH_analyses_files/*
-
 weatherSampling/weatherProcessing_monthly.R
 
 .Rhistory
@@ -15,6 +11,11 @@ csvFiles/Germany_data.xlsx
 csvFiles/weather.csv
 csvFiles/gbif_amphibs.csv
 csvFiles/.Rhistory
+
+markdownFiles/figures/*
+markdownFiles/_extensions/*
+markdownFiles/DEH_analyses_files/*
+markdownFiles/DEH_analyses.html
 
 .Rproj.user
 README.pdf
