@@ -12,24 +12,20 @@ require(renv)
 ## If step 3 does give an error, try running:
 # renv::init(repos = "https://packagemanager.posit.co/cran/2023-10-13") # (should install the correct versions of maptools, rgdal, and sp)
 
+## Packages --------------------------------------------------------------------
 ## These packages need to be loaded first (commented out pckgs only need to be run once)
 # remotes::install_version("Rttf2pt1", version = "1.3.8") # install this version, latest ver. not compatible
 # remotes::install_github("gorkang/html2latex") # convert sjPlot::tab_model() hmtl table to tex and pdf in .Rmd docs
 # extrafont::font_import("C:/Windows/Fonts") # load fonts before ggplot2; only need to do this once
-require(pacman)
-require(extrafontdb)
-require(extrafont)
-extrafont::loadfonts(device = "all", quiet = T) # plot fonts
 
 ## As of 2024-04-04, there are issues with patchwork and ggplot2 that require specific pull requests to resolve:
 # remotes::install_github("thomasp85/patchwork")
 # remotes::install_github("tidyverse/ggplot2", ref = remotes::github_pull("5592"))
 
-## As of 2024-04-04, the Matrix package (a dependency of glmmTMB) is throwing errors
-##  (Matrix v. 1.6-5) and must be reverted to Matrix v. 1.6-1.1 to work
-# remotes::install_version("Matrix", version = "1.6-1.1")
 
-## Packages --------------------------------------------------------------------
+require(pacman)
+extrafont::loadfonts(device = "all", quiet = T) # plot fonts
+
 ### General Visualization Packages----------------------------------------------
 pckgs <- c("tidyverse", # data wrangling/manipulation
              "ggbreak", # create axis breaks in ggplots

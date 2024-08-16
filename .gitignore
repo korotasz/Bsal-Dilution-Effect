@@ -16,6 +16,7 @@ markdownFiles/figures/*
 markdownFiles/_extensions/*
 markdownFiles/DEH_analyses_files/*
 markdownFiles/DEH_analyses.html
+markdownFiles/quarto.css
 
 .Rproj.user
 README.pdf

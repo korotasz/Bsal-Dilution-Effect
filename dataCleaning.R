@@ -80,14 +80,14 @@ assign_start_date <- function(df, timepoint, date, out_col){
 
 
 ### File paths -----------------------------------------------------------------
-dir <- dirname(rstudioapi::getActiveDocumentContext()$path)
-csvpath <- (path.expand("/csvFiles"))
-shppath <- (path.expand("/csvFiles/shapefiles"))
-weatherpath <- (path.expand("/weatherSampling"))
-analysespath <- path.expand("/markdownFiles")
+dir <- rstudioapi::getActiveProject()
+csvpath <- file.path(dir, path.expand("csvFiles"))
+shppath <- file.path(csvpath, path.expand("shapefiles"))
+weatherpath <- file.path(dir, path.expand("weatherSampling"))
+analysespath <- file.path(dir, path.expand("markdownFiles"))
 
 ### Read in .csv files----------------------------------------------------------
-setwd(file.path(dir, csvpath))
+setwd(csvpath)
 
 germany <- read.csv("germany.csv", header = T, encoding = "UTF-8")
 euram <- read.csv("euram.csv", header = T, encoding = "UTF-8")
@@ -483,18 +483,20 @@ df <- df %>%
 rm(sppNames)
 ## Obtain administrative level data from geodata package -----------------------
 ## Construct file path to store Euro country shapefiles
-dir.create(file.path(dir, shppath)) # Will give warning if path already exists
-setwd(file.path(dir, shppath))
+dir.create(shppath) # Will give warning if path already exists
+setwd(shppath)
 
 ## 1. Use 'geodata' pckg to get shapefiles for each country. We are using EPSG:4326 (WGS 84), as these are lat/lon data
 #     that are presented in decimal degrees.
-polygon <- geodata::gadm(country = c('BEL', 'CHE', 'CHN', 'DEU', 'ESP', 'GBR', 'VNM'), level = 2,
-                         path = file.path(dir, shppath), version = "latest", resolution = 1) %>%
+polygon <- geodata::gadm(country = c('BEL', 'DEU', 'ESP', # Europe
+                                     'CHN', 'VNM'),       # Asia
+                         level = 3, #
+                         path = shppath, version = "latest", resolution = 1) %>%
   sf::st_as_sf(., crs = 4326) %>%
   st_cast(., "MULTIPOLYGON")
 
 ## Write 'polygon' to .gpckg layer for later use with WorldClim data
-# st_write(polygon, file.path(dir, shppath, "admData.gpkg"), layer = "countries", append = F, delete_layer = T)
+# st_write(polygon, file.path(shppath, "adm3Data.gpkg"), layer = "countries", append = F, delete_layer = T)
 
 points <- df %>%
   dplyr::select(Lon, Lat) %>%
@@ -514,10 +516,10 @@ points <- df %>%
 # out <- st_intersection(points, polygon) %>%
 #   mutate(Lon = sf::st_coordinates(.)[,1],
 #          Lat = sf::st_coordinates(.)[,2])
-# st_write(out, file.path(dir, shppath, "out.shp"), append = F, delete_layer = T, layer_options = "ENCODING=UTF-8")
+# st_write(out, file.path(shppath, "out.shp"), append = F, delete_layer = T, layer_options = "ENCODING=UTF-8")
 # out <- data.frame(out) %>%
 #   dplyr::select(-(geometry))
-# write.csv(out, file.path(dir, csvpath, "adminlevels.csv"), row.names = F, fileEncoding = "UTF-8")
+# write.csv(out, file.path(csvpath, "adminlevels.csv"), row.names = F, fileEncoding = "UTF-8")
 
 ## Get admin levels in a dataframe format
 adminlvls <- read.csv(file = file.path(dir, csvpath, "adminlevels.csv"), header = T, fileEncoding = "UTF-8") %>%
@@ -667,7 +669,7 @@ df <- df %>%
 
 
 ## Add measures of biodiversity ------------------------------------------------
-### > Relative spp richness (from our dataset) ---------------------------------
+### > Species richness (from our dataset) --------------------------------------
 spr <- df %>%
   dplyr::select(Site, date, scientific) %>%
   na.omit(.) %>%
@@ -681,7 +683,6 @@ spr <- df %>%
   summarise_all(sum) %>%
   ungroup() %>%
   mutate(richness = apply(.[,3:(ncol(.))] > 0, 1, sum))
-
 
 df <- df %>%
   # species richness at a site on the date of sampling
