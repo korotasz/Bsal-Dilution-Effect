@@ -20,6 +20,7 @@ pckgs <- c("tidyverse", # data wrangling/manipulation
            "lubridate", # deals with dates
                "stats", # aggregate()
                "rgdal", # geospatial analyses
+          "geosphere", # DBSCAN
             "maptools", # package to create maps
               "raster", # raster manipulation/working with geospatial data
                "terra", # supercedes raster package
@@ -490,13 +491,14 @@ setwd(shppath)
 #     that are presented in decimal degrees.
 polygon <- geodata::gadm(country = c('BEL', 'DEU', 'ESP', # Europe
                                      'CHN', 'VNM'),       # Asia
-                         level = 3, #
+                         level = 2, #
                          path = shppath, version = "latest", resolution = 1) %>%
   sf::st_as_sf(., crs = 4326) %>%
   st_cast(., "MULTIPOLYGON")
-
 ## Write 'polygon' to .gpckg layer for later use with WorldClim data
-# st_write(polygon, file.path(shppath, "adm3Data.gpkg"), layer = "countries", append = F, delete_layer = T)
+# st_write(polygon, file.path(shppath, "adm2Data.gpkg"), layer = "countries_all", append = F, delete_layer = T)
+# st_write(filter(polygon, GID_0 == "BEL" | GID_0 == "DEU" | GID_0 == "ESP"), file.path(shppath, "adm2Data.gpkg"), layer = "countries_eu", append = T, delete_layer = T)
+# st_write(filter(polygon, GID_0 == "CHN" | GID_0 == "VNM"), file.path(shppath, "adm2Data.gpkg"), layer = "countries_as", append = T, delete_layer = T)
 
 points <- df %>%
   dplyr::select(Lon, Lat) %>%
@@ -506,6 +508,30 @@ points <- df %>%
          Lon = sf::st_coordinates(.)[,1],
          Lat = sf::st_coordinates(.)[,2]) %>%
   glimpse()
+
+# st_write(points, file.path(shppath, "adm2Data.gpkg"), layer = "locations_all", append = T, delete_layer = T)
+
+# df %>%
+#   filter(country == "Belgium" | country == "Germany" | country == "Spain") %>%
+#   dplyr::select(Lon, Lat) %>%
+#   na.omit(.) %>%
+#   sf::st_as_sf(x = ., coords = c("Lon", "Lat"), crs = 4326, na.fail = F) %>%
+#   mutate(L1 = row_number(),
+#          Lon = sf::st_coordinates(.)[,1],
+#          Lat = sf::st_coordinates(.)[,2]) %>%
+#   glimpse() %>%
+#   st_write(., file.path(shppath, "adm2Data.gpkg"), layer = "locations_eu", append = T, delete_layer = T)
+#
+# df %>%
+#   filter(country == "China" | country == "Vietnam") %>%
+#   dplyr::select(Lon, Lat) %>%
+#   na.omit(.) %>%
+#   sf::st_as_sf(x = ., coords = c("Lon", "Lat"), crs = 4326, na.fail = F) %>%
+#   mutate(L1 = row_number(),
+#          Lon = sf::st_coordinates(.)[,1],
+#          Lat = sf::st_coordinates(.)[,2]) %>%
+#   glimpse() %>%
+#   st_write(., file.path(shppath, "adm2Data.gpkg"), layer = "locations_as", append = T, delete_layer = T)
 
 
 ## Intersect lat/lon coordinates with each raster to get the correct admin levels associated with our data
@@ -520,14 +546,27 @@ points <- df %>%
 # out <- data.frame(out) %>%
 #   dplyr::select(-(geometry))
 # write.csv(out, file.path(csvpath, "adminlevels.csv"), row.names = F, fileEncoding = "UTF-8")
+#
+
 
 ## Get admin levels in a dataframe format
-adminlvls <- read.csv(file = file.path(dir, csvpath, "adminlevels.csv"), header = T, fileEncoding = "UTF-8") %>%
-  dplyr::select(Lon, Lat, GID_0, COUNTRY, NAME_1, NAME_2) %>%
+adminlvls <- read.csv(file = file.path(csvpath, "adminlevels.csv"),
+                      header = T, fileEncoding = "UTF-8", na.strings = c("", "NA")) %>%
+  dplyr::select(Lon, Lat, GID_0, COUNTRY,
+                NAME_1, ENGTYPE_1,
+                NAME_2, ENGTYPE_2,
+                NAME_3, ENGTYPE_3,
+                NAME_4, ENGTYPE_4) %>%
   unite("LatLon", c(Lat, Lon), sep = ", ") %>%
   rename(ADM0 = GID_0,
          ADM1 = NAME_1,
+         ADM1_type = ENGTYPE_1,
          ADM2 = NAME_2,
+         ADM2_type = ENGTYPE_2,
+         ADM3 = NAME_3,
+         ADM3_type = ENGTYPE_3,
+         ADM4 = NAME_4,
+         ADM4_type = ENGTYPE_4,
          country = COUNTRY) %>%
   unique(.) %>%
   mutate(continent = ifelse(country == "China" | country == "Vietnam", "Asia", "Europe")) %>%
@@ -535,7 +574,7 @@ adminlvls <- read.csv(file = file.path(dir, csvpath, "adminlevels.csv"), header 
 
 ## Check for missing admin levels!!
 # adminlvls %>%
-#   filter(is.na(ADM2)) # only one location missing (ADM2 in GBR).
+#   filter(is.na(ADM3)) # only one location missing (ADM2 in GBR).
 
 ## Get centroids of these 5 that are missing lat/lon coordinates and convert lat/lon back to EPSG:4326
 missing_coords <- df %>%
@@ -543,7 +582,7 @@ missing_coords <- df %>%
   group_by(ADM1, ADM2, scientific) %>%
   summarise(n = n())
 
-adm1_centroids <- geodata::gadm(country = c('CHN', 'VNM'), level = 1, path = file.path(dir, shppath), version = "latest", resolution = 1) %>%
+adm1_centroids <- geodata::gadm(country = c('CHN', 'VNM'), level = 1, path = file.path(shppath), version = "latest", resolution = 1) %>%
   st_as_sf(., crs = 4326) %>%
   st_centroid(.) %>%
   data.frame(.) %>%
@@ -558,11 +597,11 @@ adm1 <- data.frame(st_coordinates(st_cast(adm1_centroids$geometry, "POINT"))) %>
          ADM0 = GID_0,
          country = COUNTRY,
          ADM1 = NAME_1,
-         ADM2 = NA) %>%
-  subset(., select = c(Lat, Lon, ADM0, country, ADM1, ADM2)) %>%
+         ADM1_type = ENGTYPE_1) %>%
+  subset(., select = c(Lat, Lon, ADM0, country, ADM1, ADM1_type)) %>%
   filter(ADM1 == "Guangdong")
 
-adm2_centroids <- geodata::gadm(country = c('CHN','VNM'), level = 2, path = file.path(dir, shppath), version = "latest", resolution = 1) %>%
+adm2_centroids <- geodata::gadm(country = c('CHN','VNM'), level = 2, path = file.path(shppath), version = "latest", resolution = 1) %>%
   st_as_sf(., crs = 4326) %>%
   st_centroid(.) %>%
   data.frame(.) %>%
@@ -572,32 +611,39 @@ adm2_centroids <- geodata::gadm(country = c('CHN','VNM'), level = 2, path = file
 adm2 <- data.frame(st_coordinates(st_cast(adm2_centroids$geometry, "POINT"))) %>%
   mutate(L1 = row_number()) %>%
   left_join(adm2_centroids, ., by = "L1", keep = F) %>% # X = LON, Y = LAT
+  left_join(., adm1_centroids, by = c("GID_0", "COUNTRY", "NAME_1")) %>%
   mutate(Lat = Y,
          Lon = X,
          ADM0 = GID_0,
          country = COUNTRY,
          ADM1 = NAME_1,
-         ADM2 = NAME_2) %>%
-  subset(., select = c(Lat, Lon, ADM0, country, ADM1, ADM2)) %>%
+         ADM1_type = ENGTYPE_1,
+         ADM2 = NAME_2,
+         ADM2_type = ENGTYPE_2) %>%
+  subset(., select = c(Lat, Lon, ADM0, country, ADM1, ADM1_type, ADM2, ADM2_type)) %>%
   filter(ADM1 == "Liaoning" & ADM2 == "Anshan" |
            ADM1 == "Zhejiang" & ADM2 == "Hangzhou" |
            ADM1 == "Cao Bằng" & ADM2 == "Nguyên Bình" |
            ADM1 == "Vĩnh Phúc" & ADM2 == "Tam Đảo")
 
-missing_coords <- df %>%
+missing_coords <- adm2 %>%
+  left_join(., subset(df, select = -c(Lat, Lon)), by = c("ADM0", "country", "ADM1", "ADM2"), keep = F) %>%
   filter(scientific == "Echinotriton maxiquadratus" |
            scientific == "Hynobius leechii" & ADM1 == "Liaoning" & ADM2 == "Anshan" |
            scientific == "Hypselotriton orientalis" & ADM1 == "Zhejiang" & ADM2 == "Hangzhou" |
            scientific == "Paramesotriton deloustali" &  ADM1 == "Vĩnh Phúc" & ADM2 == "Tam Đảo" |
            scientific == "Tylototriton ziegleri" & ADM1 == "Cao Bằng" & ADM2 == "Nguyên Bình") %>%
-  dplyr::select(!("Lat":"Lon")) %>%
-  left_join(., rbind(adm1, adm2), by = c("ADM0", "country", "ADM1", "ADM2"), keep = F) %>%
-  relocate(c(Lat, Lon), .after = ADM2)
+  relocate(c(Lat, Lon), .after = locality) %>%
+  relocate(continent, .before = ADM0)
 
-centroid_adms <- rbind(adm1, adm2) %>%
+centroid_adms <- adm2 %>%
   unite("LatLon", c(Lat, Lon), sep = ", ") %>%
   mutate(continent = ifelse(country == "China" | country == "Vietnam", "Asia", "Europe")) %>%
-  relocate(continent, .before = ADM0)
+  relocate(continent, .before = ADM0) %>%
+  mutate(ADM3 = NA,
+         ADM3_type = NA,
+         ADM4 = NA,
+         ADM4_type = NA)
 adminlvls <- rbind(adminlvls, centroid_adms)
 
 gc()
@@ -611,11 +657,15 @@ df <- df %>%
            scientific == "Hypselotriton orientalis" & ADM1 == "Zhejiang" & ADM2 == "Hangzhou" |
            scientific == "Paramesotriton deloustali" &  ADM1 == "Vĩnh Phúc" & ADM2 == "Tam Đảo" |
            scientific == "Tylototriton ziegleri" & ADM1 == "Cao Bằng" & ADM2 == "Nguyên Bình")) %>%
+  mutate(ADM1_type = NA,
+         ADM2_type = NA) %>%
+  relocate(ADM1_type, .after = ADM1) %>%
+  relocate(ADM2_type, .after = ADM2) %>%
   rbind(., missing_coords) %>%
-  dplyr::select(!("country":"ADM2")) %>%
+  dplyr::select(!("country":"ADM2_type")) %>%
   unite("LatLon", c(Lat, Lon), sep = ", ") %>%
   left_join(., adminlvls, by = c("continent", "LatLon"), relationship = "many-to-one", keep = F) %>%
-  relocate(c(continent, country, ADM0, ADM1, ADM2), .before = LatLon) %>%
+  relocate(c(continent, country, ADM0, ADM1:ADM4_type, locality), .before = LatLon) %>%
   separate(LatLon, c("Lat", "Lon"), sep = ", ") %>%
   mutate(organismRemarks = case_when(country == "China" | country == "Vietnam" ~ NA,
                                      eventRemarks == "dead specimen found in the wild" ~ eventRemarks,
@@ -635,22 +685,63 @@ adminlvls <- adminlvls %>%
 
 rm(missing_coords)
 
-## Generate Site #s ------------------------------------------------------------
-setwd(file.path(dir, csvpath))
-## Assign site #s by distinct localities. In the absence of distinct localities,
-#  DM2 was used to generate a unique site #.
-siteNumber <- df %>%
-  mutate(locality = case_when(is.na(locality) ~ ADM2,
-                              TRUE ~ locality)) %>%
-  dplyr::select(ADM1, locality, materialSampleID) %>%
-  dplyr::group_by(ADM1, locality) %>%
- mutate(locationID = cur_group_id()) %>%
- ungroup()
+## Use DBSCAN to spatially cluster locations & Generate Site #s ----------------
+#  Create coords df with pop_id as rowname
+coords <- df %>%
+  # filter(continent == "Europe") %>%
+  mutate(rowID = row_number()) %>%
+  dplyr::distinct(rowID, Lon, Lat) %>%
+  mutate(Lon = as.numeric(Lon),
+         Lat = as.numeric(Lat)) %>%
+  column_to_rownames(var = "rowID")
 
-df$locationID <- siteNumber$locationID[base::match(paste(df$materialSampleID),
-                                      paste(siteNumber$materialSampleID))]
+## Distance matrix
+distance_matrix <- distm(coords, fun = distGeo)
+gc()
 
-rm(siteNumber)
+## Run DBSCAN clustering (eps is in meters)
+cluster_50m <- dbscan::dbscan(distance_matrix, eps = 50, minPts = 1)
+plot(coords, col = cluster_50m$cluster, pch = 20)
+
+cluster_100m <- dbscan::dbscan(distance_matrix, eps = 100, minPts = 1)
+cluster_250m <- dbscan::dbscan(distance_matrix, eps = 250, minPts = 1)
+cluster_500m <- dbscan::dbscan(distance_matrix, eps = 500, minPts = 1)
+cluster_1000m <- dbscan::dbscan(distance_matrix, eps = 1000, minPts = 1)
+
+##Add spatial information
+coords <- coords %>%
+  mutate(cluster_50m = cluster_50m$cluster,     # Include 50m grids
+         cluster_100m = cluster_100m$cluster,   # Include 100m grids
+         cluster_250m = cluster_250m$cluster,   # Include 250m grids
+         cluster_500m = cluster_500m$cluster,   # Include 500m grids
+         cluster_1000m = cluster_1000m$cluster) # Include 100m grids
+
+coords <- coords %>% rownames_to_column(var = "rowID")# %>% # Put rowID back
+  dplyr::select(-c(Lon, Lat))
+
+## Combine with data
+test <- df %>%
+  mutate(rowID = as.character(row_number())) #%>%
+  left_join(., coords, by = "rowID", keep = F)
+
+# full_data_corrected <- left_join(full_data_corrected, coords)
+# rm(list = setdiff(ls(), c("full_data_corrected"))) # Cleanse
+
+# setwd(file.path(dir, csvpath))
+# ## Assign site #s by distinct localities. In the absence of distinct localities,
+# #  ADM2 was used to generate a unique site #.
+# siteNumber <- df %>%
+#   mutate(locality = case_when(is.na(locality) ~ ADM2,
+#                               TRUE ~ locality)) %>%
+#   dplyr::select(ADM1, locality, materialSampleID) %>%
+#   dplyr::group_by(ADM1, locality) %>%
+#  mutate(locationID = cur_group_id()) %>%
+#  ungroup()
+#
+# df$locationID <- siteNumber$locationID[base::match(paste(df$materialSampleID),
+#                                       paste(siteNumber$materialSampleID))]
+#
+# rm(siteNumber)
 
 ## Add relative abundance ------------------------------------------------------
 df <- df %>%
