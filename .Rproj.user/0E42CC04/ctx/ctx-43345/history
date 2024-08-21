@@ -1,0 +1,512 @@
+TRUE ~ individualCount),
+occurrenceRemarks = case_when(occurrenceRemarks == "1" ~ "OK",
+occurrenceRemarks == "2" ~ "potentialDataError",
+occurrenceRemarks == "3" ~ "dataMissing",
+TRUE ~ occurrenceRemarks)) %>%
+# combine date columns into a single 'date' column
+unite(., col = "date", c("yearCollected", "monthCollected", "dayCollected"),
+sep = "-", remove = TRUE, na.rm = TRUE) %>%
+# combine genus & specificEpithet columns into single 'species' column
+unite(., col = "species", c("genus", "specificEpithet"),
+sep = " ", remove = TRUE, na.rm = TRUE)
+head(deu_revised)
+print(unique(deu_revised$occurrenceRemarks))
+# Compare ALL usable cases ("OK", "potentialDataError", & NA) to old data
+deu_revised_all <- deu_revised %>%
+filter(occurrenceRemarks != "dataMissing") %>%
+subset(., select = c(decimalLatitude, decimalLongitude, date, species,
+BsalDetected, fatal, individualCount)) %>%
+group_by(decimalLatitude, decimalLongitude, date, species,
+BsalDetected, fatal) %>%
+summarise()
+print(deu_revised_all)
+# Compare ALL usable cases ("OK", "potentialDataError", & NA) to old data
+deu_revised_all <- deu_revised %>%
+filter(occurrenceRemarks != "dataMissing") %>%
+subset(., select = c(decimalLatitude, decimalLongitude, date, species,
+BsalDetected, fatal, individualCount)) %>%
+group_by(decimalLatitude, decimalLongitude, date, species,
+BsalDetected, fatal) %>%
+summarise(n = n())
+print(deu_revised_all)
+View(deu_revised_all)
+# Compare ALL usable cases ("OK", "potentialDataError", & NA) to old data
+deu_revised_all <- deu_revised %>%
+mutate(decimalLatitude = as.character(decimalLatitude),
+decimalLongitude = as.character(decimalLongitude)) %>%
+filter(occurrenceRemarks != "dataMissing") %>%
+subset(., select = c(decimalLatitude, decimalLongitude, date, species,
+BsalDetected, fatal, individualCount)) %>%
+group_by(decimalLatitude, decimalLongitude, date, species,
+BsalDetected, fatal, individualCount) %>%
+summarise(n = n())
+print(deu_revised_all)
+# Compare ALL usable cases ("OK", "potentialDataError", & NA) to old data
+deu_revised_all <- deu_revised %>%
+mutate(decimalLatitude = as.character(decimalLatitude),
+decimalLongitude = as.character(decimalLongitude)) %>%
+filter(occurrenceRemarks != "dataMissing") %>%
+subset(., select = c(decimalLatitude, decimalLongitude, date, species,
+BsalDetected, fatal, individualCount)) %>%
+group_by(decimalLatitude, decimalLongitude, date, species,
+BsalDetected, fatal) %>%
+summarise(n = n())
+print(deu_revised_all)
+# Compare ALL usable cases ("OK", "potentialDataError", & NA) to old data
+deu_revised_all <- deu_revised %>%
+mutate(decimalLatitude = as.character(decimalLatitude),
+decimalLongitude = as.character(decimalLongitude)) %>%
+filter(occurrenceRemarks != "dataMissing") %>%
+subset(., select = c(decimalLatitude, decimalLongitude, date, species,
+BsalDetected, fatal, individualCount)) %>%
+group_by(decimalLatitude, decimalLongitude, date, species,
+BsalDetected, fatal, individualCount) %>%
+summarise()
+print(deu_revised_all)
+# Compare ALL usable cases ("OK", "potentialDataError", & NA) to old data
+deu_revised_all <- deu_revised %>%
+mutate(decimalLatitude = as.character(decimalLatitude),
+decimalLongitude = as.character(decimalLongitude)) %>%
+filter(occurrenceRemarks != "dataMissing") %>%
+subset(., select = c(decimalLatitude, decimalLongitude, date, species,
+BsalDetected, fatal, individualCount)) %>%
+group_by(decimalLatitude, decimalLongitude, date, species,
+BsalDetected, fatal, individualCount) %>%
+summarise() %>%
+distinct()
+print(deu_revised_all)
+# Compare ALL usable cases ("OK", "potentialDataError", & NA) to old data
+deu_revised_all <- deu_revised %>%
+mutate(decimalLatitude = as.character(decimalLatitude),
+decimalLongitude = as.character(decimalLongitude)) %>%
+filter(occurrenceRemarks != "dataMissing") %>%
+subset(., select = c(decimalLatitude, decimalLongitude, date, species,
+BsalDetected, fatal, individualCount)) %>%
+group_by(decimalLatitude, decimalLongitude, date, species,
+BsalDetected, fatal, individualCount) %>%
+# summarise() %>%
+distinct()
+print(deu_revised_all)
+View(deu_revised)
+View(deu_revised_all)
+# Compare ALL usable cases ("OK", "potentialDataError", & NA) to old data
+deu_revised_all <- deu_revised %>%
+mutate(decimalLatitude = as.character(decimalLatitude),
+decimalLongitude = as.character(decimalLongitude)) %>%
+filter(occurrenceRemarks != "dataMissing") %>%
+subset(., select = c(decimalLatitude, decimalLongitude, date, species,
+BsalDetected, fatal, individualCount)) %>%
+group_by(decimalLatitude, decimalLongitude, date, species,
+BsalDetected, fatal, individualCount) %>%
+summarise()
+deu_all <- germany %>%
+subset(., select = c(yearCollected:decimalLongitude, genus:specificEpithet,
+monthCollected:dayCollected, BsalDetected, fatal, individualCount)) %>%
+# trim white space around genus and species names
+mutate(locality = trimws(locality),
+genus = trimws(genus),
+specificEpithet = trimws(specificEpithet),
+# replace 'MISSING' in dataset with NA vals
+monthCollected = case_when(monthCollected == "MISSING" ~ NA,
+TRUE ~ monthCollected),
+dayCollected = case_when(dayCollected == "MISSING" ~ NA,
+TRUE ~ dayCollected),
+individualCount = case_when(individualCount == "MISSING" ~ NA,
+TRUE ~ individualCount),
+# Convert lat/lon to characters to retain precision
+decimalLatitude = as.character(decimalLatitude),
+decimalLongitude = as.character(decimalLongitude)) %>%
+# combine date columns into a single 'date' column
+unite(., col = "date", c("yearCollected", "monthCollected", "dayCollected"),
+sep = "-", remove = TRUE, na.rm = TRUE) %>%
+# combine genus & specificEpithet columns into single 'species' column
+unite(., col = "species", c("genus", "specificEpithet"),
+sep = " ", remove = TRUE, na.rm = TRUE) %>%
+subset(., select = c(decimalLatitude, decimalLongitude, date, species,
+BsalDetected, fatal, individualCount)) %>%
+group_by(decimalLatitude, decimalLongitude, date, species,
+BsalDetected, fatal, individualCount) %>%
+summarise()
+deu_all <- germany %>%
+subset(., select = c(yearCollected:decimalLongitude, genus:specificEpithet,
+monthCollected:dayCollected, BsalDetected, fatal, individualCount)) %>%
+# trim white space around genus and species names
+mutate(genus = trimws(genus),
+specificEpithet = trimws(specificEpithet),
+# replace 'MISSING' in dataset with NA vals
+monthCollected = case_when(monthCollected == "MISSING" ~ NA,
+TRUE ~ monthCollected),
+dayCollected = case_when(dayCollected == "MISSING" ~ NA,
+TRUE ~ dayCollected),
+individualCount = case_when(individualCount == "MISSING" ~ NA,
+TRUE ~ individualCount),
+# Convert lat/lon to characters to retain precision
+decimalLatitude = as.character(decimalLatitude),
+decimalLongitude = as.character(decimalLongitude)) %>%
+# combine date columns into a single 'date' column
+unite(., col = "date", c("yearCollected", "monthCollected", "dayCollected"),
+sep = "-", remove = TRUE, na.rm = TRUE) %>%
+# combine genus & specificEpithet columns into single 'species' column
+unite(., col = "species", c("genus", "specificEpithet"),
+sep = " ", remove = TRUE, na.rm = TRUE) %>%
+subset(., select = c(decimalLatitude, decimalLongitude, date, species,
+BsalDetected, fatal, individualCount)) %>%
+group_by(decimalLatitude, decimalLongitude, date, species,
+BsalDetected, fatal, individualCount) %>%
+summarise()
+View(deu_all)
+all_diff <- anti_join(deu_all, deu_revised_all)
+## Compare new germany data to old germany data --------------------------------
+deu_revised <- germanyv2 %>%
+mutate(occurrenceRemarks = as.factor(occurrenceRemarks)) %>%
+subset(., select = c(occurrenceRemarks, locality, yearCollected:decimalLongitude, genus:specificEpithet,
+monthCollected:dayCollected, BsalDetected, fatal, individualCount)) %>%
+# trim white space around genus and species names
+mutate(locality = trimws(locality),
+genus = trimws(genus),
+specificEpithet = trimws(specificEpithet),
+decimalLatitude = as.character(decimalLatitude),
+decimalLongitude = as.character(decimalLongitude),
+BsalDetected = as.logical(BsalDetected),
+fatal = as.logical(fatal),
+# replace 'MISSING' in dataset with NA vals
+monthCollected = case_when(monthCollected == "MISSING" ~ NA,
+TRUE ~ monthCollected),
+dayCollected = case_when(dayCollected == "MISSING" ~ NA,
+TRUE ~ dayCollected),
+individualCount = case_when(individualCount == "MISSING" ~ NA,
+TRUE ~ individualCount),
+occurrenceRemarks = case_when(occurrenceRemarks == "1" ~ "OK",
+occurrenceRemarks == "2" ~ "potentialDataError",
+occurrenceRemarks == "3" ~ "dataMissing",
+TRUE ~ occurrenceRemarks)) %>%
+# combine date columns into a single 'date' column
+unite(., col = "date", c("yearCollected", "monthCollected", "dayCollected"),
+sep = "-", remove = TRUE, na.rm = TRUE) %>%
+# combine genus & specificEpithet columns into single 'species' column
+unite(., col = "species", c("genus", "specificEpithet"),
+sep = " ", remove = TRUE, na.rm = TRUE)
+## Compare new germany data to old germany data --------------------------------
+deu_revised <- germanyv2 %>%
+mutate(occurrenceRemarks = as.factor(occurrenceRemarks)) %>%
+subset(., select = c(occurrenceRemarks, locality, yearCollected:decimalLongitude, genus:specificEpithet,
+monthCollected:dayCollected, BsalDetected, fatal, individualCount)) %>%
+# trim white space around genus and species names
+mutate(locality = trimws(locality),
+genus = trimws(genus),
+specificEpithet = trimws(specificEpithet),
+decimalLatitude = as.character(decimalLatitude),
+decimalLongitude = as.character(decimalLongitude),
+BsalDetected = as.logical(BsalDetected),
+fatal = as.logical(fatal),
+# replace 'MISSING' in dataset with NA vals
+monthCollected = case_when(monthCollected == "MISSING" ~ NA,
+TRUE ~ monthCollected),
+dayCollected = case_when(dayCollected == "MISSING" ~ NA,
+TRUE ~ dayCollected),
+individualCount = case_when(individualCount == "MISSING" ~ NA,
+TRUE ~ individualCount),
+occurrenceRemarks = case_when(occurrenceRemarks == "1" ~ "OK",
+occurrenceRemarks == "2" ~ "potentialDataError",
+occurrenceRemarks == "3" ~ "dataMissing",
+TRUE ~ occurrenceRemarks)) %>%
+# combine date columns into a single 'date' column
+unite(., col = "date", c("yearCollected", "monthCollected", "dayCollected"),
+sep = "-", remove = TRUE, na.rm = TRUE) %>%
+# combine genus & specificEpithet columns into single 'species' column
+unite(., col = "species", c("genus", "specificEpithet"),
+sep = " ", remove = TRUE, na.rm = TRUE)
+head(deu_revised)
+# Compare ALL usable cases ("OK", "potentialDataError", & NA) to old data
+deu_revised_all <- deu_revised %>%
+filter(occurrenceRemarks != "dataMissing") %>%
+subset(., select = c(decimalLatitude, decimalLongitude, date, species,
+BsalDetected, fatal, individualCount)) %>%
+group_by(decimalLatitude, decimalLongitude, date, species,
+BsalDetected, fatal, individualCount) %>%
+summarise()
+print(deu_revised_all)
+deu_all <- germany %>%
+subset(., select = c(yearCollected:decimalLongitude, genus:specificEpithet,
+monthCollected:dayCollected, BsalDetected, fatal, individualCount)) %>%
+# trim white space around genus and species names
+mutate(genus = trimws(genus),
+specificEpithet = trimws(specificEpithet),
+# replace 'MISSING' in dataset with NA vals
+monthCollected = case_when(monthCollected == "MISSING" ~ NA,
+TRUE ~ monthCollected),
+dayCollected = case_when(dayCollected == "MISSING" ~ NA,
+TRUE ~ dayCollected),
+individualCount = case_when(individualCount == "MISSING" ~ NA,
+TRUE ~ individualCount),
+# Convert lat/lon to characters to retain precision
+decimalLatitude = as.character(decimalLatitude),
+decimalLongitude = as.character(decimalLongitude)) %>%
+# combine date columns into a single 'date' column
+unite(., col = "date", c("yearCollected", "monthCollected", "dayCollected"),
+sep = "-", remove = TRUE, na.rm = TRUE) %>%
+# combine genus & specificEpithet columns into single 'species' column
+unite(., col = "species", c("genus", "specificEpithet"),
+sep = " ", remove = TRUE, na.rm = TRUE) %>%
+subset(., select = c(decimalLatitude, decimalLongitude, date, species,
+BsalDetected, fatal, individualCount)) %>%
+group_by(decimalLatitude, decimalLongitude, date, species,
+BsalDetected, fatal, individualCount) %>%
+summarise()
+all_diff <- anti_join(deu_all, deu_revised_all)
+deu_all <- germany %>%
+subset(., select = c(yearCollected:decimalLongitude, genus:specificEpithet,
+monthCollected:dayCollected, BsalDetected, fatal, individualCount)) %>%
+# trim white space around genus and species names
+mutate(genus = trimws(genus),
+specificEpithet = trimws(specificEpithet),
+# replace 'MISSING' in dataset with NA vals
+monthCollected = case_when(monthCollected == "MISSING" ~ NA,
+TRUE ~ monthCollected),
+dayCollected = case_when(dayCollected == "MISSING" ~ NA,
+TRUE ~ dayCollected),
+# Convert lat/lon to characters to retain precision
+decimalLatitude = as.character(decimalLatitude),
+decimalLongitude = as.character(decimalLongitude)) %>%
+# combine date columns into a single 'date' column
+unite(., col = "date", c("yearCollected", "monthCollected", "dayCollected"),
+sep = "-", remove = TRUE, na.rm = TRUE) %>%
+# combine genus & specificEpithet columns into single 'species' column
+unite(., col = "species", c("genus", "specificEpithet"),
+sep = " ", remove = TRUE, na.rm = TRUE) %>%
+subset(., select = c(decimalLatitude, decimalLongitude, date, species,
+BsalDetected, fatal, individualCount)) %>%
+group_by(decimalLatitude, decimalLongitude, date, species,
+BsalDetected, fatal, individualCount) %>%
+summarise()
+all_diff <- anti_join(deu_all, deu_revised_all)
+## Compare new germany data to old germany data --------------------------------
+deu_revised <- germanyv2 %>%
+mutate(occurrenceRemarks = as.factor(occurrenceRemarks)) %>%
+subset(., select = c(occurrenceRemarks, locality, yearCollected:decimalLongitude, genus:specificEpithet,
+monthCollected:dayCollected, BsalDetected, fatal, individualCount)) %>%
+# trim white space around genus and species names
+mutate(locality = trimws(locality),
+genus = trimws(genus),
+specificEpithet = trimws(specificEpithet),
+decimalLatitude = as.character(decimalLatitude),
+decimalLongitude = as.character(decimalLongitude),
+BsalDetected = as.logical(BsalDetected),
+fatal = as.logical(fatal),
+# replace 'MISSING' in dataset with NA vals
+monthCollected = case_when(monthCollected == "MISSING" ~ NA,
+TRUE ~ monthCollected),
+dayCollected = case_when(dayCollected == "MISSING" ~ NA,
+TRUE ~ dayCollected),
+individualCount = case_when(individualCount == "MISSING" ~ NA,
+TRUE ~ as.integer(individualCount)),
+occurrenceRemarks = case_when(occurrenceRemarks == "1" ~ "OK",
+occurrenceRemarks == "2" ~ "potentialDataError",
+occurrenceRemarks == "3" ~ "dataMissing",
+TRUE ~ occurrenceRemarks)) %>%
+# combine date columns into a single 'date' column
+unite(., col = "date", c("yearCollected", "monthCollected", "dayCollected"),
+sep = "-", remove = TRUE, na.rm = TRUE) %>%
+# combine genus & specificEpithet columns into single 'species' column
+unite(., col = "species", c("genus", "specificEpithet"),
+sep = " ", remove = TRUE, na.rm = TRUE)
+## Compare new germany data to old germany data --------------------------------
+deu_revised <- germanyv2 %>%
+mutate(occurrenceRemarks = as.factor(occurrenceRemarks)) %>%
+subset(., select = c(occurrenceRemarks, locality, yearCollected:decimalLongitude, genus:specificEpithet,
+monthCollected:dayCollected, BsalDetected, fatal, individualCount)) %>%
+# trim white space around genus and species names
+mutate(locality = trimws(locality),
+genus = trimws(genus),
+specificEpithet = trimws(specificEpithet),
+decimalLatitude = as.character(decimalLatitude),
+decimalLongitude = as.character(decimalLongitude),
+BsalDetected = as.logical(BsalDetected),
+fatal = as.logical(fatal),
+# replace 'MISSING' in dataset with NA vals
+monthCollected = case_when(monthCollected == "MISSING" ~ NA,
+TRUE ~ monthCollected),
+dayCollected = case_when(dayCollected == "MISSING" ~ NA,
+TRUE ~ dayCollected),
+individualCount = case_when(individualCount == "MISSING" ~ NA,
+TRUE ~ individualCount),
+occurrenceRemarks = case_when(occurrenceRemarks == "1" ~ "OK",
+occurrenceRemarks == "2" ~ "potentialDataError",
+occurrenceRemarks == "3" ~ "dataMissing",
+TRUE ~ occurrenceRemarks)) %>%
+# combine date columns into a single 'date' column
+unite(., col = "date", c("yearCollected", "monthCollected", "dayCollected"),
+sep = "-", remove = TRUE, na.rm = TRUE) %>%
+# combine genus & specificEpithet columns into single 'species' column
+unite(., col = "species", c("genus", "specificEpithet"),
+sep = " ", remove = TRUE, na.rm = TRUE)
+head(deu_revised)
+## Compare new germany data to old germany data --------------------------------
+deu_revised <- germanyv2 %>%
+mutate(occurrenceRemarks = as.factor(occurrenceRemarks)) %>%
+subset(., select = c(occurrenceRemarks, locality, yearCollected:decimalLongitude, genus:specificEpithet,
+monthCollected:dayCollected, BsalDetected, fatal, individualCount)) %>%
+# trim white space around genus and species names
+mutate(locality = trimws(locality),
+genus = trimws(genus),
+specificEpithet = trimws(specificEpithet),
+decimalLatitude = as.character(decimalLatitude),
+decimalLongitude = as.character(decimalLongitude),
+BsalDetected = as.logical(BsalDetected),
+fatal = as.logical(fatal),
+# replace 'MISSING' in dataset with NA vals
+monthCollected = case_when(monthCollected == "MISSING" ~ NA,
+TRUE ~ monthCollected),
+dayCollected = case_when(dayCollected == "MISSING" ~ NA,
+TRUE ~ dayCollected),
+individualCount = case_when(individualCount == "MISSING" ~ NA,
+TRUE ~ individualCount),
+occurrenceRemarks = case_when(occurrenceRemarks == "1" ~ "OK",
+occurrenceRemarks == "2" ~ "potentialDataError",
+occurrenceRemarks == "3" ~ "dataMissing",
+TRUE ~ occurrenceRemarks)) %>%
+mutate(individualCount = as.numeric(indivdualCount)) %>%
+# combine date columns into a single 'date' column
+unite(., col = "date", c("yearCollected", "monthCollected", "dayCollected"),
+sep = "-", remove = TRUE, na.rm = TRUE) %>%
+# combine genus & specificEpithet columns into single 'species' column
+unite(., col = "species", c("genus", "specificEpithet"),
+sep = " ", remove = TRUE, na.rm = TRUE)
+## Compare new germany data to old germany data --------------------------------
+deu_revised <- germanyv2 %>%
+mutate(occurrenceRemarks = as.factor(occurrenceRemarks)) %>%
+subset(., select = c(occurrenceRemarks, locality, yearCollected:decimalLongitude, genus:specificEpithet,
+monthCollected:dayCollected, BsalDetected, fatal, individualCount)) %>%
+# trim white space around genus and species names
+mutate(locality = trimws(locality),
+genus = trimws(genus),
+specificEpithet = trimws(specificEpithet),
+decimalLatitude = as.character(decimalLatitude),
+decimalLongitude = as.character(decimalLongitude),
+BsalDetected = as.logical(BsalDetected),
+fatal = as.logical(fatal),
+# replace 'MISSING' in dataset with NA vals
+monthCollected = case_when(monthCollected == "MISSING" ~ NA,
+TRUE ~ monthCollected),
+dayCollected = case_when(dayCollected == "MISSING" ~ NA,
+TRUE ~ dayCollected),
+individualCount = case_when(individualCount == "MISSING" ~ NA,
+TRUE ~ individualCount),
+occurrenceRemarks = case_when(occurrenceRemarks == "1" ~ "OK",
+occurrenceRemarks == "2" ~ "potentialDataError",
+occurrenceRemarks == "3" ~ "dataMissing",
+TRUE ~ occurrenceRemarks)) %>%
+mutate(individualCount = as.numeric(individualCount)) %>%
+# combine date columns into a single 'date' column
+unite(., col = "date", c("yearCollected", "monthCollected", "dayCollected"),
+sep = "-", remove = TRUE, na.rm = TRUE) %>%
+# combine genus & specificEpithet columns into single 'species' column
+unite(., col = "species", c("genus", "specificEpithet"),
+sep = " ", remove = TRUE, na.rm = TRUE)
+head(deu_revised)
+# Compare ALL usable cases ("OK", "potentialDataError", & NA) to old data
+deu_revised_all <- deu_revised %>%
+filter(occurrenceRemarks != "dataMissing") %>%
+subset(., select = c(decimalLatitude, decimalLongitude, date, species,
+BsalDetected, fatal, individualCount)) %>%
+group_by(decimalLatitude, decimalLongitude, date, species,
+BsalDetected, fatal, individualCount) %>%
+summarise()
+print(deu_revised_all)
+deu_all <- germany %>%
+subset(., select = c(yearCollected:decimalLongitude, genus:specificEpithet,
+monthCollected:dayCollected, BsalDetected, fatal, individualCount)) %>%
+# trim white space around genus and species names
+mutate(genus = trimws(genus),
+specificEpithet = trimws(specificEpithet),
+# replace 'MISSING' in dataset with NA vals
+monthCollected = case_when(monthCollected == "MISSING" ~ NA,
+TRUE ~ monthCollected),
+dayCollected = case_when(dayCollected == "MISSING" ~ NA,
+TRUE ~ dayCollected),
+# Convert lat/lon to characters to retain precision
+decimalLatitude = as.character(decimalLatitude),
+decimalLongitude = as.character(decimalLongitude)) %>%
+# combine date columns into a single 'date' column
+unite(., col = "date", c("yearCollected", "monthCollected", "dayCollected"),
+sep = "-", remove = TRUE, na.rm = TRUE) %>%
+# combine genus & specificEpithet columns into single 'species' column
+unite(., col = "species", c("genus", "specificEpithet"),
+sep = " ", remove = TRUE, na.rm = TRUE) %>%
+subset(., select = c(decimalLatitude, decimalLongitude, date, species,
+BsalDetected, fatal, individualCount)) %>%
+group_by(decimalLatitude, decimalLongitude, date, species,
+BsalDetected, fatal, individualCount) %>%
+summarise()
+all_diff <- anti_join(deu_all, deu_revised_all)
+View(all_diff)
+?anti_join
+?left_join()
+all_diff <- full_join(deu_all, deu_revised_all)
+View(all_diff)
+View(germany)
+# Compare ALL usable cases ("OK", "potentialDataError", & NA) to old data
+deu_revised_all <- deu_revised %>%
+filter(occurrenceRemarks != "dataMissing") %>%
+subset(., select = c(locality, decimalLatitude, decimalLongitude, date, species,
+BsalDetected, fatal, individualCount)) %>%
+group_by(locality, decimalLatitude, decimalLongitude, date, species,
+BsalDetected, fatal, individualCount) %>%
+summarise()
+deu_all <- germany %>%
+subset(., select = c(locality, yearCollected:decimalLongitude, genus:specificEpithet,
+monthCollected:dayCollected, BsalDetected, fatal, individualCount)) %>%
+# trim white space around genus and species names
+mutate(locality = trimws(locality),
+genus = trimws(genus),
+specificEpithet = trimws(specificEpithet),
+# replace 'MISSING' in dataset with NA vals
+monthCollected = case_when(monthCollected == "MISSING" ~ NA,
+TRUE ~ monthCollected),
+dayCollected = case_when(dayCollected == "MISSING" ~ NA,
+TRUE ~ dayCollected),
+# Convert lat/lon to characters to retain precision
+decimalLatitude = as.character(decimalLatitude),
+decimalLongitude = as.character(decimalLongitude)) %>%
+# combine date columns into a single 'date' column
+unite(., col = "date", c("yearCollected", "monthCollected", "dayCollected"),
+sep = "-", remove = TRUE, na.rm = TRUE) %>%
+# combine genus & specificEpithet columns into single 'species' column
+unite(., col = "species", c("genus", "specificEpithet"),
+sep = " ", remove = TRUE, na.rm = TRUE) %>%
+subset(., select = c(decimalLatitude, decimalLongitude, date, species,
+BsalDetected, fatal, individualCount)) %>%
+group_by(decimalLatitude, decimalLongitude, date, species,
+BsalDetected, fatal, individualCount) %>%
+summarise()
+deu_all <- germany %>%
+subset(., select = c(locality, yearCollected:decimalLongitude, genus:specificEpithet,
+monthCollected:dayCollected, BsalDetected, fatal, individualCount)) %>%
+# trim white space around genus and species names
+mutate(locality = trimws(locality),
+genus = trimws(genus),
+specificEpithet = trimws(specificEpithet),
+# replace 'MISSING' in dataset with NA vals
+monthCollected = case_when(monthCollected == "MISSING" ~ NA,
+TRUE ~ monthCollected),
+dayCollected = case_when(dayCollected == "MISSING" ~ NA,
+TRUE ~ dayCollected),
+# Convert lat/lon to characters to retain precision
+decimalLatitude = as.character(decimalLatitude),
+decimalLongitude = as.character(decimalLongitude)) %>%
+# combine date columns into a single 'date' column
+unite(., col = "date", c("yearCollected", "monthCollected", "dayCollected"),
+sep = "-", remove = TRUE, na.rm = TRUE) %>%
+# combine genus & specificEpithet columns into single 'species' column
+unite(., col = "species", c("genus", "specificEpithet"),
+sep = " ", remove = TRUE, na.rm = TRUE) %>%
+subset(., select = c(locality, decimalLatitude, decimalLongitude, date, species,
+BsalDetected, fatal, individualCount)) %>%
+group_by(locality, decimalLatitude, decimalLongitude, date, species,
+BsalDetected, fatal, individualCount) %>%
+summarise()
+all_diff <- full_join(deu_all, deu_revised_all)
+all_diff <- anti_join(deu_all, deu_revised_all)
+all_diff2 <- anti_join(deu_revised_all, deu_all)
+View(all_diff2)
+View(all_diff)

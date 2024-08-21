@@ -1,0 +1,29 @@
+{
+    "sources": [
+        {
+            "DOI": "10.33256/hj29.4189-206",
+            "ISSN": "02680130",
+            "author": [
+                {
+                    "family": "Allain",
+                    "given": "Steven"
+                }
+            ],
+            "container-title": "Herpetological Journal",
+            "genre": "Journal Article",
+            "id": "RN650",
+            "issue": "Volume 29, Number 4",
+            "issued": {
+                "date-parts": [
+                    [
+                        2019
+                    ]
+                ]
+            },
+            "page": "189-206",
+            "title": "Emerging infectious disease threats to european herpetofauna",
+            "type": "article-journal"
+        }
+    ],
+    "project_biblios": []
+}

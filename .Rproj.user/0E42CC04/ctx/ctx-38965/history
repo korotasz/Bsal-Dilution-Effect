@@ -1,0 +1,512 @@
+## Get centroids of these 5 that are missing lat/lon coordinates and convert lat/lon back to EPSG:4326
+missing_coords <- df %>%
+filter(is.na(Lat)) %>%
+group_by(ADM1, ADM2, scientific) %>%
+summarise(n = n())
+adm1_centroids <- geodata::gadm(country = c('CHN', 'VNM'), level = 1, path = file.path(dir, shppath), version = "latest", resolution = 1) %>%
+st_as_sf(., crs = 4326) %>%
+st_centroid(.) %>%
+data.frame(.) %>%
+mutate(L1 = row_number()) %>%
+relocate(L1, .before = GID_1)
+adm1 <- data.frame(st_coordinates(st_cast(adm1_centroids$geometry, "POINT"))) %>%
+mutate(L1 = row_number()) %>%
+left_join(adm1_centroids, ., by = "L1", keep = F) %>% # X = LON, Y = LAT
+mutate(Lat = Y,
+Lon = X,
+ADM0 = GID_0,
+country = COUNTRY,
+ADM1 = NAME_1,
+ADM2 = NA) %>%
+subset(., select = c(Lat, Lon, ADM0, country, ADM1, ADM2)) %>%
+filter(ADM1 == "Guangdong")
+adm2_centroids <- geodata::gadm(country = c('CHN','VNM'), level = 2, path = file.path(dir, shppath), version = "latest", resolution = 1) %>%
+st_as_sf(., crs = 4326) %>%
+st_centroid(.) %>%
+data.frame(.) %>%
+mutate(L1 = row_number()) %>%
+relocate(L1, .before = GID_2)
+adm2 <- data.frame(st_coordinates(st_cast(adm2_centroids$geometry, "POINT"))) %>%
+mutate(L1 = row_number()) %>%
+left_join(adm2_centroids, ., by = "L1", keep = F) %>% # X = LON, Y = LAT
+mutate(Lat = Y,
+Lon = X,
+ADM0 = GID_0,
+country = COUNTRY,
+ADM1 = NAME_1,
+ADM2 = NAME_2) %>%
+subset(., select = c(Lat, Lon, ADM0, country, ADM1, ADM2)) %>%
+filter(ADM1 == "Liaoning" & ADM2 == "Anshan" |
+ADM1 == "Zhejiang" & ADM2 == "Hangzhou" |
+ADM1 == "Cao Bằng" & ADM2 == "Nguyên Bình" |
+ADM1 == "Vĩnh Phúc" & ADM2 == "Tam Đảo")
+missing_coords <- df %>%
+filter(scientific == "Echinotriton maxiquadratus" |
+scientific == "Hynobius leechii" & ADM1 == "Liaoning" & ADM2 == "Anshan" |
+scientific == "Hypselotriton orientalis" & ADM1 == "Zhejiang" & ADM2 == "Hangzhou" |
+scientific == "Paramesotriton deloustali" &  ADM1 == "Vĩnh Phúc" & ADM2 == "Tam Đảo" |
+scientific == "Tylototriton ziegleri" & ADM1 == "Cao Bằng" & ADM2 == "Nguyên Bình") %>%
+dplyr::select(!("Lat":"Lon")) %>%
+left_join(., rbind(adm1, adm2), by = c("ADM0", "country", "ADM1", "ADM2"), keep = F) %>%
+relocate(c(Lat, Lon), .after = ADM2)
+centroid_adms <- rbind(adm1, adm2) %>%
+unite("LatLon", c(Lat, Lon), sep = ", ")
+adminlvls <- rbind(adminlvls, centroid_adms)
+rm(points, polygon, adm1, adm1_centroids, adm2, adm2_centroids, centroid_adms)
+## Add ADM info back to main dataframe -----------------------------------------
+df <- df %>%
+filter(!(scientific == "Echinotriton maxiquadratus" |
+scientific == "Hynobius leechii" & ADM1 == "Liaoning" & ADM2 == "Anshan" |
+scientific == "Hypselotriton orientalis" & ADM1 == "Zhejiang" & ADM2 == "Hangzhou" |
+scientific == "Paramesotriton deloustali" &  ADM1 == "Vĩnh Phúc" & ADM2 == "Tam Đảo" |
+scientific == "Tylototriton ziegleri" & ADM1 == "Cao Bằng" & ADM2 == "Nguyên Bình")) %>%
+rbind(., missing_coords) %>%
+dplyr::select(!("country":"ADM2")) %>%
+unite("LatLon", c(Lat, Lon), sep = ", ") %>%
+left_join(., adminlvls, by = "LatLon", relationship = "many-to-one", keep = F) %>%
+relocate(c(country, ADM0, ADM1, ADM2), .before = LatLon) %>%
+separate(LatLon, c("Lat", "Lon"), sep = ", ") %>%
+glimpse()
+adminlvls <- adminlvls %>%
+separate("LatLon", into = c("Lat", "Lon"), sep = ", ") %>%
+mutate(Lat = as.numeric(Lat),
+Lon = as.numeric(Lon)) %>%
+glimpse()
+rm(missing_coords)
+## Generate Site #s ------------------------------------------------------------
+setwd(file.path(dir, csvpath))
+# Group sites by unique lat/long combos and assign site #s to them, for all countries
+siteNumber <- df %>%
+dplyr::select(materialSampleID, Lat, Lon) %>%
+dplyr::group_by(Lat, Lon) %>%
+mutate(Site = cur_group_id()) %>%
+ungroup()
+df$Site <- siteNumber$Site[base::match(paste(df$materialSampleID),
+paste(siteNumber$materialSampleID))]
+df <- relocate(df, Site, .after = "day")
+rm(siteNumber)
+## Subset gbif.org data to supplement our calculations of relative abundance (when applicable) ----
+# ## Get species occurrence data using gbif "Sampling Event Data" -- an alternate measure of abundance?
+# ## Citation: GBIF.org (25 March 2024) GBIF Occurrence Download https://doi.org/10.15468/dl.z3jcfu
+gbif_amphib <- data.table::fread("gbif_amphibs.csv") %>%
+rename(.,
+Lat = decimalLatitude,
+Lon = decimalLongitude,
+scientific = verbatimScientificName) %>%
+unite(c("year", "month", "day"), sep = "-", col = "date", remove = F) %>%
+dplyr::filter(!(day == "NA")) %>%
+# setNames(tolower(names(.))) %>% # set lowercase column names to work with CoordinateCleaner
+filter(occurrenceStatus  == "PRESENT") %>%
+filter(coordinatePrecision < 0.01 | is.na(coordinatePrecision)) %>%
+filter(coordinateUncertaintyInMeters < 1000 | is.na(coordinateUncertaintyInMeters)) %>%
+# Assume NA vals == 0
+mutate(coordinateUncertaintyInMeters = tidyr::replace_na(coordinateUncertaintyInMeters, 0),
+coordinatePrecision = tidyr::replace_na(coordinatePrecision, 0)) %>%
+glimpse() # look at results of pipeline
+## Subset gbif.org data to supplement our calculations of relative abundance (when applicable) ----
+# ## Get species occurrence data using gbif "Sampling Event Data" -- an alternate measure of abundance?
+# ## Citation: GBIF.org (25 March 2024) GBIF Occurrence Download https://doi.org/10.15468/dl.z3jcfu
+gbif_amphib <- data.table::fread("gbif_amphibs.csv") %>%
+rename(.,
+Lat = decimalLatitude,
+Lon = decimalLongitude,
+scientific = verbatimScientificName) %>%
+unite(c("year", "month", "day"), sep = "-", col = "date", remove = F) %>%
+dplyr::filter(!(day == "NA")) %>%
+# setNames(tolower(names(.))) %>% # set lowercase column names to work with CoordinateCleaner
+filter(occurrenceStatus  == "PRESENT") %>%
+filter(coordinatePrecision < 0.01 | is.na(coordinatePrecision)) %>%
+filter(coordinateUncertaintyInMeters < 1000 | is.na(coordinateUncertaintyInMeters)) %>%
+# Assume NA vals == 0
+mutate(coordinateUncertaintyInMeters = tidyr::replace_na(coordinateUncertaintyInMeters, 0),
+coordinatePrecision = tidyr::replace_na(coordinatePrecision, 0)) %>%
+glimpse() # look at results of pipeline
+## Create key to match dates in 'df' to dates in 'gbif_amphib'
+df <- df %>%
+unite(c("year", "month", "day"), sep = "-", col = "date", remove = F) %>%
+relocate(date, .before = year)
+dates <- df %>%
+filter(!(day == "NA")) %>%
+subset(., select = date) %>%
+unique(.)
+## Only retain observations that occurred on our sampling dates
+gbif_amphib <- inner_join(dates, gbif_amphib) ## 423 of 454 dates matched observations
+## Create buffer around points that correspond with their coordinate uncertainty
+gbif_coords <- gbif_amphib %>%
+st_as_sf(., coords = c("Lon", "Lat"), crs = 4326)
+## First, separate out points that *have* no buffer
+gbif_noBuff <- gbif_coords %>%
+filter(coordinateUncertaintyInMeters == 0) %>%
+mutate(row = as.character(paste0("0", row_number())),
+dummy = "noBuff") %>%
+unite(col = "ID", c(dummy, row), remove = T) %>%
+glimpse()
+## Need to use two different CRS for Europe (EPSG:3035) and Asia (EPSG:32649)
+## EUROPE:
+# Subset Europe data from gbif (gbif_3035) and from our dataset (points_3035)
+gbif_3035 <- gbif_coords %>%
+filter(coordinateUncertaintyInMeters > 0) %>%
+filter(countryCode == "BE" | countryCode == "GB" | countryCode == "DE" | countryCode == "ES") %>%
+st_transform(., 3035) %>%
+st_buffer(., dist = gbif_coords$coordinateUncertaintyInMeters) %>%
+# transform buffered pts back to EPSG 4326
+st_transform(., 4326) %>%
+st_cast(., "MULTIPOLYGON")
+## ASIA:
+gbif_32649 <- gbif_coords %>%
+filter(coordinateUncertaintyInMeters > 0) %>%
+filter(countryCode == "CN" | countryCode == "VN" | countryCode == "HK" | countryCode == "MO") %>%
+st_transform(., 32649) %>%
+st_buffer(., dist = gbif_coords$coordinateUncertaintyInMeters) %>%
+# transform buffered pts back to EPSG 4326
+st_transform(., 4326) %>%
+st_cast(., "MULTIPOLYGON")
+# rbind buffered gbif coordinates and intersect them with distinct date/lat/lon points from dataset
+gbif_all <- rbind(gbif_3035, gbif_32649) %>%
+mutate(row = as.character(paste0("0", row_number())),
+dummy = "buff") %>%
+unite(col = "ID", c(dummy, row), remove = T) %>%
+glimpse()
+points <- df %>%
+dplyr::filter(!(day == "NA")) %>%
+subset(., select = c(Lat, Lon, date)) %>%
+unique() %>%
+st_as_sf(x = ., coords = c("Lon", "Lat"), crs = 4326) %>%
+mutate(Lon = sf::st_coordinates(.)[,1],
+Lat = sf::st_coordinates(.)[,2])
+## Save colnames from gbif_all to rename columns in gbif_intersectedPts
+names <- c(colnames(gbif_all), "Lon", "Lat")
+rm(dates, gbif_amphib, gbif_3035, gbif_32649, gbif_coords, gbif_noBuff, gbif_all, points)
+## Process gbif data and add to main df ----------------------------------------
+## Load in layer of gbif.gpkg containing all points from gbif that intersected with our data
+gbif_intersectedPts <- st_read(file.path(dir, shppath, "gbif.gpkg"), layer = "intersected_pts") %>%
+subset(., select = -c(date:gbif_fid)) %>%
+mutate(Lon = sf::st_coordinates(.)[,1],
+Lat = sf::st_coordinates(.)[,2]) %>%
+data.frame(.)
+## These packages need to be loaded first (commented out pckgs only need to be run once)
+# remotes::install_version("Rttf2pt1", version = "1.3.8") # install this version, latest ver. not compatible
+# remotes::install_github("gorkang/html2latex") # convert sjPlot::tab_model() hmtl table to tex and pdf in .Rmd docs
+# extrafont::font_import("C:/Windows/Fonts") # load fonts before ggplot2; only need to do this once
+require(pacman)
+require(renv)
+require(extrafontdb)
+require(extrafont)
+extrafont::loadfonts(device = "all", quiet = T) # plot fonts
+## These packages need to be loaded first (commented out pckgs only need to be run once)
+# remotes::install_version("Rttf2pt1", version = "1.3.8") # install this version, latest ver. not compatible
+# remotes::install_github("gorkang/html2latex") # convert sjPlot::tab_model() hmtl table to tex and pdf in .Rmd docs
+# extrafont::font_import("C:/Windows/Fonts") # load fonts before ggplot2; only need to do this once
+require(pacman)
+require(renv)
+require(extrafontdb)
+require(extrafont)
+extrafont::loadfonts(device = "all", quiet = T) # plot fonts
+## As of 2024-04-04, there are issues with patchwork and ggplot2 that require specific pull requests to resolve:
+remotes::install_github("thomasp85/patchwork")
+remotes::install_github("tidyverse/ggplot2", ref = remotes::github_pull("5592"))
+## Packages --------------------------------------------------------------------
+### > Visualization Packages----------------------------------------------------
+pckgs <- c("ggsignif", # adds labels to significant groups
+"renv", # environment lock
+"ggtext", # for text type/arrangements w/ ggplot2
+"Rttf2pt1", # to use with the extrafont package
+"ggthemes", # contains 'scales', 'themes', and 'geoms' packages
+"grDevices", # saves high quality svg, pdf, and ps files
+"graphics", # dependency of grDevices
+"cowplot", # arranging plots/figs
+"gridExtra", # arranging plots/figs
+"patchwork", # arranging plots/figs
+"hrbrthemes", # plot colors
+"RColorBrewer", # plot colors
+"viridis", # plot colors
+"scales", # plot customization
+"eurostat", # obtain spatial data from europe
+"geodata", # obtain geographic data (world map)
+"rnaturalearth", # obtain spatial polygons that can be used with sf
+"sf", # mapping
+"ggspatial", # north arrow and scale bar
+"mapproj", # apply map projection
+"scatterpie", # add pie charts to maps
+"ggpubr", # prepares plots to be ready for publication
+"latex2exp", # allows use of LaTeX in R
+"glue", # allows concatenation of LaTeX and R syntax
+"sjPlot", # plot_model(), tab_model()
+"ragg", # converts plots to tiff files
+"htmltools", # visualizes model outputs as html tables
+"webshot2", # converts html files to png
+"magick", # image_read() -- needed for cowplot::draw_image
+"Hmisc", # binconf() provides CI of binomial distribution
+### > Analysis Packages --------------------------------------------------------
+"tidyverse", # data wrangling/manipulation
+"glmmTMB", # glmmTMB()
+"emmeans", # lsmeans()
+"car", # Anova()
+"DHARMa", # simulateResiduals(), testZeroInflation(), testDispersion()
+"MuMIn", # model.sel()
+"ggeffects", # ggpredict()
+"epiR", # calculate prevalence & CIs
+"binom", # credible intervals
+"sjmisc"  # data and variable transformation
+)
+## Load packages
+pacman::p_load(pckgs, character.only = T)
+## Functions -------------------------------------------------------------------
+map_bounds <- function(x1, x2, y1, y2, crs){
+df <- data.frame(Lon = c(x1, x2),
+Lat = c(y1, y2)) %>%
+st_as_sf(., coords = c("Lon", "Lat"), crs = 4326) %>%
+st_transform(., crs)
+out_df <- data.frame(x1 = sf::st_coordinates(df)[1,1],
+x2 = sf::st_coordinates(df)[2,1],
+y1 = sf::st_coordinates(df)[1,2],
+y2 = sf::st_coordinates(df)[2,2])
+return(out_df)
+}
+## File paths ------------------------------------------------------------------
+dir <- dirname(rstudioapi::getActiveDocumentContext()$path)
+csvpath <- (path.expand("/csvFiles"))
+figpath <- (path.expand("figures"))
+## Read in .csv files-----------------------------------------------------------
+setwd(file.path(dir, csvpath))
+d <- read.csv("BsalData_all.csv", header = T, encoding = "UTF-8")
+dcbind <- read.csv("BsalData_cbind.csv", header = T, encoding = "UTF-8")
+## Define general ggplot theme for plot uniformity -----------------------------
+ak_theme <- theme_ipsum() +
+theme(axis.text.x = element_text(size = 26),
+axis.title.x = element_text(size = 34, hjust = 0.5,
+margin = margin(t = 10, r = 0, b = 0, l = 0),
+face = "plain"),
+axis.text.y = element_text(size = 26, face = "italic"),
+axis.title.y = element_text(size = 34, hjust = 0.5,
+margin = margin(t = 0, r = 15, b = 0, l = 5),
+face = "plain"),
+axis.ticks.length = unit(.25, "cm"),
+axis.ticks = element_blank(),
+plot.tag = element_text(size = 36, face = "bold"),
+plot.title = element_text(size = 42, hjust = 0.5, face = "plain"),
+plot.subtitle = element_markdown(size = 12, face = "plain"),
+plot.margin = margin(1, 1, 1.5, 1.2, "cm"),
+plot.caption = element_markdown(hjust = 0, size = 14, face = "plain"),
+plot.caption.position = "plot",
+legend.position = "top",
+legend.key.size = unit(2,"cm"),
+# legend.text.align = 1,
+legend.text = element_text(size = 28, hjust = -1),
+legend.title = element_text(size = 28, face = "bold"),
+panel.border = element_blank(),
+panel.background = element_blank(),
+panel.spacing.y = unit(1.5,"cm"),
+strip.text = element_text(size = 14, face = "bold", hjust = 0.5),
+axis.line = element_line(color = 'black'))
+## These packages need to be loaded first (commented out pckgs only need to be run once)
+# remotes::install_version("Rttf2pt1", version = "1.3.8") # install this version, latest ver. not compatible
+# remotes::install_github("gorkang/html2latex") # convert sjPlot::tab_model() hmtl table to tex and pdf in .Rmd docs
+# extrafont::font_import("C:/Windows/Fonts") # load fonts before ggplot2; only need to do this once
+require(pacman)
+require(renv)
+require(extrafontdb)
+require(extrafont)
+extrafont::loadfonts(device = "all", quiet = T) # plot fonts
+## Packages --------------------------------------------------------------------
+### > Visualization Packages----------------------------------------------------
+pckgs <- c("ggsignif", # adds labels to significant groups
+"renv", # environment lock
+"ggtext", # for text type/arrangements w/ ggplot2
+"Rttf2pt1", # to use with the extrafont package
+"ggthemes", # contains 'scales', 'themes', and 'geoms' packages
+"grDevices", # saves high quality svg, pdf, and ps files
+"graphics", # dependency of grDevices
+"cowplot", # arranging plots/figs
+"gridExtra", # arranging plots/figs
+"patchwork", # arranging plots/figs
+"hrbrthemes", # plot colors
+"RColorBrewer", # plot colors
+"viridis", # plot colors
+"scales", # plot customization
+"eurostat", # obtain spatial data from europe
+"geodata", # obtain geographic data (world map)
+"rnaturalearth", # obtain spatial polygons that can be used with sf
+"sf", # mapping
+"ggspatial", # north arrow and scale bar
+"mapproj", # apply map projection
+"scatterpie", # add pie charts to maps
+"ggpubr", # prepares plots to be ready for publication
+"latex2exp", # allows use of LaTeX in R
+"glue", # allows concatenation of LaTeX and R syntax
+"sjPlot", # plot_model(), tab_model()
+"ragg", # converts plots to tiff files
+"htmltools", # visualizes model outputs as html tables
+"webshot2", # converts html files to png
+"magick", # image_read() -- needed for cowplot::draw_image
+"Hmisc", # binconf() provides CI of binomial distribution
+### > Analysis Packages --------------------------------------------------------
+"tidyverse", # data wrangling/manipulation
+"glmmTMB", # glmmTMB()
+"emmeans", # lsmeans()
+"car", # Anova()
+"DHARMa", # simulateResiduals(), testZeroInflation(), testDispersion()
+"MuMIn", # model.sel()
+"ggeffects", # ggpredict()
+"epiR", # calculate prevalence & CIs
+"binom", # credible intervals
+"sjmisc"  # data and variable transformation
+)
+## Load packages
+pacman::p_load(pckgs, character.only = T)
+unload(ggplot2)
+## These packages need to be loaded first (commented out pckgs only need to be run once)
+# remotes::install_version("Rttf2pt1", version = "1.3.8") # install this version, latest ver. not compatible
+# remotes::install_github("gorkang/html2latex") # convert sjPlot::tab_model() hmtl table to tex and pdf in .Rmd docs
+# extrafont::font_import("C:/Windows/Fonts") # load fonts before ggplot2; only need to do this once
+require(pacman)
+require(renv)
+require(extrafontdb)
+require(extrafont)
+extrafont::loadfonts(device = "all", quiet = T) # plot fonts
+## Packages --------------------------------------------------------------------
+### > Visualization Packages----------------------------------------------------
+pckgs <- c("ggsignif", # adds labels to significant groups
+"renv", # environment lock
+"ggtext", # for text type/arrangements w/ ggplot2
+"Rttf2pt1", # to use with the extrafont package
+"ggthemes", # contains 'scales', 'themes', and 'geoms' packages
+"grDevices", # saves high quality svg, pdf, and ps files
+"graphics", # dependency of grDevices
+"cowplot", # arranging plots/figs
+"gridExtra", # arranging plots/figs
+"patchwork", # arranging plots/figs
+"hrbrthemes", # plot colors
+"RColorBrewer", # plot colors
+"viridis", # plot colors
+"scales", # plot customization
+"eurostat", # obtain spatial data from europe
+"geodata", # obtain geographic data (world map)
+"rnaturalearth", # obtain spatial polygons that can be used with sf
+"sf", # mapping
+"ggspatial", # north arrow and scale bar
+"mapproj", # apply map projection
+"scatterpie", # add pie charts to maps
+"ggpubr", # prepares plots to be ready for publication
+"latex2exp", # allows use of LaTeX in R
+"glue", # allows concatenation of LaTeX and R syntax
+"sjPlot", # plot_model(), tab_model()
+"ragg", # converts plots to tiff files
+"htmltools", # visualizes model outputs as html tables
+"webshot2", # converts html files to png
+"magick", # image_read() -- needed for cowplot::draw_image
+"Hmisc", # binconf() provides CI of binomial distribution
+### > Analysis Packages --------------------------------------------------------
+"tidyverse", # data wrangling/manipulation
+"glmmTMB", # glmmTMB()
+"emmeans", # lsmeans()
+"car", # Anova()
+"DHARMa", # simulateResiduals(), testZeroInflation(), testDispersion()
+"MuMIn", # model.sel()
+"ggeffects", # ggpredict()
+"epiR", # calculate prevalence & CIs
+"binom", # credible intervals
+"sjmisc"  # data and variable transformation
+)
+## Load packages
+pacman::p_load(pckgs, character.only = T)
+## Functions -------------------------------------------------------------------
+map_bounds <- function(x1, x2, y1, y2, crs){
+df <- data.frame(Lon = c(x1, x2),
+Lat = c(y1, y2)) %>%
+st_as_sf(., coords = c("Lon", "Lat"), crs = 4326) %>%
+st_transform(., crs)
+out_df <- data.frame(x1 = sf::st_coordinates(df)[1,1],
+x2 = sf::st_coordinates(df)[2,1],
+y1 = sf::st_coordinates(df)[1,2],
+y2 = sf::st_coordinates(df)[2,2])
+return(out_df)
+}
+## File paths ------------------------------------------------------------------
+dir <- dirname(rstudioapi::getActiveDocumentContext()$path)
+csvpath <- (path.expand("/csvFiles"))
+figpath <- (path.expand("figures"))
+## Read in .csv files-----------------------------------------------------------
+setwd(file.path(dir, csvpath))
+d <- read.csv("BsalData_all.csv", header = T, encoding = "UTF-8")
+dcbind <- read.csv("BsalData_cbind.csv", header = T, encoding = "UTF-8")
+## Define general ggplot theme for plot uniformity -----------------------------
+ak_theme <- theme_ipsum() +
+theme(axis.text.x = element_text(size = 26),
+axis.title.x = element_text(size = 34, hjust = 0.5,
+margin = margin(t = 10, r = 0, b = 0, l = 0),
+face = "plain"),
+axis.text.y = element_text(size = 26, face = "italic"),
+axis.title.y = element_text(size = 34, hjust = 0.5,
+margin = margin(t = 0, r = 15, b = 0, l = 5),
+face = "plain"),
+axis.ticks.length = unit(.25, "cm"),
+axis.ticks = element_blank(),
+plot.tag = element_text(size = 36, face = "bold"),
+plot.title = element_text(size = 42, hjust = 0.5, face = "plain"),
+plot.subtitle = element_markdown(size = 12, face = "plain"),
+plot.margin = margin(1, 1, 1.5, 1.2, "cm"),
+plot.caption = element_markdown(hjust = 0, size = 14, face = "plain"),
+plot.caption.position = "plot",
+legend.position = "top",
+legend.key.size = unit(2,"cm"),
+# legend.text.align = 1,
+legend.text = element_text(size = 28, hjust = -1),
+legend.title = element_text(size = 28, face = "bold"),
+panel.border = element_blank(),
+panel.background = element_blank(),
+panel.spacing.y = unit(1.5,"cm"),
+strip.text = element_text(size = 14, face = "bold", hjust = 0.5),
+axis.line = element_line(color = 'black'))
+# log transform vars
+d <- d %>%
+mutate(logsppAbun = log(sppAbun),
+logsiteAbun = log(siteAbun),
+scientific = as.factor(scientific),
+susceptibility = as.factor(susceptibility)) %>%
+relocate(c(logsppAbun, logsiteAbun), .after = sppAbun)
+dcbind <- dcbind %>%
+mutate(logsppAbun = log(sppAbun),
+logsiteAbun = log(siteAbun),
+scientific = as.factor(scientific),
+susceptibility = as.factor(susceptibility)) %>%
+relocate(c(logsppAbun, logsiteAbun), .after = sppAbun)
+## Vector of cleaner labels for model output table
+nicelabs <- c(`(Intercept)` = "Intercept",
+richness = "Richness",
+logsiteAbun = "log(Site abundance)",
+"richness:logsiteAbun" = "Richness:log(Site abundance)",
+temp_t0 = "Temperature",
+soilM_t0 = "Soil moisture",
+"temp_d:sMoist_d" = "Temp:Soil moisture")
+## I. Generate descriptive figures ---------------------------------------------
+# Asia polygons were re-projected to EPSG:27703 (WGS84/Equi7 Asia) and Europe polygons were
+# re-projected to EPSG:27704 (WGS84/Equi7 Europe) for mapping purposes. These projections were
+# made as a part of a larger project to optimize handling remote-sensing data, with each
+# continent having their own centroid. doi: https://doi.org/10.1016/j.cageo.2014.07.005
+# Equi7Grid GitHub: https://github.com/TUW-GEO/Equi7Grid
+epsg27703 <- crs('+proj=aeqd +lat_0=47 +lon_0=94 +x_0=4340913.84808 +y_0=4812712.92347 +datum=WGS84 +units=m +no_defs')
+epsg27704 <- crs('+proj=aeqd +lat_0=53 +lon_0=24 +x_0=5837287.81977 +y_0=2121415.69617 +datum=WGS84 +units=m +no_defs')
+obs <- d %>%
+dplyr::select(country, ADM0, Lat, Lon, BsalDetected, individualCount) %>%
+plyr::mutate(BsalDetected = as.factor(dplyr::recode(BsalDetected,
+"1" = "Bsal positive",
+"0" = "Bsal negative"))) %>%
+st_as_sf(., coords = c("Lon", "Lat"), crs = 4326) %>%
+mutate(jittered = sf::st_jitter(geometry, 0.25)) %>%
+arrange(BsalDetected)
+# summarise data
+sampSize <- obs %>%
+group_by(country) %>%
+summarise(n = n())
+# Get the coordinates of each country
+country_lookup <- read.csv("countries.csv", stringsAsFactors = F)
+names(country_lookup)[1] <- "country_code"
+# Combine summarised data
+mapLabels <- merge(x = sampSize, y = country_lookup,
+by.x = "country", by.y = "name", all.x = T) %>%
+st_as_sf(., coords = c("longitude", "latitude"), crs = 4326)
+# Obtain world map
+worldmap <- ne_countries(scale = "medium", type = "map_units", returnclass = "sf") %>%
+st_transform(., crs = 4326)
+renv::install("rnaturalearth")

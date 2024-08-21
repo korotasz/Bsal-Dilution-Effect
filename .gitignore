@@ -1,22 +1,13 @@
-weatherSampling/weatherProcessing_monthly.R
-
 .Rhistory
-.Rproj.user/*
+.RData
+.Rprofile
 
-csvFiles/shapefiles/*
-csvFiles/nativeStatus.xlsx
-csvFiles/locations
-csvFiles/locations_with_ADMs
-csvFiles/Germany_data.xlsx
-csvFiles/weather.csv
-csvFiles/gbif_amphibs.csv
-csvFiles/.Rhistory
+01_dataCleaning/shapefiles/*
+01_dataCleaning/weatherSampling/weatherProcessing_monthly.R
+01_dataCleaning/gbif_amphibs.csv
 
-markdownFiles/figures/*
-markdownFiles/_extensions/*
-markdownFiles/DEH_analyses_files/*
-markdownFiles/DEH_analyses.html
-markdownFiles/quarto.css
-
-.Rproj.user
-README.pdf
+03_outputs/figures/*
+01_dataCleaning/_extensions/*
+01_dataCleaning/DEH_analyses_files/*
+01_dataCleaning/DEH_analyses.html
+01_dataCleaning/quarto.css
