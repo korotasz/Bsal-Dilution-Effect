@@ -12,7 +12,7 @@ This chapter of my dissertation leveraged publicly available data, supplemented 
 
    All other info regarding R package versions can be found in the [renv.lock](https://github.com/korotasz/Chapter-2-Analyses/blob/main/renv.lock) file.
 
-  Python was used to obtain weather data from the [GLDAS dataset](https://disc.gsfc.nasa.gov/datasets/GLDAS_CLSM025_DA1_D_2.2/summary?keywords=GLDAS%20Catchment%20Land%20Surface%20Model%20L4%20daily%200.25%20x%200.25%20degree%20GRACE-DA1%20V2.2%20(GLDAS_CLSM025_DA1_D%202.2)) available through [NASA EarthData](https://www.earthdata.nasa.gov/), and QGIS was used to process the .nc4 files. The weather data has already been integrated into our dataset, but if you wish to run any of the .py scripts in the [weatherSampling folder](https://github.com/korotasz/Chapter-2-Analyses/blob/main/weatherSampling), you will need the following versions of Python and QGIS:
+  Python was used to obtain weather data from the [GLDAS dataset](https://disc.gsfc.nasa.gov/datasets/GLDAS_CLSM025_DA1_D_2.2/summary?keywords=GLDAS%20Catchment%20Land%20Surface%20Model%20L4%20daily%200.25%20x%200.25%20degree%20GRACE-DA1%20V2.2%20(GLDAS_CLSM025_DA1_D%202.2)) available through [NASA EarthData](https://www.earthdata.nasa.gov/), and QGIS was used to process the .nc4 files. The weather data has already been integrated into our dataset, but if you wish to run any of the .py scripts in the [weatherSampling folder](https://github.com/korotasz/Chapter-2-Analyses/blob/main/01_dataCleaning/weatherSampling), you will need the following versions of Python and QGIS:
   
   <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/Python-v.3.12.0-%234584b6?style=plastic&logo=Python&logoColor=%23ffde57&logoSize=auto&labelColor=%234584b6&color=%23fbfbfb"/></a>
   <a href="https://ftp.osuosl.org/pub/osgeo/download/qgis/windows/"><img src="https://img.shields.io/badge/QGIS-v.3.26.2--1-%23fbfbfb?style=plastic&logo=Qgis&logoColor=%23f18d36&logoSize=auto&labelColor=%23589632&color=%23fbfbfb"/></a> 
@@ -30,7 +30,7 @@ This chapter of my dissertation leveraged publicly available data, supplemented 
    3. In R, navigate to the folder containing the cloned repository and open the [Chapter-2-Analyses.Rproj](https://github.com/korotasz/Chapter-2-Analyses/blob/main/Chapter-2-Analyses.Rproj) file.
       - This project file will organize the R environment so that all relevant scripts, files, and sub-folders are structured how they need to be to efficiently run the R scripts. Click [here](https://r4ds.had.co.nz/workflow-projects.html#rstudio-projects) to learn more about R projects.
    
-   4. Within the opened project, open the [dataAnalysis_DEH](https://github.com/korotasz/Chapter-2-Analyses/blob/main/dataAnalysis_DEH.R) R script.
+   4. Within the opened project, open the [dataAnalysis_DEH](https://github.com/korotasz/Chapter-2-Analyses/blob/main/02_dataAnalyses/dataAnalysis.RData) R script.
    
    5. **Before running any part of the script**, make sure the ***renv*** package is installed and loaded:
       ```
