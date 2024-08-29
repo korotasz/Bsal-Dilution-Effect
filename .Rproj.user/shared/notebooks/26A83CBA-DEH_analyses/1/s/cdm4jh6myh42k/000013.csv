@@ -1,3 +1,0 @@
-"0",""
-"0","## Look closer at 'nPos_all'"
-"0","rstatix::identify_outliers(posSites_reduced, nPos_all) # Be aware of the extreme outlier -- not going to do anything about it now"

@@ -82,10 +82,10 @@ assign_start_date <- function(df, timepoint, date, out_col){
 
 ### File paths -----------------------------------------------------------------
 dir <- rstudioapi::getActiveProject()
-csvpath <- file.path(dir, path.expand("csvFiles"))
+csvpath <- file.path(dir, path.expand("01_dataCleaning"))
 shppath <- file.path(csvpath, path.expand("shapefiles"))
-weatherpath <- file.path(dir, path.expand("weatherSampling"))
-analysespath <- file.path(dir, path.expand("markdownFiles"))
+weatherpath <- file.path(csvpath, path.expand("weatherSampling"))
+analysespath <- file.path(dir, path.expand("02_dataAnalyses"))
 
 ### Read in .csv files----------------------------------------------------------
 setwd(csvpath)
@@ -668,6 +668,8 @@ adminlvls <- adminlvls %>%
   glimpse()
 
 
+
+## Assign site #s by distinct localities ---------------------------------------
 ## for NA 'locality' values, replace with next larger ADM. For example, when
 #  'localities' was NA, ADM4 was listed. If ADM4 was not available, ADM3 was used, etc.
 for(i in 1:nrow(df)){
@@ -685,22 +687,24 @@ for(i in 1:nrow(df)){
 }
 
 
-
-rm(missing_coords, i)
-
-
-## Assign site #s by distinct localities.
 df <- df %>%
-  dplyr::group_by(ADM1, locality) %>%
+  dplyr::select(!(date)) %>%
+  unite(c("year", "month", "day"), sep = "-", col = "date", remove = F) %>%
+  ## Remove incomplete observations before assigning a site #
+  # filter(!c(is.na(year) | is.na(month) | is.na(day))) %>%
+  dplyr::group_by( locality) %>%
   mutate(locationID = cur_group_id()) %>%
   ungroup() %>%
   relocate(locationID, .after = georeferenceProtocol)
 
+rm(missing_coords, i)
+
+
 ## Add relative abundance ------------------------------------------------------
+##**CHANGE HERE FOR CONF VS NON-CONF CBIND DATA --------------------------------
 df <- df %>%
-  dplyr::select(!(date)) %>%
+  filter(occurrenceRemarks == "OK") %>%
   rename(Site = locationID) %>%
-  unite(c("year", "month", "day"), sep = "-", col = "date", remove = F) %>%
   ## Relative species abundance (# individuals/spp at a site during each sampling event) -- calculated using ONLY our data
   group_by(scientific, Site, date) %>%
   mutate(sppAbun = sum(individualCount)) %>%
@@ -792,7 +796,7 @@ df <- df %>%
   relocate(locality, .after = ADM4)
 
 
-rm(iucn_rich, locality_spr, spr, subset)
+rm(iucn_rich, locality_spr, spr, subset, exclude)
 ## Add susceptibility data -----------------------------------------------------
 ## Susceptibility codes (based on a combination of Martel et al. 2014 and Bosch et al. 2021)
 ## 1 = resistant: no infection, no clinical signs of disease, no mortality
@@ -807,11 +811,12 @@ df$susceptibility <- s$susceptibility[base::match(df$scientific, s$scientific)]
 ## double check for NAs
 plyr::count(df, "susceptibility")
 
+
 ## close look at any missing data
 # sus <- df %>% dplyr::filter(is.na(susceptibility)) %>%
 #   group_by(scientific) %>%
 #   summarise(n = n()) # 25 spp. total missing susceptibility scores
-# print(sum(sus$n)) # 732 observations total, missing
+# print(sum(sus$n)) # 719 observations total, missing
 df <- df %>%
   relocate(susceptibility, .after = scientific)
 
@@ -1092,7 +1097,7 @@ df <- df %>%
   relocate(c(temp_wk3, temp_wk2, temp_wk1, temp_d4, temp_d,
              sMoist_wk3, sMoist_wk2, sMoist_wk1, sMoist_d4, sMoist_d), .after = basisOfRecord)
 
-rm(avg_soilMoist, avg_temp, daily_SM, daily_temp, exclude, gldas_daily, i, soilMoisture, start_dates, temperature, weather_d, weatherData)
+rm(avg_soilMoist, avg_temp, daily_SM, daily_temp, gldas_daily, i, soilMoisture, start_dates, temperature, weather_d, weatherData)
 # ## Import MONTHLY temperature, precip, & soil moisture data from NASA's EarthData website (citation below) ----
 # # Li, B., H. Beaudoing, and M. Rodell, NASA/GSFC/HSL (2020), GLDAS Catchment Land Surface Model L4 monthly 1.0 x 1.0 degree V2.1, Greenbelt, Maryland, USA,
 # #   Goddard Earth Sciences Data and Information Services Center (GES DISC), Accessed: [2024-04-01], 10.5067/FOUXNLXFAZNY
@@ -1234,8 +1239,8 @@ levels(df$diseaseDetected) <- c(0,1) #0 = F, 1 = T
 ## Climate data from geodata package
 ## Construct file path to store WorldClim data
 dir.create(file.path(shppath, "/WorldClim")) # Will give warning if path already exists
-wclim_path <- path.expand("csvFiles/shapefiles/WorldClim")
-setwd(file.path(dir, wclim_path))
+wclim_path <- file.path(shppath, path.expand("WorldClim"))
+setwd(file.path(wclim_path))
 
 ## Create bounding box for European AND Asian countries' extent to crop WorldClim rasters
 extent <- c(-18.105469, 135.351563, 7.362467, 60.239811) # xmin, xmax, ymin, ymax
@@ -1257,7 +1262,7 @@ points <- latlon_id %>%
 ## Obtain WorldClim data as SpatRasters and extract data using lat/lon from adminlvls df ----
 ## WorldClim resolution of 2.5 arc minutes is approximately equivalent to 0.0417 degrees (finer scale than needed, but that's ok)
 #     a. tmin | temporal scale: monthly (30yr avg)
-tmin <- geodata::worldclim_global(var = 'tmin', path = file.path(dir, wclim_path), res = 2.5, version = "2.1")
+tmin <- geodata::worldclim_global(var = 'tmin', path = file.path(wclim_path), res = 2.5, version = "2.1")
 
 tmin_cropped <- terra::crop(tmin, extent)
 names(tmin_cropped) <- c("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12")
@@ -1276,7 +1281,7 @@ rm(tmin, tmin_extract)
 
 
 #     b. tmax | temporal scale: monthly (30yr avg)
-tmax <- geodata::worldclim_global(var = 'tmax', path = file.path(dir, wclim_path), res = 2.5, version = "2.1")
+tmax <- geodata::worldclim_global(var = 'tmax', path = file.path(wclim_path), res = 2.5, version = "2.1")
 
 tmax_cropped <- terra::crop(tmax, extent)
 names(tmax_cropped) <- c("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12")
@@ -1295,7 +1300,7 @@ rm(tmax, tmax_extract)
 
 
 #     c. tavg | temporal scale: monthly (30yr avg)
-tavg <- geodata::worldclim_global(var = 'tavg', path = file.path(dir, wclim_path), res = 2.5, version = "2.1")
+tavg <- geodata::worldclim_global(var = 'tavg', path = file.path(wclim_path), res = 2.5, version = "2.1")
 
 tavg_cropped <- terra::crop(tavg, extent)
 names(tavg_cropped) <- c("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12")
@@ -1313,7 +1318,7 @@ tavg_df <- as.data.frame(tavg_extract) %>%
 rm(tavg, tavg_extract)
 
 #     d. prec | temporal scale: monthly (30yr avg)
-prec <- geodata::worldclim_global(var = 'prec', path = file.path(dir, wclim_path), res = 2.5, version = "2.1")
+prec <- geodata::worldclim_global(var = 'prec', path = file.path(wclim_path), res = 2.5, version = "2.1")
 
 prec_cropped <- terra::crop(prec, extent)
 names(prec_cropped) <- c("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12")
@@ -1332,7 +1337,7 @@ prec_df <- as.data.frame(prec_extract) %>%
 rm(prec, prec_extract)
 
 #     e. bio | temporal scale: annual (30yr avg)
-bio <- geodata::worldclim_global(var = 'bio', path = file.path(dir, wclim_path), res = 2.5, version = "2.1")
+bio <- geodata::worldclim_global(var = 'bio', path = file.path(wclim_path), res = 2.5, version = "2.1")
 
 bio_cropped <- terra::crop(bio, extent)
 names(bio_cropped) <- c("bio1", "bio2", "bio3", "bio4", "bio5", "bio6", "bio7", "bio8", "bio9", "bio10", "bio11", "bio12",
@@ -1370,7 +1375,7 @@ df <- df %>%
   left_join(., wclim, by = c("Lat", "Lon", "month", "continent", "country", "ADM0", "ADM1", "ADM2", "ADM3", "ADM4"), keep = F) %>%
   relocate(c(tmin, tavg, tmax, prec, bio1:bio19), .after = sMoist_d)
 
-rm(wclim, points, adminlvls)
+rm(wclim, points, adminlvls, extent)
 
 # Determine which spp have <10 observations and remove from data set -----------
 df %>%
@@ -1434,7 +1439,7 @@ df %>%
 
 ## Double checking #s
 nBsalPos <- aggregate(individualCount ~ BsalDetected+country+scientific, data = df, sum) %>%
-  pivot_wider(names_from = BsalDetected, values_from = individualCount)
+  pivot_wider(names_from = BsalDetected, values_from = individualCount) %>%
 
 rm(nBsalPos, dateFirstPositive)
 # Add all data back into 'df' data frame, even sites that are negative
@@ -1447,7 +1452,6 @@ df <- df %>%
          bio17_wc = bio17, bio18_wc = bio18, bio19_wc = bio19, dataConfidence = occurrenceRemarks) %>%
   relocate(c(iucn_rich, locality_rich), .after = richness)
 
-rm(extent)
 
 ## Get rid of columns I've changed my mind about in OG dataframe
 df <- df %>%
@@ -1469,42 +1473,113 @@ df <- df %>%
 
 
 ## Create 'cbind' dataset ------------------------------------------------------
+### > Summarise Bsal+ and Bsal- observations in dataset ------------------------
 setwd(file.path(analysespath))
+## Total tally including all observations
 # Return data frame containing all observations from countries that had confirmed Bsal positive sites (will separate out Bsal+ and Bsal- sites later)
+BsalCount_all <- df %>%
+  subset(., select = c(country, Site, posSite, date, scientific, BsalDetected, individualCount)) %>%
+  mutate(BsalDetected = case_when(BsalDetected == "1" ~ "nPos_all",
+                                  BsalDetected == "0" ~ "nNeg_all")) %>%
+  group_by(country, Site, posSite, date, scientific, BsalDetected) %>%
+  summarize(n = sum(individualCount)) %>%
+  pivot_wider(names_from = c(BsalDetected),
+              id_cols = c(country, Site, posSite, date, scientific),
+              values_from = n, values_fill = 0)
+
+## Tally for fire salamanders only
+BsalCount_FS_only <- df %>%
+  subset(., select = c(country, Site, posSite, date, scientific, BsalDetected, individualCount)) %>%
+  filter(scientific == "Salamandra salamandra") %>%
+  mutate(BsalDetected = case_when(BsalDetected == "1" ~ "nPos_FS",
+                                  BsalDetected == "0" ~ "nNeg_FS")) %>%
+  group_by(country, Site, posSite, date, scientific, BsalDetected) %>%
+  summarize(n = sum(individualCount)) %>%
+  pivot_wider(names_from = c(BsalDetected),
+              id_cols = c(country, Site, posSite, date, scientific),
+              values_from = n, values_fill = 0)
+
+## Tally excluding fire salamanders
+BsalCount_noFS <- df %>%
+  subset(., select = c(country, Site, posSite, date, scientific, BsalDetected, individualCount)) %>%
+  filter(scientific != "Salamandra salamandra") %>%
+  mutate(BsalDetected = case_when(BsalDetected == "1" ~ "nPos_noFS",
+                                  BsalDetected == "0" ~ "nNeg_noFS")) %>%
+  group_by(country, Site, posSite, date, scientific, BsalDetected) %>%
+  summarize(n = sum(individualCount)) %>%
+  pivot_wider(names_from = c(BsalDetected),
+              id_cols = c(country, Site, posSite, date, scientific),
+              values_from = n, values_fill = 0)
+
+### > Summarise fatal observations in dataset ----------------------------------
+fatalCount_all <- df %>%
+  subset(., select = c(country, Site, posSite, date, scientific, fatal, individualCount)) %>%
+  mutate(fatal = case_when(fatal == "1" ~ "nDead_all",
+                           fatal == "0" ~ "nAlive_all",
+                           is.na(fatal) ~ "nFatalUnk_all")) %>%
+  group_by(country, Site, posSite, date, scientific, fatal) %>%
+  summarize(n = sum(individualCount)) %>%
+  pivot_wider(names_from = c(fatal),
+              id_cols = c(country, Site, posSite, date, scientific),
+              values_from = n, values_fill = 0)
+
+fatalCount_FS_only <- df %>%
+  subset(., select = c(country, Site, posSite, date, scientific, fatal, individualCount)) %>%
+  filter(scientific == "Salamandra salamandra") %>%
+  mutate(fatal = case_when(fatal == "1" ~ "nDead_FS",
+                           fatal == "0" ~ "nAlive_FS",
+                           is.na(fatal) ~ "nFatalUnk_FS")) %>%
+  group_by(country, Site, posSite, date, scientific, fatal) %>%
+  summarize(n = sum(individualCount)) %>%
+  pivot_wider(names_from = c(fatal),
+              id_cols = c(country, Site, posSite, date, scientific),
+              values_from = n, values_fill = 0)
+
+fatalCount_noFS <- df %>%
+  subset(., select = c(country, Site, posSite, date, scientific, fatal, individualCount)) %>%
+  filter(scientific != "Salamandra salamandra") %>%
+  mutate(fatal = case_when(fatal == "1" ~ "nDead_noFS",
+                           fatal == "0" ~ "nAlive_noFS",
+                           is.na(fatal) ~ "nFatalUnk_noFS")) %>%
+  group_by(country, Site, posSite, date, scientific, fatal) %>%
+  summarize(n = sum(individualCount)) %>%
+  pivot_wider(names_from = c(fatal),
+              id_cols = c(country, Site, posSite, date, scientific),
+              values_from = n, values_fill = 0)
+
+### > Combine it all -----------------------------------------------------------
 dcbind_all <- df %>%
-  group_by(Site, date, scientific) %>%
-  mutate(nPos_FS = sum(BsalDetected != "0" & scientific == "Salamandra salamandra"),
-         nNeg_FS = sum(BsalDetected == "0" & scientific == "Salamandra salamandra"),
-         nDead_FS = sum(fatal != "0" & scientific == "Salamandra salamandra", na.rm = T),
-         nAlive_FS = sum(fatal == "0" & scientific == "Salamandra salamandra", na.rm = T),
-         nFatalUnk_FS = sum(is.na(fatal) & scientific == "Salamandra salamandra"),
-         nPos_all = sum(BsalDetected != "0"),
-         nNeg_all = sum(BsalDetected == "0"),
-         nDead_all = sum(fatal != "0", na.rm = T),
-         nAlive_all = sum(fatal == "0", na.rm = T),
-         nFatalUnk_all = sum(is.na(fatal)),
-         nPos_all_noFS = sum(BsalDetected != "0" & scientific != "Salamandra salamandra"),
-         nNeg_all_noFS = sum(BsalDetected == "0" & scientific != "Salamandra salamandra"),
-         nDead_all_noFS = sum(fatal != "0" & scientific != "Salamandra salamandra", na.rm = T),
-         nAlive_all_noFS = sum(fatal == "0" & scientific != "Salamandra salamandra", na.rm = T),
-         nFatalUnk_all_noFS = sum(is.na(fatal)),
-         posSite = as.factor(posSite),
-         # In the absence of a sample 'collectorList', the 'collector' is assumed to be
+  subset(., select = c(continent:country, ADM1:siteAbun, genus:susceptibility,
+                       establishmentMeans:dataConfidence)) %>%
+  # subset(., select = c(country:susceptibility, establishmentMeans:bio19_wc, principalInvestigator:dataConfidence)) %>%
+  left_join(BsalCount_all, by = c("country", "Site", "posSite", "date", "scientific")) %>%
+  left_join(fatalCount_all, by = c("country", "Site", "posSite", "date", "scientific")) %>%
+  left_join(BsalCount_FS_only, by = c("country", "Site", "posSite", "date", "scientific")) %>%
+  left_join(fatalCount_FS_only, by = c("country", "Site", "posSite", "date", "scientific")) %>%
+  left_join(BsalCount_noFS, by = c("country", "Site", "posSite", "date", "scientific")) %>%
+  left_join(fatalCount_noFS, by = c("country", "Site", "posSite", "date", "scientific")) %>%
+  mutate_at(c(66:80), ~replace(., is.na(.), 0)) %>%
+  relocate(c(nNeg_all:nDead_noFS), .after = populationTrend) %>%
+  mutate(# In the absence of a sample 'collectorList', the 'collector' is assumed to be
          #  the first author of the paper associated with the data.
          collectorList = case_when(country == "China" ~ "Z. Yuan; J. Zhou; J. Wang; S. Hou; Y. Duan; X. Liu;
-                                                X. Chen; P. Wei; Y. Zhang; K. Wang; J. Shi",
+                                              X. Chen; P. Wei; Y. Zhang; K. Wang; J. Shi",
                                    country == "Vietnam" ~ "A. Laking; H.N. Ngo; T.T. Nguyen",
                                    TRUE ~ collectorList)) %>%
-  slice(1) %>%
-  ungroup() %>%
-  relocate(c(nPos_FS:nFatalUnk_all_noFS), .after = redListCategory) %>%
-  dplyr::select(continent:country, ADM1:siteAbun, genus:susceptibility,
-                establishmentMeans:nFatalUnk_all_noFS, temp_wk3:dataConfidence)
+  distinct()
 
 
 dcbind_all <- with(dcbind_all, dcbind_all[order(Site, scientific), ])
 
+rm(BsalCount, BsalCount_all, BsalCount_FS_only, BsalCount_noFS,
+   fatalCount, fatalCount_all, fatalCount_FS_only, fatalCount_noFS)
 
+## Initially Bsal- sites that were later Bsal+
+df %>%
+  subset(., select = c(posSite, Site)) %>%
+  unique() %>%
+  summarise(n = n()) %>%
+  filter(n != 1)
 
 ## Total # sites each species was present at in each country
 df %>%
@@ -1518,6 +1593,7 @@ df %>%
 
 ## Total # of Bsal+ sites each species was present at in each country
 df %>%
+  # filter(continent == "Europe") %>%
   dplyr::select(Site, country, posSite, scientific) %>%
   filter(posSite == "1") %>%
   group_by(country, scientific) %>%
@@ -1527,31 +1603,64 @@ df %>%
   summarise(n = n()) %>%
   print(n = 31)
 
+## Total # of Bsal+ sites in each country
+df %>%
+  # filter(continent == "Europe") %>%
+  dplyr::select(Site, country, posSite) %>%
+  filter(posSite == "1") %>%
+  group_by(country) %>%
+  unique() %>%
+  summarise(n = n())
+
+# Total # of Bsal+ individuals from each species
+df %>%
+  subset(., select = c(scientific, BsalDetected, individualCount)) %>%
+  group_by(scientific, BsalDetected) %>%
+  summarise(n = sum(individualCount)) %>%
+  pivot_wider(names_from = BsalDetected,
+              id_cols = scientific,
+              values_from = n) %>%
+  mutate_at(c(2:3), ~replace(., is.na(.), 0)) %>%
+  print(n = 29)
 
 ## Double check everything matches
-dcbind_all %>%
-  dplyr::select(country, scientific,  susceptibility, nPos_all, nNeg_all) %>%
+tmp <- dcbind_all %>%
+  # filter(continent == "Europe") %>%
+  dplyr::select(country, Site, posSite, date, scientific,  susceptibility, nPos_all, nNeg_all) %>%
+  distinct() %>%
   group_by(country, susceptibility, scientific) %>%
-  summarise(nPos = sum(nPos_all), nNeg = sum(nNeg_all),
+  summarise(nPos = sum(nPos_all),
+            nNeg = sum(nNeg_all),
             n = sum(nPos_all, nNeg_all)) %>%
   print(n = 38)
 
 
+tmp2 <- df %>%
+  # filter(continent == "Europe") %>%
+  subset(., select = c(country, susceptibility, scientific, BsalDetected, individualCount)) %>%
+  mutate(BsalDetected = case_when(BsalDetected == "1" ~ "nPos",
+                                  BsalDetected == "0" ~ "nNeg")) %>%
+  group_by(country, susceptibility, scientific, BsalDetected) %>%
+  summarise(n = sum(individualCount)) %>%
+  pivot_wider(names_from = BsalDetected,
+              id_cols = c(country, susceptibility, scientific),
+              values_from = n) %>%
+  mutate_at(c(4:5), ~replace(., is.na(.), 0)) %>%
+  relocate(nPos, .before = nNeg) %>%
+  mutate(n = sum(nPos, nNeg)) %>%
+  print(n = 29)
 
-df %>% dplyr::select(country, scientific, susceptibility, individualCount, BsalDetected) %>%
-  group_by(country, susceptibility, scientific) %>%
-  summarise(nPos = sum(BsalDetected != 0), nNeg = sum(BsalDetected == 0),
-            n = n()) %>%
-  print(n = 38)
 
+tmp3 <- anti_join(tmp, tmp2) # everything matches
 
+rm(dateFirstPositive, tmp, tmp2, tmp3)
 ## Export 'cleaned' datasets for data analysis ---------------------------------
 ## File for all* data -- samples listed as individual rows; nothing is summarized:
 #     *Bsal positive countries only
-write.csv(df, file = "BsalData_all.csv", row.names = FALSE)
+write.csv(df, file = "BsalData_OK.csv", row.names = FALSE)
 
 ## File for cbind dataset (organized for binomial models):
-write.csv(dcbind_all, file = "Bsal_cbind_all.csv", row.names = FALSE)
+write.csv(dcbind_all, file = "Bsal_cbind_OK.csv", row.names = FALSE)
 
 
 ## Export data for collaborators to xlsx sheet:

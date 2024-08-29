@@ -16,9 +16,8 @@ require(renv)
 ## These packages need to be loaded first (commented out pckgs only need to be run once)
 # remotes::install_version("Rttf2pt1", version = "1.3.8") # install this version, latest ver. not compatible
 # remotes::install_github("gorkang/html2latex") # convert sjPlot::tab_model() hmtl table to tex and pdf in .Rmd docs
-# extrafont::font_import("C:/Windows/Fonts") # load fonts before ggplot2; only need to do this once
-
-
+# remotes::install_github("ddsjoberg/gtsummary")
+# remotes::install_github("larmarange/broom.helpers") ## used by gtsummary
 ## As of 2024-04-04, there are issues with patchwork and ggplot2 that require specific pull requests to resolve:
 # remotes::install_github("thomasp85/patchwork")
 # remotes::install_github("tidyverse/ggplot2", ref = remotes::github_pull("5592"))
@@ -27,9 +26,8 @@ require(renv)
 ##  (Matrix v. 1.6-5) and must be reverted to Matrix v. 1.6-1.1 to work
 # remotes::install_version("Matrix", version = "1.6-1.1")
 
-
 require(pacman)
-extrafont::loadfonts(device = "all", quiet = T) # plot fonts
+extrafont::loadfonts(device = "all", quiet = T)
 
 ### Visualization Packages------------------------------------------------------
 pckgs <- c("ggsignif", # adds labels to significant groups
@@ -48,6 +46,11 @@ pckgs <- c("ggsignif", # adds labels to significant groups
                "glue", # allows concatenation of LaTeX and R syntax
              "sjPlot", # plot_model(), tab_model()
                "ragg", # converts plots to tiff files
+          "flextable", # create tables compatible with Word
+          "gtsummary", # better package for creating tables from glmmTMB objects
+        "broom.mixed", # required to create flextable/gtsummary objects from mixed model outputs
+      "broom.helpers", # required for gtsummary
+            # "webshot", # save kable tables
              "magick", # image_read() -- needed for cowplot::draw_image
 ### Analysis Packages --------------------------------------------------------
           "tidyverse", # data wrangling/manipulation
@@ -80,36 +83,34 @@ flip <- function(data) {
   new
 }
 
+# a function to round p-values and add stars to gtsummary objects
+style_pvalue_stars <- function(x) {
+  dplyr::case_when(
+    x < 0.001 ~ paste0(style_pvalue(x), "***"),
+    x < 0.01 ~ paste0(style_pvalue(x), "**"),
+    x < 0.05 ~ paste0(style_pvalue(x), "*"),
+    TRUE ~ style_pvalue(x)
+  )
+}
+
+
 ## File paths ------------------------------------------------------------------
 dir <- rstudioapi::getActiveProject()
-mdpath <- file.path(dir, path.expand("markdownFiles"))
-figpath <- file.path(mdpath, path.expand("figures"))
+analysis <- file.path(dir, path.expand("02_dataAnalyses"))
+outputs <- file.path(dir, path.expand("03_outputs"))
+figpath <- file.path(outputs, path.expand("figures"))
+tblpath <- file.path(outputs, path.expand("tables"))
+shppath <- file.path(dir, path.expand("01_dataCleaning/shapefiles"))
 
 ## Read in .csv files and prep data --------------------------------------------
-setwd(mdpath)
-## All data -- not meant for analyses, just visualization.
-d <- read.csv("BsalData_all.csv", header = T, encoding = "UTF-8") %>%
-  # transform vars
-  mutate(logsppAbun = log(sppAbun + 1),
-         logsiteAbun = log(siteAbun + 1),
-         scientific = as.factor(scientific),
-         susceptibility = as.factor(susceptibility)) %>%
-  relocate(c(logsppAbun, logsiteAbun), .after = sppAbun)
+setwd(analysis)
 
 ## only data I am confident about
-d_conf <- read.csv("BsalData_OK.csv", header = T, encoding = "UTF-8") %>%
-  # transform vars
-  mutate(logsppAbun = log(sppAbun + 1),
-         logsiteAbun = log(siteAbun + 1),
-         scientific = as.factor(scientific),
-         susceptibility = as.factor(susceptibility)) %>%
-  relocate(c(logsppAbun, logsiteAbun), .after = sppAbun)
-
-
-
-## 'dcbind' dataset is what will be used to run our models
-dcbind_all <- read.csv("Bsal_cbind_all.csv", header = T, encoding = "UTF-8") %>%
-  # transform vars
+d <- read.csv("BsalData_OK.csv", header = T, encoding = "UTF-8") %>%
+  filter(continent == "Europe") %>%
+  #   Retain sites that have ever had a Bsal+, regardless of when the first positive at that site was
+  filter(!(is.na(dateFirstPositive))) %>%
+  #   transform vars
   mutate(logsppAbun = log(sppAbun + 1),
          logsiteAbun = log(siteAbun + 1),
          scientific = as.factor(scientific),
@@ -118,41 +119,30 @@ dcbind_all <- read.csv("Bsal_cbind_all.csv", header = T, encoding = "UTF-8") %>%
 
 
 ## 'dcbind' dataset is what will be used to run our models
-dcbind_conf <- read.csv("Bsal_cbind_OK.csv", header = T, encoding = "UTF-8") %>%
+dcbind <- read.csv("Bsal_cbind_all.csv", header = T, encoding = "UTF-8") #%>%
+  filter(continent == "Europe") %>%
+  #   Retain sites that have ever had a Bsal+, regardless of when the first positive at that site was
+  filter(!(is.na(dateFirstPositive))) %>%
   # transform vars
   mutate(logsppAbun = log(sppAbun + 1),
          logsiteAbun = log(siteAbun + 1),
          scientific = as.factor(scientific),
          susceptibility = as.factor(susceptibility)) %>%
-  relocate(c(logsppAbun, logsiteAbun), .after = sppAbun)
-
-
+  relocate(c(logsppAbun, logsiteAbun), .after = sppAbun) %>%
 ## Data prep for cbind models: drop rows with NA vals in weather data & scale relevant vars
 #   bio1_wc = "annual mean temperature" | bio12_wc = annual precipitation
-dcbindScaled <- dcbind_all %>%
-  filter(continent == "Europe") %>%
   tidyr::drop_na(., any_of(c("temp_d", "sMoist_d", "tmin_wc:bio1_wc", "bio12_wc"))) %>%
   mutate_at(c("temp_d", "sMoist_d",
               "bio1_wc", "bio12_wc", "tavg_wc", "prec_wc"),
             ~(scale(., center = T, scale = T %>% as.numeric))) %>%
-  mutate(year = year(date),
-         locality = case_when(is.na(locality) ~ ADM2,
-                              TRUE ~ locality))
+  mutate(year = year(date))
 
 
-dcbindScaled_conf <- dcbind_conf %>%
-  filter(continent == "Europe") %>%
-  tidyr::drop_na(., any_of(c("temp_d", "sMoist_d", "tmin_wc:bio1_wc", "bio12_wc"))) %>%
-  mutate_at(c("temp_d", "sMoist_d",
-              "bio1_wc", "bio12_wc", "tavg_wc", "prec_wc"),
-            ~(scale(., center = T, scale = T %>% as.numeric))) %>%
-  mutate(year = year(date),
-         locality = case_when(is.na(locality) ~ ADM2,
-                              TRUE ~ locality))
+## Define ggplot theme and set flextable defaults ------------------------------
+## Load fonts from grDevices
+grDevices::pdfFonts()
 
-
-## Define general ggplot theme for plot uniformity -----------------------------
-ak_theme <- hrbrthemes::theme_ipsum(base_family = "Montserrat Light") +
+ak_theme <- hrbrthemes::theme_ipsum(base_family = "Segoe UI Light") +
   theme(axis.text.x = element_text(size = 26),
         axis.title.x = element_text(size = 34, hjust = 0.5,
                                     margin = margin(t = 10, r = 0, b = 0, l = 0),
@@ -179,7 +169,20 @@ ak_theme <- hrbrthemes::theme_ipsum(base_family = "Montserrat Light") +
         strip.text = element_text(size = 14, face = "bold", hjust = 0.5),
         axis.line = element_line(color = 'black'))
 
-
+set_flextable_defaults(
+  font.family = "Segoe UI Light",
+  font.size = 11,
+  font.color = "black",
+  text.align = "center",
+  line_spacing = 1,
+  cs.family = "Segoe UI Light",
+  digits =3,
+  pct_digits = 3,
+  split = T,
+  # keep_with_next = NULL,
+  # tabcolsep = NULL,
+  post_process_docx = T
+  )
 
 
 ## Clean labels for model output in a table ------------------------------------
@@ -194,57 +197,38 @@ nicelabs <- c(`(Intercept)` = "Intercept",
               soilM_d = "Soil moisture",
               "temp_d:sMoist_d" = "Temp:Soil moisture")
 
-
 ## II. Testing assumptions of the dilution effect hypothesis -------------------
 ### a. Hosts differ in their reservoir competence. -----------------------------
 sampSize <- d %>%
-  # filter(continent == "Europe") %>%
-  subset(., select = c(country, Site, Lat, Lon,  diseaseTested,
-                BsalDetected, BdDetected, individualCount)) %>%
+  filter(continent == "Europe" & posSite == 1) %>%
+  subset(., select = c(country, Site, scientific, susceptibility, BsalDetected, individualCount)) %>%
   plyr::mutate(BsalDetected = as.factor(dplyr::recode(BsalDetected,
-                                                      "1" = "Bsal positive",
-                                                      "0" = "Bsal negative"))) %>%
-  group_by(country, Site, BsalDetected) %>%
-  summarise(n = n()) %>%
+                                                      "1" = "nPos",
+                                                      "0" = "nNeg"))) %>%
+  group_by(country, Site, scientific, BsalDetected) %>%
+  mutate(n = sum(individualCount)) %>%
+  dplyr::select(!(individualCount)) %>%
+  unique() %>%
+  pivot_wider(names_from = BsalDetected, id_cols = c(country, Site, scientific, susceptibility), values_from = n) %>%
+  mutate(nPos = case_when(is.na(nPos) ~ 0,
+                          TRUE ~ nPos),
+         nNeg = case_when(is.na(nNeg) ~ 0,
+                          TRUE ~ nNeg)) %>%
+
+  group_by(country, scientific, Site) %>%
+  mutate(sppTotal = sum(nPos, nNeg)) %>%
+  ungroup() %>%
+  group_by(country, Site) %>%
+  mutate(siteTotal = sum(nPos, nNeg)) %>%
   ungroup()
 
 
-deu <- sampSize %>%
-  filter(country == "Germany") %>%
-  plyr::mutate(BsalDetected = as.factor(dplyr::recode(BsalDetected,
-                                                      "Bsal positive" = "Pos", "Bsal negative" = "Neg"))) %>%
-  pivot_wider(names_from = BsalDetected, id_cols = Site, values_from = n) %>%
-  mutate(Pos = case_when(is.na(Pos) ~ 0,
-                         TRUE ~ Pos),
-         Neg = case_when(is.na(Neg) ~ 0,
-                         TRUE ~ Neg)) %>%
-  group_by(Site) %>%
-  mutate(pop = sum(Pos, Neg),
-         sitePrev = round((Pos/pop)*100, 2))
-print(deu$sitePrev) # observed prevalence at each site
-
-
-esp <- sampSize %>%
-  filter(country == "Spain") %>%
-  plyr::mutate(BsalDetected = as.factor(dplyr::recode(BsalDetected,
-                                                      "Bsal positive" = "Pos", "Bsal negative" = "Neg"))) %>%
-  pivot_wider(names_from = BsalDetected, id_cols = Site, values_from = n) %>%
-  mutate(Pos = case_when(is.na(Pos) ~ 0,
-                         TRUE ~ Pos),
-         Neg = case_when(is.na(Neg) ~ 0,
-                         TRUE ~ Neg)) %>%
-  group_by(Site) %>%
-  mutate(pop = sum(Pos, Neg),
-         sitePrev = round((Pos/pop)*100, 2))
-print(esp$sitePrev) # observed prevalence at each site
-
-## Observed species prevalence
-prev <- d %>%
-  filter(posSite == "1") %>%
+## > Observed prevalence by species
+prev <- sampSize %>%
+  subset(., select = c(country, scientific, susceptibility, nPos, sppTotal)) %>%
   group_by(scientific) %>%
-  mutate(ncas_Bsal = sum(BsalDetected == 1), # number of observed Bsal+ cases
-         npop = sum(individualCount)) %>% # pop size (total # individuals/spp.)
-  drop_na(date) %>%
+  mutate(ncas_Bsal = sum(nPos), # number of observed Bsal+ cases
+         npop = sum(sppTotal)) %>% # pop size (total # individuals/spp.)
   ungroup() %>%
   mutate(Bsal_prev = (ncas_Bsal/npop)*100) %>% # prevalence as a percentage
   subset(., select = c(scientific, susceptibility, ncas_Bsal, Bsal_prev, npop)) %>%
@@ -276,17 +260,19 @@ bsal_bayesci <-  bsal_bayesci %>%
 
 # Join with original 'prev' dataset, so we can plot actual vs expected
 prev <- prev %>%
- left_join(., bsal_ci, by = "row_id") %>%
+  left_join(., bsal_ci, by = "row_id") %>%
   left_join(., bsal_bayesci, by = "row_id") %>%
   plyr::arrange(., scientific)
 
+
+##### > Figure 2a --------------------------------------------------------------
 prev_bayes_plot <- ggplot(prev, aes(scientific, sapply(mean, FUN = function(x) ifelse(x == 0.0, round(x, 0), x)),
-                                      colour = susceptibility,
-                                      label = paste(mean,"%"))) +
+                                    colour = susceptibility,
+                                    label = paste(mean,"%"))) +
   geom_point(aes(colour = susceptibility), size = 5) +
   geom_errorbar(aes(ymin = lower, ymax = upper, colour = susceptibility), width = 0.5, linewidth = 1, show.legend = F) +
-  geom_text(aes(colour = susceptibility, x = (c(1:25) + 0.05), y = upper + 5),
-            size = 6, fontface = "bold", alpha = 0.75, show.legend = F) +
+  geom_text(aes(colour = susceptibility, x = (c(14:1) + 0.05), y = upper + 8),
+            size = 6.75, fontface = "bold", alpha = 0.75, show.legend = F) +
   labs(x = "Species",
        y = "Disease prevalence (%)") +
   coord_flip(clip = "off") +
@@ -296,8 +282,9 @@ prev_bayes_plot <- ggplot(prev, aes(scientific, sapply(mean, FUN = function(x) i
                       guide = "none") +
   scale_y_continuous(labels = seq(0, 100, 20),
                      breaks = seq(0, 100, 20),
-                     limits = c(0, 100)) +
-  scale_x_discrete(expand = expansion(mult = c(0, 0.01), add = c(1, 0.25))) +
+                     limits = c(0, 110)) +
+  scale_x_discrete(expand = expansion(mult = c(0, 0.01), add = c(1, 0.25)),
+                   limits = rev) +
   ak_theme + theme(axis.text.y = element_text(face = "italic"),
                    legend.position = "top",
                    legend.key.size = unit(0, "cm"),
@@ -310,49 +297,76 @@ prev_bayes_plot <- ggplot(prev, aes(scientific, sapply(mean, FUN = function(x) i
 
 prev_bayes_plot
 
-ggsave("prev_bayes_plot_all.pdf", prev_bayes_plot, device = cairo_pdf, path = file.path(dir, figpath),
-         width = 2600, height = 2000, scale = 1.5, units = "px", dpi = 300, limitsize = F)
-
-# rm(prev_bayes_plot, bsal_bayesci, bsal_ci, chn, deu, esp, prev, sampSize, vnm)
+# ggsave("fig2a_bayes.pdf", prev_bayes_plot, device = cairo_pdf, path = file.path(figpath),
+#        width = 2500, height = 1800, scale = 1.5, units = "px", dpi = 300, limitsize = F)
+#
+rm(bsal_bayesci, bsal_ci, prev, sampSize)
 
 ### b. The most susceptible species are the most abundant ----------------------
-#### > All data ----------------------------------------------------------------
-##### i. Including fire salamanders --------------------------------------------
-d_noFS <- d %>%
-  filter(scientific != "Salamandra salamandra")
+## Make sure to remove observations associated with a site when it was negative even if it later became positive
+d <- d %>%
+  filter(posSite == 1)
 
-d_eu_noFS <- d %>%
-  filter(continent == "Europe" & scientific != "Salamandra salamandra")
+dcbind <- dcbind %>%
+  filter(posSite == 1)
 
-d_conf_noFS <- d_conf %>%
-  filter(scientific != "Salamandra salamandra")
-
-d_conf_eu <- d_conf %>%
-  filter(continent == "Europe")
-
-d_conf_eu_noFS <- d_conf %>%
-  filter(continent == "Europe" & scientific != "Salamandra salamandra")
-
-m2b <- glmmTMB(logsppAbun ~ scientific + (1|Site),
-               data = d_conf_eu,
+#### i. Including fire salamanders --------------------------------------------
+m2b <- glmmTMB(logsppAbun ~ scientific + (1|Site) + (1|eventRemarks),
+               data = d,
                control = glmmTMBControl(optimizer = optim,
                                         optArgs = list(method = "BFGS")))
 
 
 summary(m2b)
 Anova(m2b)
-# post-hoc test for multiple comparison of means
 
 
-m2b_post.hoc <- glht(m2b, linfct = mcp(scientific = "Tukey")) %>%
+##### > Tables -----------------------------------------------------------------
+m2b_tbl <- gtsummary::tbl_regression(m2b, exponentiate = T, intercept = F,
+                                     label = list(scientific = "Species")) %>%
+  modify_header(label = "**Variable**", estimate = "**OR**") %>%
+  italicize_levels() %>%
+  bold_p() %>%
+  modify_footnote(estimate ~ "OR = Odds Ratio") %>%
+  add_significance_stars(pattern = "{p.value}{stars}", hide_ci = F, hide_p = F) %>%
+  add_glance_table(logLik) %>%
+  # add stars to model p-val
+  modify_fmt_fun(estimate ~ style_pvalue_stars,
+                 rows = row_type == "glance_statistic" & label == "p-value")
+
+
+m2b_tbl
+
+
+# using glht for multcomps.
+m2b_post.hoc <- glht(m2b, linfct = mcp(scientific = "Tukey"), alternative = "greater") %>%
   broom::tidy() %>%
   dplyr::select(-(term)) %>%
   dplyr::mutate(signif = gtools::stars.pval(adj.p.value)) %>%
-  kableExtra::kbl(digits = 2) %>%
-  kableExtra::kable_styling()
+  flextable(theme_fun = theme(booktabs)) %>%
+  set_header_labels(., contrast = "Species",
+                    null.value = "Null",
+                    estimate = "Estimate",
+                    std.error = "SE",
+                    statistic = "Statistic",
+                    adj.p.value = "Adjusted p-value",
+                    signif = "Signif") %>%
+  add_header_row(., values = "Tukey's Multiple Comparisons - All species", colwidths = 7) %>%
+  footnote(., i = 2, j = 7, inline = T, ref_symbols = c("1"), part = "header",
+           value = as_paragraph("*p<0.05; **p<0.01; ***p<0.001")) %>%
+  set_formatter_type(fmt_double = "%#.3f") %>%
+  set_table_properties(., layout = "autofit", width = .8) %>%
+  align(., align = "center", part = "all") %>%
+  bold(bold = TRUE, part = "header") %>%
+  color(i = ~ adj.p.value >= 0.05, j = c("contrast", "null.value", "estimate", "std.error",
+                                         "statistic", "adj.p.value", "signif"),
+        color = "gray") %>%
+  highlight(i = ~ adj.p.value < 0.05, j = "adj.p.value",  color = "yellow")
 
-m2bpost.hoc
 
+m2b_post.hoc
+
+##### > Figure 2b --------------------------------------------------------------
 # Subset observed abundance
 obs_abun <- d %>%
   dplyr::select(scientific, sppAbun, Site) %>%
@@ -412,9 +426,9 @@ m2b_plot <- ggplot(m2b_predict, aes(x = scientific, label = round(expectedAbun, 
   # annotate(geom = "text", x = (as.numeric(df3$scientific) + 0.1), y = (df3$conf.high + 1.5),
   #          label = paste(xhat), parse = TRUE, size = 6, color = "#b30000", alpha = 0.75) +
   coord_flip(clip = "off") +
-  ylab("Abundance") +
-  xlab("Species") +
-  labs(caption = "Figure displays all species from our dataset.") +
+  labs(x = "Species",
+       y = "Abundance",
+       caption = "Figure displays all species from our dataset.") +
   scale_colour_manual(name = "Susceptibility",
                       values = c("#548078", "#E3A630", "#b30000"),
                       labels = c("Resistant", "Tolerant", "Susceptible"),
@@ -424,7 +438,8 @@ m2b_plot <- ggplot(m2b_predict, aes(x = scientific, label = round(expectedAbun, 
                      limits = c(0, 113)) + # 1 obs. point cut off -- @112 (L. helveticus)
   scale_y_break(c(64, 84)) +
   scale_y_break(c(95, 110)) +
-  scale_x_discrete(expand = expansion(mult = c(0, 0.01), add = c(1, 0.29))) +
+  scale_x_discrete(expand = expansion(mult = c(0, 0.01), add = c(1, 0.29)),
+                   limits = rev) +
   ak_theme + theme(axis.text.y = element_text(face = "italic"),
                    axis.title.y = element_text(vjust = 0.5),
                    axis.title.x = element_text(hjust = 0.65),
@@ -434,29 +449,81 @@ m2b_plot <- ggplot(m2b_predict, aes(x = scientific, label = round(expectedAbun, 
 
 m2b_plot
 
-# ggsave("fig2b_all.pdf", m2b_plot, device = cairo_pdf, path = file.path(dir, figpath),
+# ggsave("fig2b_all.pdf", m2b_plot, device = cairo_pdf, path = figpath,
 #           width = 2000, height = 1400, scale = 2, units = "px", dpi = 300, limitsize = F)
-
-rm(df1, df2, df3, obs_abun, m2b_plot, m2b_predict, textcol)
-##### ii. Excluding fire salamanders -------------------------------------------
+#
+rm(df1, df2, df3, obs_abun, m2b, m2b_predict, textcol)
+#### ii. Excluding fire salamanders -------------------------------------------
 m2b_noFS <- glmmTMB(logsppAbun ~ scientific + (1|Site),
-                    data = filter(d_conf, scientific != "Salamandra salamandra"),
+                    data = filter(d, scientific != "Salamandra salamandra"),
                     control = glmmTMBControl(optimizer = optim,
                                              optArgs = list(method = "BFGS")))
 
 
 summary(m2b_noFS)
 Anova(m2b_noFS)
-## post-hoc test for multiple comparison of means
-# m2b_noFS_post.hoc <- glht(m2b_noFS, linfct = mcp(scientific = "Tukey")) %>%
-#   broom::tidy() %>%
-#   dplyr::select(-(term)) %>%
-#   dplyr::mutate(signif = gtools::stars.pval(adj.p.value)) %>%
-#   kableExtra::kbl(digits = 2) %>%
-#   kableExtra::kable_styling()
-#
-# m2b_noFSpost.hoc
 
+
+##### > Tables -----------------------------------------------------------------
+m2b_noFS_tbl <- gtsummary::tbl_regression(m2b_noFS, exponentiate = T, intercept = F,
+                          label = list(scientific = "Species")) %>%
+  modify_header(label = "**Variable**", estimate = "**OR**") %>%
+  italicize_levels() %>%
+  bold_p() %>%
+  modify_footnote(estimate ~ "OR = Odds Ratio") %>%
+  add_significance_stars(pattern = "{p.value}{stars}", hide_ci = F, hide_p = F) %>%
+  add_glance_table(logLik) %>%
+  # add stars to model p-val
+  modify_fmt_fun(estimate ~ style_pvalue_stars,
+                 rows = row_type == "glance_statistic" & label == "p-value")
+
+
+m2b_noFS_tbl
+
+
+m2b_noFS_post.hoc <- glht(m2b_noFS, linfct = mcp(scientific = "Tukey"), alternative = "greater") %>%
+  broom::tidy() %>%
+  dplyr::select(-(term)) %>%
+  dplyr::mutate(signif = gtools::stars.pval(adj.p.value)) %>%
+  flextable(theme_fun = theme(booktabs)) %>%
+  set_header_labels(., contrast = "Species",
+                    null.value = "Null",
+                    estimate = "Estimate",
+                    std.error = "SE",
+                    statistic = "Statistic",
+                    adj.p.value = "Adjusted p-value",
+                    signif = "Signif") %>%
+  add_header_row(., values = "Tukey's Multiple Comparisons - No fire salamanders", colwidths = 7) %>%
+  footnote(., i = 2, j = 7, inline = T, ref_symbols = c("1"), part = "header",
+           value = as_paragraph("*p<0.05; **p<0.01; ***p<0.001")) %>%
+  set_formatter_type(fmt_double = "%#.3f") %>%
+  set_table_properties(., layout = "autofit", width = .8) %>%
+  align(., align = "center", part = "all") %>%
+  bold(bold = TRUE, part = "header") %>%
+  color(i = ~ adj.p.value >= 0.05, j = c("contrast", "null.value", "estimate", "std.error",
+                                         "statistic", "adj.p.value", "signif"),
+        color = "gray") %>%
+  highlight(i = ~ adj.p.value < 0.05, j = "adj.p.value",  color = "yellow")
+
+m2b_noFS_post.hoc
+
+
+## Combine model2b 'All spp' tables with model2a 'no FS' tables
+# dir.create(tblpath)
+model2tbls <- tbl_merge(tbls = list(m2b_tbl, m2b_noFS_tbl),
+                        tab_spanner = c("**All species**", "**No fire salamanders**")) %>%
+  as_gt() %>%
+  gt::gtsave(., filename = "model2b_tbls.docx", path = tblpath)
+
+## Combine model2b Tukey HSD tables
+save_as_docx(
+  "Model 2b Tukey's HSD - All species" = m2b_post.hoc,
+  "Model 2b Tukey's HSD - No fire salamanders" = m2b_noFS_post.hoc,
+  path = file.path(tblpath, "/model2b_TukeyHSD.docx")
+)
+
+
+##### > Supp. Figure 2b --------------------------------------------------------
 # Subset observed abundance
 obs_abun <- d %>%
   filter(!(scientific == "Salamandra salamandra")) %>%
@@ -536,215 +603,14 @@ m2b_noFS_plot <- ggplot(m2b_noFS_predict, aes(x = scientific, label = round(expe
 
 m2b_noFS_plot
 
-# ggsave("fig2b_noFS.pdf", m2b_noFS_plot, device = cairo_pdf, path = file.path(dir, figpath),
+# ggsave("fig2b_noFS.pdf", m2b_noFS_plot, device = cairo_pdf, path = figpath,
 #           width = 2000, height = 1400, scale = 2, units = "px", dpi = 300, limitsize = F)
 
-rm(df1, df2, df3, obs_abun, m2b_noFS_plot, m2b_noFS_predict, textcol)
-#### > Europe data only --------------------------------------------------------
-##### i. Including fire salamanders -----------------------------------------
-m2b_EU <- glmmTMB(logsppAbun ~ scientific + (1|Site),
-               data = filter(d, continent == "Europe"),
-               control = glmmTMBControl(optimizer = optim,
-                                        optArgs = list(method = "BFGS")))
+rm(df1, df2, df3, obs_abun, m2b_noFS, m2b_noFS_plot, m2b_noFS_post.hoc, m2b_noFS_predict,
+   m2b_noFS_tbl, m2b_post.hoc, m2b_tbl, textcol, model2tbls)
 
-
-summary(m2b_EU)
-Anova(m2b_EU)
-## post-hoc test for multiple comparison of means
-# m2b_EU_post.hoc <- glht(m2b_EU, linfct = mcp(scientific = "Tukey")) %>%
-#   broom::tidy() %>%
-#   dplyr::select(-(term)) %>%
-#   dplyr::mutate(signif = gtools::stars.pval(adj.p.value)) %>%
-#   kableExtra::kbl(digits = 2) %>%
-#   kableExtra::kable_styling()
-#
-# m2b_EU_post.hoc
-
-# Subset observed abundance
-EU_abun <- d %>%
-  filter(continent == "Europe") %>%
-  dplyr::select(scientific, sppAbun, Site) %>%
-  rename(EU_abun = sppAbun)
-
-textcol <- d %>%
-  filter(continent == "Europe") %>%
-  dplyr::select(scientific, susceptibility, Site) %>% # subset relevant data
-  mutate(Site = as.factor(Site)) %>%
-  group_by(scientific) %>%
-  mutate(No.Sites = length(unique(Site))) %>%
-  ungroup() %>%
-  dplyr::select(!Site) %>%
-  unique() %>%
-  left_join(., EU_abun, by = "scientific")
-
-m2b_EU_predict <- ggpredict(m2b_EU, terms = "scientific") %>%
-  dplyr::rename("scientific" = "x",
-         "logsppAbun" = "predicted",
-         "expectedAbun" = "group") %>%
-  left_join(., textcol, by = "scientific") %>%
-  plyr::mutate(expectedAbun = exp(logsppAbun - 1),
-               conf.low = exp(conf.low - 1),
-               conf.high = exp(conf.high - 1),
-               susceptibility = as.factor(susceptibility)) %>%
-  group_by(scientific, EU_abun, expectedAbun) %>%
-  unique()
-
-
-# Create color coded labels for graph annotation
-# Resistant
-df1 <- m2b_EU_predict %>%
-  filter(susceptibility == "1")
-
-# Tolerant
-df2 <- m2b_EU_predict %>%
-  filter(susceptibility == "2")
-
-# Susceptible
-df3 <- m2b_EU_predict %>%
-  filter(susceptibility == "3")
-
-m2b_EU_plot <- ggplot(m2b_EU_predict, aes(x = scientific, label = round(expectedAbun, 0))) +
-  geom_jitter(aes(y = EU_abun, colour = susceptibility), shape = 23, size = 2,
-             alpha = 0.5, show.legend = F) +
-  geom_point(aes(y = expectedAbun, colour = susceptibility), size = 4.5) +
-  geom_errorbar(aes(ymin = conf.low, ymax = conf.high, colour = susceptibility), width = 0.5, linewidth = 1) +
-  # geom_text(aes(colour = susceptibility, x = (as.numeric(scientific) + 0.05), y = conf.high + 3),
-  #           size = 6, fontface = "bold", alpha = 0.75) +
-  # annotate(geom = "text", x = (as.numeric(df1$scientific) + 0.1), y = (df1$conf.high + 1.5),
-  #          label = paste(xhat), parse = TRUE, size = 6, color = "#548078", alpha = 0.75) +
-  # annotate(geom = "text", x = (as.numeric(df2$scientific) + 0.1), y = (df2$conf.high + 1.5),
-  #          label = paste(xhat), parse = TRUE, size = 6, color = "#E3A630", alpha = 0.75) +
-  # annotate(geom = "text", x = (as.numeric(df3$scientific) + 0.1), y = (df3$conf.high + 1.5),
-  #          label = paste(xhat), parse = TRUE, size = 6, color = "#b30000", alpha = 0.75) +
-  coord_flip(clip = "off") +
-  ylab("Abundance") +
-  xlab("Species") +
-  labs(caption = "Figure displays all observations from Europe.") +
-  scale_colour_manual(name = "Susceptibility",
-                      values = c("#548078", "#E3A630", "#b30000"),
-                      labels = c("Resistant", "Tolerant", "Susceptible"),
-                      guide = "none") +
-  scale_y_continuous(labels = seq(0, 110, 10),
-                     breaks = seq(0, 110, 10),
-                     limits = c(0, 113)) + # 1 obs. point cut off -- @112 (L. helveticus)
-  scale_y_break(c(66, 110)) +
-  scale_x_discrete(expand = expansion(mult = c(0, 0.01), add = c(1, 0.29))) +
-  ak_theme + theme(axis.text.y = element_text(face = "italic"),
-                   axis.title.y = element_text(vjust = 0.5),
-                   axis.title.x = element_text(hjust = 0.65),
-                   axis.text.x.top = element_blank(),
-                   legend.title = element_blank())
-
-
-m2b_EU_plot
-
-# ggsave("fig2b_europe.pdf", m2b_EU_plot, device = cairo_pdf, path = file.path(dir, figpath),
-#           width = 2000, height = 1400, scale = 2, units = "px", dpi = 300, limitsize = F)
-
-rm(df1, df2, df3, EU_abun, m2b_EU_plot, m2b_EU_predict, textcol)
-##### ii. Excluding fire salamanders -------------------------------------------
-m2b_noFS_EU <- glmmTMB(logsppAbun ~ scientific + (1|Site),
-                       data = filter(d, (continent == "Europe" & scientific != "Salamandra salamandra")),
-                       control = glmmTMBControl(optimizer = optim,
-                                                optArgs = list(method = "BFGS")))
-
-
-summary(m2b_noFS_EU)
-Anova(m2b_noFS_EU)
-## post-hoc test for multiple comparison of means
-# m2b_noFS_EU_post.hoc <- glht(m2b_noFS_EU, linfct = mcp(scientific = "Tukey")) %>%
-#   broom::tidy() %>%
-#   dplyr::select(-(term)) %>%
-#   dplyr::mutate(signif = gtools::stars.pval(adj.p.value)) %>%
-#   kableExtra::kbl(digits = 2) %>%
-#   kableExtra::kable_styling()
-#
-# m2b_noFS_EU_post.hoc
-
-# Subset observed abundance
-noFS_EU_abun <- d %>%
-  filter(continent == "Europe" & scientific != "Salamandra salamandra") %>%
-  dplyr::select(scientific, sppAbun, Site) %>%
-  rename(noFS_EU_abun = sppAbun)
-
-textcol <- d %>%
-  filter(continent == "Europe" & scientific != "Salamandra salamandra") %>%
-  dplyr::select(scientific, susceptibility, Site) %>% # subset relevant data
-  mutate(Site = as.factor(Site)) %>%
-  group_by(scientific) %>%
-  mutate(No.Sites = length(unique(Site))) %>%
-  ungroup() %>%
-  dplyr::select(!Site) %>%
-  unique() %>%
-  left_join(., noFS_EU_abun, by = "scientific")
-
-m2b_noFS_EU_predict <- ggpredict(m2b_noFS_EU, terms = "scientific") %>%
-  dplyr::rename("scientific" = "x",
-                "logsppAbun" = "predicted",
-                "expectedAbun" = "group") %>%
-  left_join(., textcol, by = "scientific") %>%
-  plyr::mutate(expectedAbun = exp(logsppAbun - 1),
-               conf.low = exp(conf.low - 1),
-               conf.high = exp(conf.high - 1),
-               susceptibility = as.factor(susceptibility)) %>%
-  group_by(scientific, noFS_EU_abun, expectedAbun) %>%
-  unique()
-
-# Create color coded labels for graph annotation
-# Resistant
-df1 <- m2b_noFS_EU_predict %>%
-  filter(susceptibility == "1")
-
-# Tolerant
-df2 <- m2b_noFS_EU_predict %>%
-  filter(susceptibility == "2")
-
-# Susceptible
-df3 <- m2b_noFS_EU_predict %>%
-  filter(susceptibility == "3")
-
-m2b_noFS_EU_plot <- ggplot(m2b_noFS_EU_predict, aes(x = scientific, label = round(expectedAbun, 0))) +
-  geom_jitter(aes(y = noFS_EU_abun, colour = susceptibility), shape = 23, size = 2,
-              alpha = 0.5, show.legend = F) +
-  geom_point(aes(y = expectedAbun, colour = susceptibility), size = 4.5) +
-  geom_errorbar(aes(ymin = conf.low, ymax = conf.high, colour = susceptibility), width = 0.5, linewidth = 1) +
-  # geom_text(aes(colour = susceptibility, x = (as.numeric(scientific) + 0.05), y = conf.high + 3),
-  #           size = 6, fontface = "bold", alpha = 0.75) +
-  # annotate(geom = "text", x = (as.numeric(df1$scientific) + 0.1), y = (df1$conf.high + 1.5),
-  #          label = paste(xhat), parse = TRUE, size = 6, color = "#548078", alpha = 0.75) +
-  # annotate(geom = "text", x = (as.numeric(df2$scientific) + 0.1), y = (df2$conf.high + 1.5),
-  #          label = paste(xhat), parse = TRUE, size = 6, color = "#E3A630", alpha = 0.75) +
-  # annotate(geom = "text", x = (as.numeric(df3$scientific) + 0.1), y = (df3$conf.high + 1.5),
-  #          label = paste(xhat), parse = TRUE, size = 6, color = "#b30000", alpha = 0.75) +
-  coord_flip(clip = "off") +
-  ylab("Abundance") +
-  xlab("Species") +
-  labs(caption = "Figure displays observations from Europe, excluding fire salamanders.") +
-  scale_colour_manual(name = "Susceptibility",
-                      values = c("#548078", "#E3A630", "#b30000"),
-                      labels = c("Resistant", "Tolerant", "Susceptible"),
-                      guide = "none") +
-  scale_y_continuous(labels = seq(0, 110, 10),
-                     breaks = seq(0, 110, 10),
-                     limits = c(0, 113)) + # 1 obs. point cut off -- @112 (L. helveticus)
-  scale_y_break(c(63, 110)) +
-  scale_x_discrete(expand = expansion(mult = c(0, 0.01), add = c(1, 0.29))) +
-  ak_theme + theme(axis.text.y = element_text(face = "italic"),
-                   axis.title.y = element_text(vjust = 0.5),
-                   axis.title.x = element_text(hjust = 0.65),
-                   axis.text.x.top = element_blank(),
-                   legend.title = element_blank())
-
-
-m2b_noFS_EU_plot
-
-# ggsave("fig2b_noFS_EU.pdf", m2b_noFS_EU_plot, device = cairo_pdf, path = file.path(dir, figpath),
-#           width = 2000, height = 1400, scale = 2, units = "px", dpi = 300, limitsize = F)
-
-rm(textcol, noFS_EU_abun, m2b_noFS_EU_predict, m2b_noFS_EU_plot, df1, df2, df3)
 ### c. Host abundance and susceptibility in our dataset ------------------------
-#### > All data ----------------------------------------------------------------
-##### i. Including fire salamanders --------------------------------------------
+#### i. Including fire salamanders --------------------------------------------
 m2c <- glmmTMB(logsppAbun ~ susceptibility + (1|Site),
                data = d,
                control = glmmTMBControl(optimizer = optim,
@@ -752,6 +618,53 @@ m2c <- glmmTMB(logsppAbun ~ susceptibility + (1|Site),
 summary(m2c)
 Anova(m2c)
 
+##### > Tables -----------------------------------------------------------------
+m2c_tbl <- gtsummary::tbl_regression(m2c, exponentiate = T, intercept = F,
+                                          label = list(susceptibility = "Susceptibility")) %>%
+  # add stars to model p-val
+  add_significance_stars(pattern = "{p.value}{stars}", hide_ci = F, hide_p = F) %>%
+  add_glance_table(logLik) %>%
+  bold_p() %>%
+  modify_header(label = "**Variable**", estimate = "**OR**") %>%
+  modify_footnote(estimate ~ "OR = Odds Ratio") %>%
+  modify_fmt_fun(estimate ~ style_pvalue_stars,
+                 rows = row_type == "glance_statistic" & label == "p-value")
+
+m2c_tbl
+
+
+# using glht for multcomps.
+m2c_post.hoc <- glht(m2c, linfct = mcp(susceptibility = "Tukey"), alternative = "greater") %>%
+  broom::tidy() %>%
+  dplyr::select(-(term)) %>%
+  dplyr::mutate(signif = gtools::stars.pval(adj.p.value)) %>%
+  flextable(theme_fun = theme(booktabs)) %>%
+  # labelizor(., labels = c(susceptibility, ))
+  set_header_labels(., contrast = "Susceptibility",
+                    null.value = "Null",
+                    estimate = "Estimate",
+                    std.error = "SE",
+                    statistic = "Statistic",
+                    adj.p.value = "Adjusted p-value",
+                    signif = "Signif") %>%
+  add_header_row(., values = "Tukey's Multiple Comparisons - All species", colwidths = 7) %>%
+  footnote(., i = 2, j = 7, inline = T, ref_symbols = c("1"), part = "header",
+           value = as_paragraph("*p<0.05; **p<0.01; ***p<0.001")) %>%
+  set_formatter_type(fmt_double = "%#.3f") %>%
+  set_table_properties(., layout = "autofit", width = .8) %>%
+  align(., align = "left", part = "footer") %>%
+  align(., align = "center", part = "header") %>%
+  align(., align = "center", part = "body") %>%
+  bold(bold = TRUE, part = "header") %>%
+  color(i = ~ adj.p.value >= 0.05, j = c("contrast", "null.value", "estimate", "std.error",
+                                         "statistic", "adj.p.value", "signif"),
+        color = "gray") %>%
+  highlight(i = ~ adj.p.value < 0.05, j = "adj.p.value",  color = "yellow")
+
+
+m2c_post.hoc
+
+##### > Figure 2c --------------------------------------------------------------
 ## post-hoc test for multiple comparison of means
 post.hoc <- glht(m2c, linfct = mcp(susceptibility = "Tukey"),
                  alternative = "greater")
@@ -789,8 +702,8 @@ m2c_predict <- ggpredict(m2c, terms = c("susceptibility")) %>%
 m2c_plot <- ggplot(m2c_predict, aes(susceptibility, predicted, color = susceptibility)) +
   geom_point(size = 5) +
   geom_errorbar(aes(ymin = conf.low, ymax = conf.high), width = 0.1, linewidth = 1) +
-  stat_pvalue_manual(filter(mcLabs, !(signif == "n.s.")), y.position = 4.5, label = "signif",
-                     step.increase = 0.25, label.size = 10,bracket.size = 1) +
+  stat_pvalue_manual(filter(mcLabs, !(signif == "n.s.")), y.position = 8.5, label = "signif",
+                     step.increase = 0.2, label.size = 10,bracket.size = 1) +
   # geom_richtext(aes(y = (conf.high + 0.5), label = paste0("n<span style = 'font-size:15pt'><sub>*obs*</sub> </span>= ", n)),
   #               alpha = 0.75, size = 8, label.size = NA, fill = NA, fontface = "bold", show.legend = F) +
   # annotate("text", x = 3, y = 4.25, label = "***", size = 10, fontface = "bold",
@@ -798,11 +711,11 @@ m2c_plot <- ggplot(m2c_predict, aes(susceptibility, predicted, color = susceptib
   # annotate("text", x = 0.65, y = 9, label = "C", size = 12, fontface = "bold",
   #          colour = "black") +
   scale_x_discrete(labels = c("Resistant", "Tolerant", "Susceptible")) +
-  ylab("Species abundance") +
-  xlab("Susceptibility level") +
-  labs(caption = "All species in the dataset and all observations from both continents were retained in these analyses.") +
-  scale_y_continuous(limits = c(0, 8),
-                     breaks = seq(0, 8, 2)) +
+  labs(x = "Susceptibility category",
+       y = "Species abundance",
+       caption = "All species at at our sites .") +
+  scale_y_continuous(limits = c(0, 10),
+                     breaks = seq(0, 10, 2)) +
   scale_colour_manual(name = "Susceptibility",
                       values = c("#548078", # 9 spp
                                  "#E3A630", # 15 spp
@@ -814,17 +727,63 @@ m2c_plot <- ggplot(m2c_predict, aes(susceptibility, predicted, color = susceptib
 m2c_plot
 
 
-# ggsave("fig2c.pdf", m2c_plot, device = cairo_pdf, path = file.path(dir, figpath),
+# ggsave("fig2c.pdf", m2c_plot, device = cairo_pdf, path = figpath,
 #           width = 2000, height = 1300, scale = 2, units = "px", dpi = 300, limitsize = F)
 
 rm(m2c_predict, m2c_plot, mcLabs, n, post.hoc)
-##### ii. Excluding fire salamanders -------------------------------------------
+#### ii. Excluding fire salamanders -------------------------------------------
 m2c_noFS <- glmmTMB(logsppAbun ~ susceptibility + (1|Site),
                     data = filter(d_eu, scientific != "Salamandra salamandra"),
                     control = glmmTMBControl(optimizer = optim,
                                              optArgs = list(method = "BFGS")))
 summary(m2c_noFS)
 Anova(m2c_noFS)
+
+##### > Tables -----------------------------------------------------------------
+m2c_noFS_tbl <- gtsummary::tbl_regression(m2c_noFS, exponentiate = T, intercept = F,
+                                     label = list(susceptibility = "Susceptibility")) %>%
+  # add stars to model p-val
+  add_significance_stars(pattern = "{p.value}{stars}", hide_ci = F, hide_p = F) %>%
+  add_glance_table(logLik) %>%
+  bold_p() %>%
+  modify_header(label = "**Variable**", estimate = "**OR**") %>%
+  modify_footnote(estimate ~ "OR = Odds Ratio") %>%
+  modify_fmt_fun(estimate ~ style_pvalue_stars,
+                 rows = row_type == "glance_statistic" & label == "p-value")
+
+m2c_tbl
+
+
+# using glht for multcomps.
+m2c_noFS_post.hoc <- glht(m2c_noFS, linfct = mcp(susceptibility = "Tukey"), alternative = "greater") %>%
+  broom::tidy() %>%
+  dplyr::select(-(term)) %>%
+  dplyr::mutate(signif = gtools::stars.pval(adj.p.value)) %>%
+  flextable(theme_fun = theme(booktabs)) %>%
+  # labelizor(., labels = c(susceptibility, ))
+  set_header_labels(., contrast = "Susceptibility",
+                    null.value = "Null",
+                    estimate = "Estimate",
+                    std.error = "SE",
+                    statistic = "Statistic",
+                    adj.p.value = "Adjusted p-value",
+                    signif = "Signif") %>%
+  add_header_row(., values = "Tukey's Multiple Comparisons - All species", colwidths = 7) %>%
+  footnote(., i = 2, j = 7, inline = T, ref_symbols = c("1"), part = "header",
+           value = as_paragraph("*p<0.05; **p<0.01; ***p<0.001")) %>%
+  set_formatter_type(fmt_double = "%#.3f") %>%
+  set_table_properties(., layout = "autofit", width = .8) %>%
+  align(., align = "left", part = "footer") %>%
+  align(., align = "center", part = "header") %>%
+  align(., align = "center", part = "body") %>%
+  bold(bold = TRUE, part = "header") %>%
+  color(i = ~ adj.p.value >= 0.05, j = c("contrast", "null.value", "estimate", "std.error",
+                                         "statistic", "adj.p.value", "signif"),
+        color = "gray") %>%
+  highlight(i = ~ adj.p.value < 0.05, j = "adj.p.value",  color = "yellow")
+
+
+m2c_post.hoc
 
 ## post-hoc test for multiple comparison of means
 post.hoc <- glht(m2c_noFS, linfct = mcp(susceptibility = "Tukey"),
