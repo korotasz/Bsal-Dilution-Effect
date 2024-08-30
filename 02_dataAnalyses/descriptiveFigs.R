@@ -451,7 +451,77 @@ table1 <- tbl1_data %>%
 
 table1
 
+#### > Prevalence by species & site (tables) -----------------------------------
+## > Observed prevalence by species
+deu <- sampSize %>%
+  filter(country == "Germany") %>%
+  subset(., select = c(country, scientific, susceptibility, nPos, sppTotal)) %>%
+  group_by(scientific) %>%
+  mutate(ncas_Bsal = sum(nPos), # number of observed Bsal+ cases
+         npop = sum(sppTotal)) %>% # pop size (total # individuals/spp.)
+  filter(!(npop < 15)) %>%
+  ungroup() %>%
+  mutate(Bsal_prev = (ncas_Bsal/npop)*100) %>% # prevalence as a percentage
+  subset(., select = c(scientific, susceptibility, ncas_Bsal, Bsal_prev, npop)) %>%
+  unique() %>%
+  dplyr::mutate(row_id = row_number()) %>%
+  relocate(row_id, .before = scientific)
 
+esp <- sampSize %>%
+  filter(country == "Spain") %>%
+  subset(., select = c(country, scientific, susceptibility, nPos, sppTotal)) %>%
+  group_by(scientific) %>%
+  mutate(ncas_Bsal = sum(nPos), # number of observed Bsal+ cases
+         npop = sum(sppTotal)) %>% # pop size (total # individuals/spp.)
+  filter(!(npop < 15)) %>%
+  ungroup() %>%
+  mutate(Bsal_prev = (ncas_Bsal/npop)*100) %>% # prevalence as a percentage
+  subset(., select = c(scientific, susceptibility, ncas_Bsal, Bsal_prev, npop)) %>%
+  unique() %>%
+  dplyr::mutate(row_id = row_number()) %>%
+  relocate(row_id, .before = scientific)
+
+
+deu_bayesci <- binom::binom.bayes(x = deu$ncas_Bsal, n = deu$npop, type = "highest", tol = 1e-9, maxit = 1000)
+esp_bayesci <- binom::binom.bayes(x = esp$ncas_Bsal, n = esp$npop, type = "highest", tol = 1e-9, maxit = 1000)
+
+
+# Convert bayesian estimates + CIs to percentages for plotting
+deu_bayesci <-  deu_bayesci %>%
+  plyr::mutate(mean = round((mean*100), 1),
+               lower = round((lower*100), 1),
+               upper = round((upper*100), 1)) %>%
+  dplyr::mutate(row_id = row_number()) %>%
+  relocate(row_id, .before = method)
+
+# Convert bayesian estimates + CIs to percentages for plotting
+esp_bayesci <-  esp_bayesci %>%
+  plyr::mutate(mean = round((mean*100), 1),
+               lower = round((lower*100), 1),
+               upper = round((upper*100), 1)) %>%
+  dplyr::mutate(row_id = row_number()) %>%
+  relocate(row_id, .before = method)
+
+
+
+# Join with original dataset, so we can plot actual vs expected
+deu <- deu %>%
+  left_join(., deu_bayesci, by = "row_id") %>%
+  plyr::arrange(., scientific) %>%
+  mutate(country = "Germany") %>%
+  relocate(country, .after = "row_id") %>%
+  dplyr::select(-("row_id"))
+
+# Join with original dataset, so we can plot actual vs expected
+esp <- esp %>%
+  left_join(., esp_bayesci, by = "row_id") %>%
+  plyr::arrange(., scientific) %>%
+  mutate(country = "Spain") %>%
+  relocate(country, .after = "row_id") %>%
+  dplyr::select(-("row_id"))
+
+supp_prevtbl <- rbind(deu, esp)
+View(supp_prevtbl)
 
 ## III. Extra data for extra figures -------------------------------------------
 ## May not use all of this.
