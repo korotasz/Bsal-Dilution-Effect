@@ -546,3 +546,26 @@ prevBySite <- d %>%
 # group_by(Site) %>%
 # filter(siteTotal > 15) # 26 out of 49 sites have >15 observations on any given date
 
+
+tmp <- d_subset %>%
+  filter(continent == "Europe" & posSite == "1") %>%
+  dplyr::select(Site, country, susceptibility, BsalDetected, fatal, scientific, individualCount) %>%
+  filter(BsalDetected == "1") %>%
+  group_by(country, susceptibility, scientific) %>%
+  summarise(n = sum(individualCount))
+  ungroup()   %>%
+  group_by(country, scientific) %>%
+  summarise(n = n()) %>%
+  print(n = 31)
+
+tmp2<-d %>%
+    filter(continent == "Europe"  & posSite == "1") #%>%
+    dplyr::select(Site, country, susceptibility, BsalDetected, fatal, scientific, individualCount) %>%
+    # filter(BsalDetected == "1") %>%
+    group_by(country, susceptibility, scientific) %>%
+    summarise(n = sum(individualCount))
+  ungroup()   %>%
+    group_by(country, scientific) %>%
+    summarise(n = n()) %>%
+    print(n = 31)
+

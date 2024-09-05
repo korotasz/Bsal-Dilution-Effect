@@ -1482,7 +1482,7 @@ BsalCount_all <- df %>%
   mutate(BsalDetected = case_when(BsalDetected == "1" ~ "nPos_all",
                                   BsalDetected == "0" ~ "nNeg_all")) %>%
   group_by(country, Site, posSite, date, scientific, BsalDetected) %>%
-  summarize(n = sum(individualCount)) %>%
+  summarise(n = sum(individualCount)) %>%
   pivot_wider(names_from = c(BsalDetected),
               id_cols = c(country, Site, posSite, date, scientific),
               values_from = n, values_fill = 0)
@@ -1494,7 +1494,7 @@ BsalCount_FS_only <- df %>%
   mutate(BsalDetected = case_when(BsalDetected == "1" ~ "nPos_FS",
                                   BsalDetected == "0" ~ "nNeg_FS")) %>%
   group_by(country, Site, posSite, date, scientific, BsalDetected) %>%
-  summarize(n = sum(individualCount)) %>%
+  summarise(n = sum(individualCount)) %>%
   pivot_wider(names_from = c(BsalDetected),
               id_cols = c(country, Site, posSite, date, scientific),
               values_from = n, values_fill = 0)
@@ -1506,7 +1506,7 @@ BsalCount_noFS <- df %>%
   mutate(BsalDetected = case_when(BsalDetected == "1" ~ "nPos_noFS",
                                   BsalDetected == "0" ~ "nNeg_noFS")) %>%
   group_by(country, Site, posSite, date, scientific, BsalDetected) %>%
-  summarize(n = sum(individualCount)) %>%
+  summarise(n = sum(individualCount)) %>%
   pivot_wider(names_from = c(BsalDetected),
               id_cols = c(country, Site, posSite, date, scientific),
               values_from = n, values_fill = 0)
@@ -1518,7 +1518,7 @@ fatalCount_all <- df %>%
                            fatal == "0" ~ "nAlive_all",
                            is.na(fatal) ~ "nFatalUnk_all")) %>%
   group_by(country, Site, posSite, date, scientific, fatal) %>%
-  summarize(n = sum(individualCount)) %>%
+  summarise(n = sum(individualCount)) %>%
   pivot_wider(names_from = c(fatal),
               id_cols = c(country, Site, posSite, date, scientific),
               values_from = n, values_fill = 0)
@@ -1530,7 +1530,7 @@ fatalCount_FS_only <- df %>%
                            fatal == "0" ~ "nAlive_FS",
                            is.na(fatal) ~ "nFatalUnk_FS")) %>%
   group_by(country, Site, posSite, date, scientific, fatal) %>%
-  summarize(n = sum(individualCount)) %>%
+  summarise(n = sum(individualCount)) %>%
   pivot_wider(names_from = c(fatal),
               id_cols = c(country, Site, posSite, date, scientific),
               values_from = n, values_fill = 0)
@@ -1542,7 +1542,7 @@ fatalCount_noFS <- df %>%
                            fatal == "0" ~ "nAlive_noFS",
                            is.na(fatal) ~ "nFatalUnk_noFS")) %>%
   group_by(country, Site, posSite, date, scientific, fatal) %>%
-  summarize(n = sum(individualCount)) %>%
+  summarise(n = sum(individualCount)) %>%
   pivot_wider(names_from = c(fatal),
               id_cols = c(country, Site, posSite, date, scientific),
               values_from = n, values_fill = 0)
@@ -1571,8 +1571,8 @@ dcbind_all <- df %>%
 
 dcbind_all <- with(dcbind_all, dcbind_all[order(Site, scientific), ])
 
-rm(BsalCount, BsalCount_all, BsalCount_FS_only, BsalCount_noFS,
-   fatalCount, fatalCount_all, fatalCount_FS_only, fatalCount_noFS)
+rm(BsalCount_all, BsalCount_FS_only, BsalCount_noFS,
+   fatalCount_all, fatalCount_FS_only, fatalCount_noFS)
 
 ## Initially Bsal- sites that were later Bsal+
 df %>%
@@ -1613,7 +1613,7 @@ df %>%
   summarise(n = n())
 
 # Total # of Bsal+ individuals from each species
-df %>%
+tmp <- df %>%
   subset(., select = c(scientific, BsalDetected, individualCount)) %>%
   group_by(scientific, BsalDetected) %>%
   summarise(n = sum(individualCount)) %>%
@@ -1625,10 +1625,10 @@ df %>%
 
 ## Double check everything matches
 tmp <- dcbind_all %>%
-  # filter(continent == "Europe") %>%
-  dplyr::select(country, Site, posSite, date, scientific,  susceptibility, nPos_all, nNeg_all) %>%
-  distinct() %>%
+  filter(continent == "Europe") %>%
+  dplyr::select(country, Site, date, scientific,  susceptibility, nPos_all, nNeg_all) %>%
   group_by(country, susceptibility, scientific) %>%
+  distinct() %>%
   summarise(nPos = sum(nPos_all),
             nNeg = sum(nNeg_all),
             n = sum(nPos_all, nNeg_all)) %>%

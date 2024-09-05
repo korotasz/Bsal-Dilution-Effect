@@ -242,9 +242,6 @@ boxplot(d_subset$sppAbun,
 hist(d_subset$logsppAbun,
      ylab = "logsppAbun")
 
-boxplot(d_subset$logsppAbun,
-        ylab = "logsppAbun")
-
 
 ## > Use this information to make new cbind data set ---------------------------
 ### > Summarise BsalDetected observations in data set --------------------------
@@ -357,6 +354,9 @@ dcbind_subset <- dcbind_subset %>%
             ~(scale(., center = T, scale = T %>% as.numeric))) %>%
   mutate(year = year(date))
 
+dcbind_pos <- dcbind_subset %>%
+  filter((scientific != "Triturus anatolicus" | scientific != "Pelophylax sp." & country == "Germany")) %>%
+  filter(posSite == 1)
 
 
 ## II. Testing assumptions of the dilution effect hypothesis -------------------
@@ -489,13 +489,14 @@ m2b <- glmmTMB(logsppAbun ~ scientific + (1|Site) + (1|associatedReferences),
 
 
 summary(m2b) # glmm overview
-
+Anova(m2b)
 # simulationOutput <- simulateResiduals(m2b)
 # plot(simulationOutput)
 
 
 
 ##### > Tables -----------------------------------------------------------------
+# tab_model(m2b)
 m2b_tbl <- gtsummary::tbl_regression(m2b, exponentiate = T,
                                           intercept = F, label = nicelabs) %>%
   add_glance_source_note(label = list(sigma = "\u03c3"),
@@ -802,7 +803,7 @@ m2c <- glmmTMB(logsppAbun ~ susceptibility + (1|Site) + (1|associatedReferences)
                control = glmmTMBControl(optimizer = optim,
                                         optArgs = list(method = "BFGS")))
 summary(m2c) # glmm overview
-
+Anova(m2c)
 # simulationOutput <- simulateResiduals(m2c)
 # plot(simulationOutput, quantreg = TRUE)
 #
@@ -1146,16 +1147,11 @@ fig2combined <- (fig2ab/plot_spacer()/fig2c_tag) +
 
 fig2combined
 
-# ggsave("fig2_combined.pdf", fig2combined, device = cairo_pdf, path = figpath,
-#        width = 2800, height = 2600, scale = 2, units = "px", dpi = 300, limitsize = F)
+ggsave("fig2_combined.pdf", fig2combined, device = cairo_pdf, path = figpath,
+       width = 2800, height = 2600, scale = 2, units = "px", dpi = 300, limitsize = F)
 
 rm(fig2a, fig2a_tag, fig2ab, fig2b, fig2b_tag, fig2c, fig2c_tag, fig2combined)
 ## III. Cbind models testing the dilution dffect hypothesis --------------------
-dcbind_pos <- dcbind_subset %>%
-  filter((scientific != "Triturus anatolicus" | scientific != "Pelophylax sp." & country == "Germany")) %>%
-  filter(posSite == 1)
-
-
 #### i. 'All spp.' (Including fire salamanders) --------------------------------
 ##### > Locality richness (From collaborators) ---------------------------------
 ###### > Model selection -------------------------------------------------------
@@ -1207,6 +1203,8 @@ all_lr.3 <- glmmTMB(cbind(nPos_all, nNeg_all) ~ locality_rich*logsiteAbun +
 
 summary(all_lr.3) # richness:logsiteAbun and soil moisture are highly significant
 Anova(all_lr.3) # soil moisture is n.s.
+
+
 
 resid <- simulateResiduals(all_lr.3)
 testResiduals(resid)
@@ -1528,7 +1526,7 @@ rm(m3a_predict, m3_noFS_predict, noFS, noFS_lr.3)
 ###### > Model selection -------------------------------------------------------
 # FS_lr <- glmmTMB(cbind(nPos_FS, nNeg_FS) ~ locality_rich*logsiteAbun +
 #                       temp_d*sMoist_d + (1|country) + (1|scientific) + (1|associatedReferences),
-#                        data = dcbind_pos,
+#                        data = subset(dcbind_pos, scientific == "Salamandra salamandra"),
 #                        family = "binomial", na.action = "na.fail",
 #                        control = glmmTMBControl(optimizer = optim,
 #                                                 optArgs = list(method = "BFGS")))
@@ -1536,42 +1534,42 @@ rm(m3a_predict, m3_noFS_predict, noFS, noFS_lr.3)
 #
 # FS_lr.2 <- glmmTMB(cbind(nPos_FS, nNeg_FS) ~ locality_rich*logsiteAbun +
 #                       temp_d*sMoist_d + (1|country) + (1|scientific),
-#                     data = dcbind_pos,
+#                     data = subset(dcbind_pos, scientific == "Salamandra salamandra"),
 #                     family = "binomial", na.action = "na.fail",
 #                     control = glmmTMBControl(optimizer = optim,
 #                                              optArgs = list(method = "BFGS")))
 #
 # FS_lr.3 <- glmmTMB(cbind(nPos_FS, nNeg_FS) ~ locality_rich*logsiteAbun +
 #                      temp_d*sMoist_d + (1|country) + (1|associatedReferences),
-#                    data = dcbind_pos,
+#                    data = subset(dcbind_pos, scientific == "Salamandra salamandra"),
 #                    family = "binomial", na.action = "na.fail",
 #                    control = glmmTMBControl(optimizer = optim,
 #                                             optArgs = list(method = "BFGS")))
 #
 # FS_lr.4 <- glmmTMB(cbind(nPos_FS, nNeg_FS) ~ locality_rich*logsiteAbun +
 #                      temp_d*sMoist_d + (1|scientific) + (1|associatedReferences),
-#                    data = dcbind_pos,
+#                    data = subset(dcbind_pos, scientific == "Salamandra salamandra"),
 #                    family = "binomial", na.action = "na.fail",
 #                    control = glmmTMBControl(optimizer = optim,
 #                                             optArgs = list(method = "BFGS")))
 #
 # FS_lr.5 <- glmmTMB(cbind(nPos_FS, nNeg_FS) ~ locality_rich*logsiteAbun +
 #                      temp_d*sMoist_d + (1|associatedReferences),
-#                    data = dcbind_pos,
+#                    data = subset(dcbind_pos, scientific == "Salamandra salamandra"),
 #                    family = "binomial", na.action = "na.fail",
 #                    control = glmmTMBControl(optimizer = optim,
 #                                             optArgs = list(method = "BFGS")))
 #
 # FS_lr.6 <- glmmTMB(cbind(nPos_FS, nNeg_FS) ~ locality_rich*logsiteAbun +
 #                       temp_d*sMoist_d + (1|scientific/country) + (1|associatedReferences),
-#                     data = dcbind_pos,
+#                     data = subset(dcbind_pos, scientific == "Salamandra salamandra"),
 #                     family = "binomial", na.action = "na.fail",
 #                     control = glmmTMBControl(optimizer = optim,
 #                                              optArgs = list(method = "BFGS")))
 #
 # FS_lr.7 <- glmmTMB(cbind(nPos_FS, nNeg_FS) ~ locality_rich*logsiteAbun +
 #                       temp_d*sMoist_d + (1|scientific/country),
-#                     data = dcbind_pos,
+#                     data = subset(dcbind_pos, scientific == "Salamandra salamandra"),
 #                     family = "binomial", na.action = "na.fail",
 #                     control = glmmTMBControl(optimizer = optim,
 #                                              optArgs = list(method = "BFGS")))
@@ -1582,10 +1580,12 @@ rm(m3a_predict, m3_noFS_predict, noFS, noFS_lr.3)
 ###### > Model Checking/Diagnostics --------------------------------------------
 FS_lr.5 <- glmmTMB(cbind(nPos_FS, nNeg_FS) ~ locality_rich*logsiteAbun +
                      temp_d*sMoist_d + (1|associatedReferences),
-                   data = dcbind_pos,
+                   data = subset(dcbind_pos, scientific == "Salamandra salamandra"),
                    family = "binomial", na.action = "na.fail",
                    control = glmmTMBControl(optimizer = optim,
                                             optArgs = list(method = "BFGS")))
+
+
 summary(FS_lr.5)
 Anova(FS_lr.5) # locality_rich:logsiteAbun and soil moisture are n.s.
 # main effects of locality_rich, logsiteAbun, and sMoist_d are very significant
@@ -1601,8 +1601,8 @@ testResiduals(resid)
 
 ## Need to subset unique lat/lon vals to test for spatial autocorrelation
 coords <- dcbind_pos %>%
-  # filter(scientific == "Salamandra salamandra") %>%
-  filter(scientific == "Salamandra salamandra" & country == "Germany") %>%
+  filter(scientific == "Salamandra salamandra") %>%
+  # filter(scientific == "Salamandra salamandra" & country == "Germany") %>%
   subset(., select = c(Site, Lat, Lon)) %>%
   distinct(Site, Lat, Lon, .keep_all = T) %>%
   group_by(Site) %>%
@@ -1621,13 +1621,13 @@ testSpatialAutocorrelation(recalc.resid, x = coords$Lon, y = coords$Lat)
 # DHARMa Moran's I test for distance-based autocorrelation
 # (INCLUDING SPAIN OBSERVATIONS)
 # data:  recalc.resid
-# observed = -0.061161, expected = -0.034483, sd = 0.062787, p-value = 0.6709
+# observed = -0.076639, expected = -0.034483, sd = 0.063388, p-value = 0.506
 # alternative hypothesis: Distance-based autocorrelation
 
 # DHARMa Moran's I test for distance-based autocorrelation -- Germany data only
 # (GERMANY ONLY)
 # data:  recalc.resid
-# observed = 0.0064057, expected = -0.0357143, sd = 0.0648070, p-value = 0.5157
+# observed = -0.005374, expected = -0.035714, sd = 0.065634, p-value = 0.6439
 # alternative hypothesis: Distance-based autocorrelation
 
 ## No spatial autocorrelation! cool.
@@ -1694,7 +1694,7 @@ save_as_docx(
   path = file.path(tblpath, "/cbind_models.docx")
 )
 
-rm(m3_all_tbl, m3_noFS_tbl, m3_FS_tbl)
+# rm(m3_all_tbl, m3_noFS_tbl, m3_FS_tbl)
 
 ###### > Plot ------------------------------------------------------------------
 m_FS_predict <- ggpredict(FS_lr.5,  terms = c("locality_rich", "logsiteAbun")) %>%
@@ -1743,6 +1743,7 @@ rm(nicelabs, m_FS_predict, FS_lr.5)
 ## Create combined plot for manuscript
 fig3a <- m3a + labs(caption = NULL, y = NULL, x = NULL) +
   theme(plot.tag.position = c(0.95, 0.95),
+        plot.tag = element_text(face = "bold"),
         plot.margin = margin(.5, .75, .5, .5, "cm"),
         legend.position = c(0.5, 0.9),
         legend.background = element_rect(fill = alpha ("white", 0.75), color = NA),
@@ -1762,6 +1763,7 @@ fig3a
 
 fig3b <- m3b_FS + labs(caption = NULL, y = NULL) +
   theme(plot.tag.position = c(0.95, 0.95),
+        plot.tag = element_text(face = "bold"),
         plot.margin = margin(.5, .75, .5, .5, "cm"),
         legend.position = c(0.5, 0.9),
         legend.background = element_rect(fill = alpha ("white", 0.75), color = NA),
@@ -1793,7 +1795,7 @@ fig3ab_v
 fig3ab_v_combined <- ggdraw(fig3ab_v, xlim = c(-0.15, 1)) +
   draw_label("Bsal prevalence (%)", x = -0.11, y = 0.55, angle = 90,
              size = 44, fontfamily = "Segoe UI Light") +
-  draw_image(image = fs_img, x = 0.35, y = -0.12, scale = 0.17) +
+  draw_image(image = fs_img, x = 0.32, y = -0.05, scale = 0.17) +
   ak_theme + theme(plot.margin = margin(0.5, 0.5, 0.5, 0.5, "cm"))
 
 
