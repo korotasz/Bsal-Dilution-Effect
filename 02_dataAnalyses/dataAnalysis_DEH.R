@@ -17,7 +17,9 @@ require(renv)
 # remotes::install_version("Rttf2pt1", version = "1.3.8") # install this version, latest ver. not compatible
 # remotes::install_github("gorkang/html2latex") # convert sjPlot::tab_model() hmtl table to tex and pdf in .Rmd docs
 # remotes::install_github("ddsjoberg/gtsummary")
-# remotes::install_github("larmarange/broom.helpers") ## used by gtsummary
+#    devtools::install_github("larmarange/broom.helpers") ## used by gtsummary
+#    devtools::install_github("cran/aod") # need at least v. 1.3.3
+#    devtools::install_github("insightsengineering/cardx")# need at least v. 0.2.0.9008
 ## As of 2024-04-04, there are issues with patchwork and ggplot2 that require specific pull requests to resolve:
 # remotes::install_github("thomasp85/patchwork")
 # remotes::install_github("tidyverse/ggplot2", ref = remotes::github_pull("5592"))
@@ -50,7 +52,9 @@ pckgs <- c("ggsignif", # adds labels to significant groups
           "gtsummary", # better package for creating tables from glmmTMB objects
         "broom.mixed", # required to create flextable/gtsummary objects from mixed model outputs
       "broom.helpers", # required for gtsummary
-            # "webshot", # save kable tables
+           "reporter", # streamlines adding special characters to labels ## PROBABY DELETE
+              "cardx", # to add chisquare vals to model summary outputs in gtsummary
+          # "webshot", # save kable tables
              "magick", # image_read() -- needed for cowplot::draw_image
 ### Analysis Packages --------------------------------------------------------
           "tidyverse", # data wrangling/manipulation
@@ -101,6 +105,64 @@ outputs <- file.path(dir, path.expand("03_outputs"))
 figpath <- file.path(outputs, path.expand("figures"))
 tblpath <- file.path(outputs, path.expand("tables"))
 shppath <- file.path(dir, path.expand("01_dataCleaning/shapefiles"))
+
+## Plot and table stylings -----------------------------------------------------
+## Load fonts from grDevices
+grDevices::pdfFonts()
+
+ak_theme <- hrbrthemes::theme_ipsum(base_family = "Segoe UI Light") +
+  theme(axis.text.x = element_text(size = 32),
+        axis.title.x = element_text(size = 38, hjust = 0.5,
+                                    margin = margin(t = 10, r = 0, b = 0, l = 0),
+                                    face = "plain"),
+        axis.text.y = element_text(size = 32, face = "plain"),
+        axis.title.y = element_text(size = 38, hjust = 0.5,
+                                    margin = margin(t = 0, r = 15, b = 0, l = 5),
+                                    face = "plain"),
+        axis.ticks.length = unit(.25, "cm"),
+        axis.ticks = element_blank(),
+        plot.tag = element_text(size = 42, face = "bold"),
+        plot.title = element_text(hjust = 0.5, face = "plain"),
+        plot.subtitle = element_markdown(size = 12, face = "plain"),
+        # plot.margin = margin(1, 1, 1.5, 1.2, "cm"),
+        plot.caption = element_markdown(hjust = 1, size = 14, face = "plain"),
+        plot.caption.position = "plot",
+        legend.position = "top",
+        legend.key.size = unit(2,"cm"),
+        legend.text = element_text(size = 32, hjust = -1),
+        legend.title = element_text(size = 38, face = "bold"),
+        panel.border = element_blank(),
+        panel.background = element_blank(),
+        panel.spacing.y = unit(1.5,"cm"),
+        strip.text = element_text(size = 14, face = "bold", hjust = 0.5),
+        axis.line = element_line(color = 'black'))
+
+set_flextable_defaults(
+  font.family = "Segoe UI Light",
+  font.size = 11,
+  font.color = "black",
+  text.align = "center",
+  line_spacing = 1,
+  cs.family = "Segoe UI Light",
+  digits =3,
+  pct_digits = 3,
+  split = T,
+  # keep_with_next = NULL,
+  # tabcolsep = NULL,
+  post_process_docx = T
+)
+
+nicelabs <- list(locality_rich = "Locality richness",
+                 logsiteAbun = "log(Site abundance)",
+                 temp_d = paste0("Temperature (\u00b0C)"),
+                 sMoist_d = paste0("Soil moisture (kg\u00b7m\u00b2)"),
+                 "locality_rich*logsiteAbun" = "Locality richness:log(Site abundance)",
+                 "locality_rich:logsiteAbun" = "Locality richness:log(Site abundance)",
+                 "temp_d*sMoist_d" = "Temperature:Soil moisture",
+                 "temp_d:sMoist_d" = "Temperature:Soil moisture")
+
+
+chisqlab <- paste0(symbol("chi"),"\u00b2")
 
 ## Read in .csv files and prep data --------------------------------------------
 setwd(analysis)
@@ -297,65 +359,6 @@ dcbind_subset <- dcbind_subset %>%
 
 
 
-## Define ggplot theme and set flextable defaults ------------------------------
-## Load fonts from grDevices
-grDevices::pdfFonts()
-
-ak_theme <- hrbrthemes::theme_ipsum(base_family = "Segoe UI Light") +
-  theme(axis.text.x = element_text(size = 32),
-        axis.title.x = element_text(size = 38, hjust = 0.5,
-                                    margin = margin(t = 10, r = 0, b = 0, l = 0),
-                                    face = "plain"),
-        axis.text.y = element_text(size = 32, face = "plain"),
-        axis.title.y = element_text(size = 38, hjust = 0.5,
-                                    margin = margin(t = 0, r = 15, b = 0, l = 5),
-                                    face = "plain"),
-        axis.ticks.length = unit(.25, "cm"),
-        axis.ticks = element_blank(),
-        plot.tag = element_text(size = 42, face = "bold"),
-        plot.title = element_text(hjust = 0.5, face = "plain"),
-        plot.subtitle = element_markdown(size = 12, face = "plain"),
-        # plot.margin = margin(1, 1, 1.5, 1.2, "cm"),
-        plot.caption = element_markdown(hjust = 1, size = 14, face = "plain"),
-        plot.caption.position = "plot",
-        legend.position = "top",
-        legend.key.size = unit(2,"cm"),
-        legend.text = element_text(size = 32, hjust = -1),
-        legend.title = element_text(size = 38, face = "bold"),
-        panel.border = element_blank(),
-        panel.background = element_blank(),
-        panel.spacing.y = unit(1.5,"cm"),
-        strip.text = element_text(size = 14, face = "bold", hjust = 0.5),
-        axis.line = element_line(color = 'black'))
-
-set_flextable_defaults(
-  font.family = "Segoe UI Light",
-  font.size = 11,
-  font.color = "black",
-  text.align = "center",
-  line_spacing = 1,
-  cs.family = "Segoe UI Light",
-  digits =3,
-  pct_digits = 3,
-  split = T,
-  # keep_with_next = NULL,
-  # tabcolsep = NULL,
-  post_process_docx = T
-  )
-
-
-## Clean labels for model output in a table ------------------------------------
-nicelabs <- c(`(Intercept)` = "Intercept",
-              richness = "Relative richness",
-              iucn_rich = "Richness estimate (IUCN)",
-              locality_rich = "Richness estimate (local species pool)",
-              logsppAbun = "log(Species abundance)",
-              logsiteAbun = "log(Site abundance)",
-              "richness:logsiteAbun" = "Richness:log(Site abundance)",
-              temp_d = "Temperature",
-              soilM_d = "Soil moisture",
-              "temp_d:sMoist_d" = "Temp:Soil moisture")
-
 ## II. Testing assumptions of the dilution effect hypothesis -------------------
 ### a. Hosts differ in their reservoir competence. -----------------------------
 sampSize <- d_subset %>%
@@ -485,28 +488,25 @@ m2b <- glmmTMB(logsppAbun ~ scientific + (1|Site) + (1|associatedReferences),
 
 
 
-summary(m2b)
-Anova(m2b)
+summary(m2b) # glmm overview
 
 # simulationOutput <- simulateResiduals(m2b)
 # plot(simulationOutput)
 
-# simulationOutput <- recalculateResiduals(simulationOutput, group = d$scientific)
 
 
 ##### > Tables -----------------------------------------------------------------
-m2b_tbl <- gtsummary::tbl_regression(m2b, exponentiate = T, intercept = F,
-                                     label = list(scientific = "Species")) %>%
-  modify_header(label = "**Variable**", estimate = "**OR**") %>%
-  italicize_levels() %>%
+m2b_tbl <- gtsummary::tbl_regression(m2b, exponentiate = T,
+                                          intercept = F, label = nicelabs) %>%
+  add_glance_source_note(label = list(sigma = "\u03c3"),
+                         include = c(nobs, AIC, df.residual)) %>%
   bold_p() %>%
+  modify_header(label = "**Variable**", estimate = "**OR**") %>%
   modify_footnote(estimate ~ "OR = Odds Ratio") %>%
-  add_significance_stars(pattern = "{p.value}{stars}", hide_ci = F, hide_p = F) %>%
-  add_glance_table(logLik) %>%
+  add_significance_stars(pattern = "{p.value}{stars}", hide_se = T, hide_p = F) %>%
   # add stars to model p-val
   modify_fmt_fun(estimate ~ style_pvalue_stars,
                  rows = row_type == "glance_statistic" & label == "p-value")
-
 
 m2b_tbl
 
@@ -523,21 +523,30 @@ m2b_post.hoc <- glht(m2b, linfct = mcp(scientific = "Tukey"), alternative = "gre
                     std.error = "SE",
                     statistic = "Statistic",
                     adj.p.value = "Adjusted p-value",
-                    signif = "Signif") %>%
+                    signif = "") %>%
   add_header_row(., values = "Tukey's Multiple Comparisons - All species", colwidths = 7) %>%
-  footnote(., i = 2, j = 7, inline = T, ref_symbols = c("1"), part = "header",
+  footnote(., i = 2, j = 6, inline = T, ref_symbols = c("1"), part = "header",
            value = as_paragraph("*p<0.05; **p<0.01; ***p<0.001")) %>%
   set_formatter_type(fmt_double = "%#.3f") %>%
-  set_table_properties(., layout = "autofit", width = .8) %>%
-  align(., align = "center", part = "all") %>%
+  flextable::align(., align = "center", part = "all") %>%
+  flextable::align(j = "adj.p.value", align = "right") %>%
+  flextable::align(j = "signif", align = "left") %>%
+  padding(padding.right = 0, j = 'adj.p.value', part = "all") %>%
+  padding(padding.left = 0, j = "signif", part  = "all") %>%
+  autofit() %>%
   bold(bold = TRUE, part = "header") %>%
-  color(i = ~ adj.p.value >= 0.05, j = c("contrast", "null.value", "estimate", "std.error",
-                                         "statistic", "adj.p.value", "signif"),
+  color(i = ~ adj.p.value >= 0.05,
+        j = c("contrast", "null.value", "estimate", "std.error",
+              "statistic", "adj.p.value", "signif"),
         color = "gray") %>%
-  highlight(i = ~ adj.p.value < 0.05, j = "adj.p.value",  color = "yellow")
+  bold(bold = T,
+       i = ~ adj.p.value < 0.05,
+       j = c("contrast", "null.value", "estimate", "std.error",
+             "statistic", "adj.p.value", "signif"))
 
 
 m2b_post.hoc
+
 
 ##### > Figure 2b --------------------------------------------------------------
 # Subset observed abundance
@@ -631,26 +640,23 @@ m2b_noFS <- glmmTMB(logsppAbun ~ scientific + (1|Site) + (1|associatedReferences
                                              optArgs = list(method = "BFGS")))
 
 
-summary(m2b_noFS)
-Anova(m2b_noFS)
+summary(m2b_noFS) # glmm overview
 
 
 ##### > Tables -----------------------------------------------------------------
-m2b_noFS_tbl <- gtsummary::tbl_regression(m2b_noFS, exponentiate = T, intercept = F,
-                          label = list(scientific = "Species")) %>%
-  modify_header(label = "**Variable**", estimate = "**OR**") %>%
-  italicize_levels() %>%
+m2b_noFS_tbl <- gtsummary::tbl_regression(m2b_noFS, exponentiate = T,
+                                     intercept = F, label = nicelabs) %>%
+  add_glance_source_note(label = list(sigma = "\u03c3"),
+                         include = c(nobs, AIC, df.residual)) %>%
   bold_p() %>%
+  modify_header(label = "**Variable**", estimate = "**OR**") %>%
   modify_footnote(estimate ~ "OR = Odds Ratio") %>%
-  add_significance_stars(pattern = "{p.value}{stars}", hide_ci = F, hide_p = F) %>%
-  add_glance_table(logLik) %>%
+  add_significance_stars(pattern = "{p.value}{stars}", hide_se = T, hide_p = F) %>%
   # add stars to model p-val
   modify_fmt_fun(estimate ~ style_pvalue_stars,
                  rows = row_type == "glance_statistic" & label == "p-value")
 
-
 m2b_noFS_tbl
-
 
 m2b_noFS_post.hoc <- glht(m2b_noFS, linfct = mcp(scientific = "Tukey"), alternative = "greater") %>%
   broom::tidy() %>%
@@ -663,21 +669,28 @@ m2b_noFS_post.hoc <- glht(m2b_noFS, linfct = mcp(scientific = "Tukey"), alternat
                     std.error = "SE",
                     statistic = "Statistic",
                     adj.p.value = "Adjusted p-value",
-                    signif = "Signif") %>%
+                    signif = "") %>%
   add_header_row(., values = "Tukey's Multiple Comparisons - No fire salamanders", colwidths = 7) %>%
-  footnote(., i = 2, j = 7, inline = T, ref_symbols = c("1"), part = "header",
+  footnote(., i = 2, j = 6, inline = T, ref_symbols = c("1"), part = "header",
            value = as_paragraph("*p<0.05; **p<0.01; ***p<0.001")) %>%
   set_formatter_type(fmt_double = "%#.3f") %>%
-  set_table_properties(., layout = "autofit", width = .8) %>%
-  align(., align = "center", part = "all") %>%
+  flextable::align(., align = "center", part = "all") %>%
+  flextable::align(j = "adj.p.value", align = "right") %>%
+  flextable::align(j = "signif", align = "left") %>%
+  padding(padding.right = 0, j = 'adj.p.value', part = "all") %>%
+  padding(padding.left = 0, j = "signif", part  = "all") %>%
+  autofit() %>%
   bold(bold = TRUE, part = "header") %>%
-  color(i = ~ adj.p.value >= 0.05, j = c("contrast", "null.value", "estimate", "std.error",
-                                         "statistic", "adj.p.value", "signif"),
+  color(i = ~ adj.p.value >= 0.05,
+        j = c("contrast", "null.value", "estimate", "std.error",
+              "statistic", "adj.p.value", "signif"),
         color = "gray") %>%
-  highlight(i = ~ adj.p.value < 0.05, j = "adj.p.value",  color = "yellow")
+  bold(bold = T,
+       i = ~ adj.p.value < 0.05,
+       j = c("contrast", "null.value", "estimate", "std.error",
+             "statistic", "adj.p.value", "signif"))
 
 m2b_noFS_post.hoc
-
 
 ## Combine model2b 'All spp' tables with model2a 'no FS' tables
 # dir.create(tblpath)
@@ -788,8 +801,7 @@ m2c <- glmmTMB(logsppAbun ~ susceptibility + (1|Site) + (1|associatedReferences)
                data = d_subset,
                control = glmmTMBControl(optimizer = optim,
                                         optArgs = list(method = "BFGS")))
-summary(m2c)
-Anova(m2c)
+summary(m2c) # glmm overview
 
 # simulationOutput <- simulateResiduals(m2c)
 # plot(simulationOutput, quantreg = TRUE)
@@ -798,14 +810,15 @@ Anova(m2c)
 
 
 ##### > Tables -----------------------------------------------------------------
-m2c_tbl <- gtsummary::tbl_regression(m2c, exponentiate = T, intercept = F,
-                                          label = list(susceptibility = "Susceptibility")) %>%
-  # add stars to model p-val
-  add_significance_stars(pattern = "{p.value}{stars}", hide_ci = F, hide_p = F) %>%
-  add_glance_table(logLik) %>%
+m2c_tbl <- gtsummary::tbl_regression(m2c, exponentiate = T,
+                                        intercept = F, label = nicelabs) %>%
+  add_glance_source_note(label = list(sigma = "\u03c3"),
+                         include = c(nobs, AIC, df.residual)) %>%
   bold_p() %>%
   modify_header(label = "**Variable**", estimate = "**OR**") %>%
   modify_footnote(estimate ~ "OR = Odds Ratio") %>%
+  add_significance_stars(pattern = "{p.value}{stars}", hide_se = T, hide_p = F) %>%
+  # add stars to model p-val
   modify_fmt_fun(estimate ~ style_pvalue_stars,
                  rows = row_type == "glance_statistic" & label == "p-value")
 
@@ -818,28 +831,32 @@ m2c_post.hoc <- glht(m2c, linfct = mcp(susceptibility = "Tukey"), alternative = 
   dplyr::select(-(term)) %>%
   dplyr::mutate(signif = gtools::stars.pval(adj.p.value)) %>%
   flextable(theme_fun = theme(booktabs)) %>%
-  # labelizor(., labels = c(susceptibility, ))
-  set_header_labels(., contrast = "Susceptibility",
+  set_header_labels(., contrast = "Species",
                     null.value = "Null",
                     estimate = "Estimate",
                     std.error = "SE",
                     statistic = "Statistic",
                     adj.p.value = "Adjusted p-value",
-                    signif = "Signif") %>%
+                    signif = "") %>%
   add_header_row(., values = "Tukey's Multiple Comparisons - All species", colwidths = 7) %>%
-  footnote(., i = 2, j = 7, inline = T, ref_symbols = c("1"), part = "header",
+  footnote(., i = 2, j = 6, inline = T, ref_symbols = c("1"), part = "header",
            value = as_paragraph("*p<0.05; **p<0.01; ***p<0.001")) %>%
   set_formatter_type(fmt_double = "%#.3f") %>%
-  set_table_properties(., layout = "autofit", width = .8) %>%
-  align(., align = "left", part = "footer") %>%
-  align(., align = "center", part = "header") %>%
-  align(., align = "center", part = "body") %>%
+  flextable::align(., align = "center", part = "all") %>%
+  flextable::align(j = "adj.p.value", align = "right") %>%
+  flextable::align(j = "signif", align = "left") %>%
+  padding(padding.right = 0, j = 'adj.p.value', part = "all") %>%
+  padding(padding.left = 0, j = "signif", part  = "all") %>%
+  autofit() %>%
   bold(bold = TRUE, part = "header") %>%
-  color(i = ~ adj.p.value >= 0.05, j = c("contrast", "null.value", "estimate", "std.error",
-                                         "statistic", "adj.p.value", "signif"),
+  color(i = ~ adj.p.value >= 0.05,
+        j = c("contrast", "null.value", "estimate", "std.error",
+              "statistic", "adj.p.value", "signif"),
         color = "gray") %>%
-  highlight(i = ~ adj.p.value < 0.05, j = "adj.p.value",  color = "yellow")
-
+  bold(bold = T,
+       i = ~ adj.p.value < 0.05,
+       j = c("contrast", "null.value", "estimate", "std.error",
+             "statistic", "adj.p.value", "signif"))
 
 m2c_post.hoc
 
@@ -919,24 +936,23 @@ m2c_noFS <- glmmTMB(logsppAbun ~ susceptibility + (1|Site) + (1|associatedRefere
                     data = filter(d_subset, scientific != "Salamandra salamandra"),
                     control = glmmTMBControl(optimizer = optim,
                                              optArgs = list(method = "BFGS")))
-summary(m2c_noFS)
-Anova(m2c_noFS)
+summary(m2c_noFS) # glmm overview
 
 
 ##### > Tables -----------------------------------------------------------------
-m2c_noFS_tbl <- gtsummary::tbl_regression(m2c_noFS, exponentiate = T, intercept = F,
-                                     label = list(susceptibility = "Susceptibility")) %>%
-  # add stars to model p-val
-  add_significance_stars(pattern = "{p.value}{stars}", hide_ci = F, hide_p = F) %>%
-  add_glance_table(logLik) %>%
+m2c_noFS_tbl <- gtsummary::tbl_regression(m2c_noFS, exponentiate = T,
+                                     intercept = F, label = nicelabs) %>%
+  add_glance_source_note(label = list(sigma = "\u03c3"),
+                         include = c(nobs, AIC, df.residual)) %>%
   bold_p() %>%
   modify_header(label = "**Variable**", estimate = "**OR**") %>%
   modify_footnote(estimate ~ "OR = Odds Ratio") %>%
+  add_significance_stars(pattern = "{p.value}{stars}", hide_se = T, hide_p = F) %>%
+  # add stars to model p-val
   modify_fmt_fun(estimate ~ style_pvalue_stars,
                  rows = row_type == "glance_statistic" & label == "p-value")
 
-m2c_tbl
-
+m2c_noFS_tbl
 
 # using glht for multcomps.
 m2c_noFS_post.hoc <- glht(m2c_noFS, linfct = mcp(susceptibility = "Tukey"), alternative = "greater") %>%
@@ -944,30 +960,34 @@ m2c_noFS_post.hoc <- glht(m2c_noFS, linfct = mcp(susceptibility = "Tukey"), alte
   dplyr::select(-(term)) %>%
   dplyr::mutate(signif = gtools::stars.pval(adj.p.value)) %>%
   flextable(theme_fun = theme(booktabs)) %>%
-  # labelizor(., labels = c(susceptibility, ))
-  set_header_labels(., contrast = "Susceptibility",
+  set_header_labels(., contrast = "Species",
                     null.value = "Null",
                     estimate = "Estimate",
                     std.error = "SE",
                     statistic = "Statistic",
                     adj.p.value = "Adjusted p-value",
-                    signif = "Signif") %>%
-  add_header_row(., values = "Tukey's Multiple Comparisons - All species", colwidths = 7) %>%
-  footnote(., i = 2, j = 7, inline = T, ref_symbols = c("1"), part = "header",
+                    signif = "") %>%
+  add_header_row(., values = "Tukey's Multiple Comparisons - No fire salamanders", colwidths = 7) %>%
+  footnote(., i = 2, j = 6, inline = T, ref_symbols = c("1"), part = "header",
            value = as_paragraph("*p<0.05; **p<0.01; ***p<0.001")) %>%
   set_formatter_type(fmt_double = "%#.3f") %>%
-  set_table_properties(., layout = "autofit", width = .8) %>%
-  align(., align = "left", part = "footer") %>%
-  align(., align = "center", part = "header") %>%
-  align(., align = "center", part = "body") %>%
+  flextable::align(., align = "center", part = "all") %>%
+  flextable::align(j = "adj.p.value", align = "right") %>%
+  flextable::align(j = "signif", align = "left") %>%
+  padding(padding.right = 0, j = 'adj.p.value', part = "all") %>%
+  padding(padding.left = 0, j = "signif", part  = "all") %>%
+  autofit() %>%
   bold(bold = TRUE, part = "header") %>%
-  color(i = ~ adj.p.value >= 0.05, j = c("contrast", "null.value", "estimate", "std.error",
-                                         "statistic", "adj.p.value", "signif"),
+  color(i = ~ adj.p.value >= 0.05,
+        j = c("contrast", "null.value", "estimate", "std.error",
+              "statistic", "adj.p.value", "signif"),
         color = "gray") %>%
-  highlight(i = ~ adj.p.value < 0.05, j = "adj.p.value",  color = "yellow")
+  bold(bold = T,
+       i = ~ adj.p.value < 0.05,
+       j = c("contrast", "null.value", "estimate", "std.error",
+             "statistic", "adj.p.value", "signif"))
 
-
-m2c_post.hoc
+m2c_noFS_post.hoc
 
 ## Combine model2c 'All spp' tables with model 2c 'no FS' tables
 # dir.create(tblpath)
@@ -1055,7 +1075,7 @@ fig2c_noFS
 # ggsave("fig2c_noFS.pdf", fig2c_noFS, device = cairo_pdf, path = figpath,
 #           width = 2000, height = 1300, scale = 2, units = "px", dpi = 300, limitsize = F)
 
-rm(m2c_noFS, m2c_noFS_predict, fig2c_noFS, mcLabs, n, post.hoc)
+rm(m2c, m2c_noFS, m2c_noFS_predict, fig2c_noFS, mcLabs, n, post.hoc)
 
 ## Figure 2. ------------------------------------------------------------------
 ## Create guide to force a common legend
@@ -1129,204 +1149,599 @@ fig2combined
 # ggsave("fig2_combined.pdf", fig2combined, device = cairo_pdf, path = figpath,
 #        width = 2800, height = 2600, scale = 2, units = "px", dpi = 300, limitsize = F)
 
-
-## III. "All Spp" Cbind models testing the dilution dffect hypothesis ----------
-dcbind_subset <- dcbind_subset %>%
-  filter((scientific != "Triturus anatolicus" | scientific != "Pelobates cultripes" & country == "Germany")) %>%
+rm(fig2a, fig2a_tag, fig2ab, fig2b, fig2b_tag, fig2c, fig2c_tag, fig2combined)
+## III. Cbind models testing the dilution dffect hypothesis --------------------
+dcbind_pos <- dcbind_subset %>%
+  filter((scientific != "Triturus anatolicus" | scientific != "Pelophylax sp." & country == "Germany")) %>%
   filter(posSite == 1)
 
-#### i. Including fire salamanders --------------------------------------------
-##### > Locality richness (From collaborators) -------------------------------
-all_lr <- glmmTMB(cbind(nPos_all, nNeg_all) ~ locality_rich*logsiteAbun +
-                    temp_d*sMoist_d + (1|Site) + (1|scientific) + (1|associatedReferences),
-                     data = filter(dcbind, continent == "Europe"),
-                     family = "binomial", na.action = "na.fail",
-                     control = glmmTMBControl(optimizer = optim,
-                                              optArgs = list(method = "BFGS")))
 
-all_lr.2 <- glmmTMB(cbind(nPos_all, nNeg_all) ~ locality_rich*logsiteAbun +
-                    temp_d*sMoist_d + (1|country) + (1|scientific),
-                  data = filter(dcbind, continent == "Europe"),
-                  family = "binomial", na.action = "na.fail",
-                  control = glmmTMBControl(optimizer = optim,
-                                           optArgs = list(method = "BFGS")))
+#### i. 'All spp.' (Including fire salamanders) --------------------------------
+##### > Locality richness (From collaborators) ---------------------------------
+###### > Model selection -------------------------------------------------------
+# all_lr <- glmmTMB(cbind(nPos_all, nNeg_all) ~ locality_rich*logsiteAbun +
+#                     temp_d*sMoist_d + (1|country) + (1|scientific) + (1|associatedReferences),
+#                      data = dcbind_pos,
+#                      family = "binomial", na.action = "na.fail",
+#                      control = glmmTMBControl(optimizer = optim,
+#                                               optArgs = list(method = "BFGS")))
+#
+# all_lr.2 <- glmmTMB(cbind(nPos_all, nNeg_all) ~ locality_rich*logsiteAbun +
+#                       temp_d*sMoist_d + (1|country) + (1|scientific),
+#                     data = dcbind_pos,
+#                     family = "binomial", na.action = "na.fail",
+#                     control = glmmTMBControl(optimizer = optim,
+#                                              optArgs = list(method = "BFGS")))
+#
+# all_lr.3 <- glmmTMB(cbind(nPos_all, nNeg_all) ~ locality_rich*logsiteAbun +
+#                       temp_d*sMoist_d + (1|scientific) + (1|associatedReferences),
+#                     data = dcbind_pos,
+#                     family = "binomial", na.action = "na.fail",
+#                     control = glmmTMBControl(optimizer = optim,
+#                                              optArgs = list(method = "BFGS")))
+#
+# all_lr.4<- glmmTMB(cbind(nPos_all, nNeg_all) ~ locality_rich*logsiteAbun +
+#                       temp_d*sMoist_d + (1|scientific/country) + (1|associatedReferences),
+#                     data = dcbind_pos,
+#                     family = "binomial", na.action = "na.fail",
+#                     control = glmmTMBControl(optimizer = optim,
+#                                              optArgs = list(method = "BFGS")))
+#
+# all_lr.5 <- glmmTMB(cbind(nPos_all, nNeg_all) ~ locality_rich*logsiteAbun +
+#                       temp_d*sMoist_d + (1|scientific/country),
+#                     data = dcbind_pos,
+#                     family = "binomial", na.action = "na.fail",
+#                     control = glmmTMBControl(optimizer = optim,
+#                                              optArgs = list(method = "BFGS")))
+#
+#
+# model.sel(all_lr, all_lr.2, all_lr.3, all_lr.4, all_lr.5)
+# rm(all_lr, all_lr.2, all_lr.3, all_lr.4, all_lr.5)
+###### > Model Checking/Diagnostics --------------------------------------------
+all_lr.3 <- glmmTMB(cbind(nPos_all, nNeg_all) ~ locality_rich*logsiteAbun +
+                      temp_d*sMoist_d + (1|scientific) + (1|associatedReferences),
+                    data = dcbind_pos,
+                    family = "binomial", na.action = "na.fail",
+                    control = glmmTMBControl(optimizer = optim,
+                                             optArgs = list(method = "BFGS")))
 
-model.sel(all_lr, all_lr.2)
+summary(all_lr.3) # richness:logsiteAbun and soil moisture are highly significant
+Anova(all_lr.3) # soil moisture is n.s.
 
-summary(all_lr)
-Anova(all_lr) # richness:logsiteAbun and soil moisture are highly significant
+resid <- simulateResiduals(all_lr.3)
+testResiduals(resid)
+# plotResiduals(resid)
+# testOutliers(resid, type = "bootstrap") # n.s.
+# testDispersion(resid) # n.s.
+# testQuantiles(resid) # significant deviation, but may be ok
+# testZeroInflation(resid) # n.s.
 
 
+## Need to subset unique lat/lon vals to test for spatial autocorrelation
+coords <- dcbind_pos %>%
+  subset(., select = c(Site, Lat, Lon)) %>%
+  distinct(Site, Lat, Lon, .keep_all = T) %>%
+  group_by(Site) %>%
+  mutate(Lat = mean(Lat), Lon = mean(Lon)) %>%
+  distinct() %>%
+  ungroup()
 
-##  Prevalence by Abundance & Richness Plots for 'All spp.' model
-all_EU_RR_pred <- ggpredict(all_EU_RR,  terms = c("richness", "logsiteAbun")) %>%
-  dplyr::rename("richness" = "x",
+# need to use recalculateResiduals() function because we have multiple observations per location
+recalc.resid <- recalculateResiduals(resid, group = coords$Site)
+
+testSpatialAutocorrelation(recalc.resid, x = coords$Lon, y = coords$Lat)
+# DHARMa Moran's I test for distance-based autocorrelation
+#
+# data:  recalc.resid
+# observed = -0.099234, expected = -0.020833, sd = 0.045536, p-value = 0.08512
+# alternative hypothesis: Distance-based autocorrelation
+
+## No spatial autocorrelation! cool.
+
+rm(resid, recalc.resid, coords)
+###### > Tables ----------------------------------------------------------------
+m3_all_tbl <- all_lr.3 %>%
+  broom::tidy() %>%
+  filter(!row_number() %in% c(1, 8:9)) %>%
+  mutate(OR = exp(estimate)) %>%
+  relocate(OR, .before = p.value) %>%
+  left_join(., (Anova(all_lr.3) %>%
+                  rownames_to_column(., "term")), by = "term") %>%
+  dplyr::select(-c(effect, component, group, estimate, std.error, statistic, p.value,
+                   Df)) %>%
+  rename(Terms = term,
+         pval = `Pr(>Chisq)`) %>%
+  mutate(signif = gtools::stars.pval(pval),
+         Terms = case_when(Terms == "locality_rich" ~ "Locality richness",
+                           Terms == "logsiteAbun" ~ "log(Site abundance)",
+                           Terms == "temp_d" ~ paste0("Temperature (\u00b0C)"),
+                           Terms == "sMoist_d" ~ paste0("Soil moisture (kg\u00b7m\u00b2)"),
+                           Terms == "locality_rich:logsiteAbun" ~ "Locality richness:log(Site abundance)",
+                           Terms == "temp_d:sMoist_d" ~ "Temperature:Soil moisture")) %>%
+  flextable(theme_fun = theme(booktabs)) %>%
+  set_header_labels(., Chisq = chisqlab,
+                    pval = "p-value",
+                    signif = "") %>%
+  add_header_lines(., values = "cbind Model - All species") %>%
+  footnote(., i = 2, j = 2,
+           value = as_paragraph("OR = Odds Ratio"),
+           ref_symbols = "1",
+           part = "header") %>%
+  footnote(., i = 2, j = 4,
+           value = as_paragraph("*p<0.05; **p<0.01; ***p<0.001"),
+           ref_symbols = "2",
+           part = "header") %>%
+  set_formatter_type(fmt_double = "%#.3f") %>%
+  flextable::align(j = c("OR", "Chisq"), align = "center", part = "all") %>%
+  flextable::align(j = c("Terms", "pval"), align = "right", part = "all") %>%
+  flextable::align(j = "signif", align = "left") %>%
+  flextable::align(i = 1, j = NULL, align = "center", part = "header") %>%
+  flextable::align(., align = "left", part = "footer") %>%
+  padding(padding.right = 0, j = 'pval', part = "all") %>%
+  padding(padding.left = 0, j = "signif", part  = "all") %>%
+  autofit() %>%
+  bold(bold = TRUE, part = "header") %>%
+  color(i = ~ pval >= 0.05, j = c("Terms", "OR", "Chisq", "pval", "signif"),
+        color = "gray") %>%
+  bold(bold = T,
+       i = ~ pval < 0.05,
+       j = c("Terms", "OR", "Chisq", "pval", "signif"))
+
+
+m3_all_tbl
+
+###### > Plot ------------------------------------------------------------------
+m3a_predict <- ggpredict(all_lr.3,  terms = c("locality_rich", "logsiteAbun")) %>%
+# m3a_predict <- ggpredict(all_lr.3,  terms = c("locality_rich", "logsiteAbun [1.6094, 2.7726, 3.5835]")) %>% # 1st quartile, median, 3rd quartile
+# m3a_predict <- ggpredict(all_lr.3,  terms = c("locality_rich", "logsiteAbun [0.6931, 2.5935, 4.8040]")) %>% # min, mean, max
+  dplyr::rename("locality_rich" = "x",
                 "logsiteAbun" = "group") %>%
-  plyr::mutate(richness = as.numeric(as.character(richness)),
+  plyr::mutate(locality_rich = as.numeric(as.character(locality_rich)),
                logsiteAbun = as.numeric(as.character(logsiteAbun)),
                # Convert scaled prediction to original data scale:
-               siteAbun = as.factor(round(exp(as.numeric(logsiteAbun)), 0)))
+               siteAbun = as.factor(round(exp(as.numeric(logsiteAbun - 1)), 0)))
 
 
-all_EU_RR_plot <- ggplot(all_EU_RR_pred, aes(x = richness, y = predicted, linetype = siteAbun, colour = siteAbun)) +
+
+m3a <- ggplot(m3a_predict, aes(x = locality_rich, y = predicted, linetype = siteAbun, colour = siteAbun)) +
   geom_line(aes(linetype = siteAbun, colour = siteAbun), linewidth = 1) +
-  geom_rug(data = dcbindScaled, aes(x = richness, y = 0), sides = "b",
+  # geom_ribbon(aes(ymin = conf.low, ymax = conf.high,
+  #                 colour = siteAbun,
+  #                 linetype = siteAbun), outline.type = "both", alpha = 0.1, show.legend = F) +
+  geom_rug(data = dcbind_pos, aes(x = locality_rich, y = 0), sides = "b",
            alpha = 0.5, position = position_jitter(width = 0.4, height = 0.1),
            inherit.aes = F, na.rm = T) +
-  labs(x = "Relative species richness",
+  labs(x = "Locality richness",
        y = "Bsal prevalence (%)") +
-   # geom_ribbon(aes(x = richness, ymin = conf.low, ymax = conf.high,
-   #             fill = siteAbun), alpha = 0.2, colour = NA, show.legend = F) +
   geom_label(label = "Europe", size = 8, colour = "gray20", label.padding = unit(0.25, "lines"),
              x = 9, y = 0.055, alpha = 0.75) +
   scale_linetype_manual(values = c("solid", "longdash", "twodash")) +
   scale_color_grey(start = 0.8, end = 0.2) +
-  scale_x_continuous(labels = seq(0, 10, 1),
-                     breaks = seq(0, 10, 1)) +
+  scale_x_continuous(labels = seq(0, 6, 1),
+                     breaks = seq(0, 6, 1)) +
   scale_y_continuous(labels = scales::percent_format(accuracy = 1),
-                     breaks = seq(0, .06, 0.02),
-                     limits = c(0, 0.06),
-                     minor_breaks = seq(0, 0.06, 0.02)) +
+                     breaks = seq(0, .6, 0.2),
+                     limits = c(0, .65),
+                     minor_breaks = seq(0, 0.6, 0.1)) +
   ak_theme + theme(plot.tag.position = c(0.96, 0.9),
                    axis.text.y = element_text(face = "plain")) +
   guides(colour = guide_legend("Site-level abundance", title.position = "top", title.hjust = 0.5),
          linetype = guide_legend("Site-level abundance", title.position = "top", title.hjust = 0.5))
 
-all_EU_RR_plot
-# ggsave("Europe_allRR_plot.pdf", all_EU_RR_plot, device = cairo_pdf, path = file.path(dir, figpath),
+m3a
+# ggsave("m3a_all.pdf", m3a, device = cairo_pdf, path = figpath,
 #        width = 1250, height = 1500, scale = 2, units = "px", dpi = 300, limitsize = F)
 
-#### ii. Excluding fire salamanders --------------------------------------------
+#### ii. 'All spp.' (Excluding fire salamanders) -------------------------------
 ##### > Locality richness (From collaborators) ---------------------------------
-all_LR_noFS <- glmmTMB(cbind(nPos_all_noFS, nNeg_all_noFS) ~ locality_rich*logsiteAbun +
-                         temp_d*sMoist_d + (1|country) + (1|scientific),
-                       data = filter(dcbindScaled_conf, scientific != "Salamandra salamandra"),
-                       family = "binomial", na.action = "na.fail",
-                       control = glmmTMBControl(optimizer = optim,
-                                                optArgs = list(method = "BFGS")))
-
-summary(all_LR_noFS)
-Anova(all_LR_noFS) # richness:logsiteAbun and soil moisture are highly significant
-
-
-
-## IV. "Fire salamander only" Cbind models testing the dilution effect hypothesis ------------------------------
-## Subset data even further to only include Fire Salamanders
-FSdata <- dcbindScaled %>%
-  filter(scientific == "Salamandra salamandra")
-
-FSdata_conf <- dcbindScaled_conf %>%
-  filter(scientific == "Salamandra salamandra")
-
-m_FS <- glmmTMB(cbind(nPos_FS, nNeg_FS) ~  richness * logsiteAbun + temp_d*sMoist_d + (1|country) + (1|scientific),
-                data = FSdata_conf, family = "binomial",
-                control = glmmTMBControl(optimizer = optim,
-                                         optArgs = list(method = "BFGS")))
-
-
-summary(m_FS)
-Anova(m_FS)
-
-
-m_FS_LR <- glmmTMB(cbind(nPos_FS, nNeg_FS) ~  locality_rich * logsiteAbun + temp_d*sMoist_d + (1|country) + (1|scientific),
-                data = FSdata_conf, family = "binomial",
-                control = glmmTMBControl(optimizer = optim,
-                                         optArgs = list(method = "BFGS")))
-
-
-summary(m_FS_LR)
-Anova(m_FS_LR)
-
-
-m_FS_iucnR <- glmmTMB(cbind(nPos_FS, nNeg_FS) ~  iucn_rich * logsiteAbun + temp_d*sMoist_d + (1|country) + (1|scientific),
-                data = FSdata_conf, family = "binomial",
-                control = glmmTMBControl(optimizer = optim,
-                                         optArgs = list(method = "BFGS")))
-
-
-summary(m_FS_iucnR)
-Anova(m_FS_iucnR)
-
-# m_FS2 <- glmmTMB(cbind(nPos_FS, nNeg_FS) ~  richness + logsppAbun + temp_d*sMoist_d + (1|scientific) + (1|principalInvestigator),
-#                  data = FSdata, family = "binomial", na.action = "na.fail",
-#                  control = glmmTMBControl(optimizer = optim,
-#                                           optArgs = list(method = "BFGS")))
-#
-# summary(m_FS2)
-# Anova(m_FS2)
+###### > Model selection -------------------------------------------------------
+# noFS_lr <- all_lr <- glmmTMB(cbind(nPos_noFS, nNeg_noFS) ~ locality_rich*logsiteAbun +
+#                       temp_d*sMoist_d + (1|country) + (1|scientific) + (1|associatedReferences),
+#                        data = subset(dcbind_pos, scientific != "Salamandra salamandra"),
+#                        family = "binomial", na.action = "na.fail",
+#                        control = glmmTMBControl(optimizer = optim,
+#                                                 optArgs = list(method = "BFGS")))
 #
 #
- anova(m_FS2, m_FS) # same as the "all spp. model" -- simpler model is just as effective at accounting for variance
+# noFS_lr.2 <- glmmTMB(cbind(nPos_noFS, nNeg_noFS) ~ locality_rich*logsiteAbun +
+#                       temp_d*sMoist_d + (1|country) + (1|scientific),
+#                     data = subset(dcbind_pos, scientific != "Salamandra salamandra"),
+#                     family = "binomial", na.action = "na.fail",
+#                     control = glmmTMBControl(optimizer = optim,
+#                                              optArgs = list(method = "BFGS")))
+#
+# noFS_lr.3 <- glmmTMB(cbind(nPos_noFS, nNeg_noFS) ~ locality_rich*logsiteAbun +
+#                       temp_d*sMoist_d + (1|scientific) + (1|associatedReferences),
+#                     data = subset(dcbind_pos, scientific != "Salamandra salamandra"),
+#                     family = "binomial", na.action = "na.fail",
+#                     control = glmmTMBControl(optimizer = optim,
+#                                              optArgs = list(method = "BFGS")))
+#
+# noFS_lr.4 <- glmmTMB(cbind(nPos_noFS, nNeg_noFS) ~ locality_rich*logsiteAbun +
+#                       temp_d*sMoist_d + (1|scientific/country) + (1|associatedReferences),
+#                     data = subset(dcbind_pos, scientific != "Salamandra salamandra"),
+#                     family = "binomial", na.action = "na.fail",
+#                     control = glmmTMBControl(optimizer = optim,
+#                                              optArgs = list(method = "BFGS")))
+#
+# noFS_lr.5 <- glmmTMB(cbind(nPos_noFS, nNeg_noFS) ~ locality_rich*logsiteAbun +
+#                       temp_d*sMoist_d + (1|scientific/country),
+#                     data = subset(dcbind_pos, scientific != "Salamandra salamandra"),
+#                     family = "binomial", na.action = "na.fail",
+#                     control = glmmTMBControl(optimizer = optim,
+#                                              optArgs = list(method = "BFGS")))
+#
+#
+# model.sel(noFS_lr, noFS_lr.2, noFS_lr.3, noFS_lr.4, noFS_lr.5)
+# rm(noFS_lr, noFS_lr.2, noFS_lr.3, noFS_lr.4, noFS_lr.5)
+
+###### > Model Checking/Diagnostics --------------------------------------------
+noFS_lr.3 <- glmmTMB(cbind(nPos_noFS, nNeg_noFS) ~ locality_rich*logsiteAbun +
+                       temp_d*sMoist_d + (1|scientific) + (1|associatedReferences),
+                     data = subset(dcbind_pos, scientific != "Salamandra salamandra"),
+                     family = "binomial", na.action = "na.fail",
+                     control = glmmTMBControl(optimizer = optim,
+                                              optArgs = list(method = "BFGS")))
+
+summary(noFS_lr.3)
+Anova(noFS_lr.3) # richness:logsiteAbun and soil moisture are highly significant
+
+resid <- simulateResiduals(noFS_lr.3)
+testResiduals(resid)
+# plotResiduals(resid)
+# testOutliers(resid, type = "bootstrap") # n.s.
+# testDispersion(resid) # n.s.
+# testQuantiles(resid) # deviation n.s.
+# testZeroInflation(resid) # n.s.
 
 
+## Need to subset unique lat/lon vals to test for spatial autocorrelation
+coords <- dcbind_pos %>%
+  filter(scientific != "Salamandra salamandra") %>%
+  # filter(scientific != "Salamandra salamandra" & country == "Germany") %>%
+  subset(., select = c(Site, Lat, Lon)) %>%
+  distinct(Site, Lat, Lon, .keep_all = T) %>%
+  group_by(Site) %>%
+  mutate(Lat = mean(Lat), Lon = mean(Lon)) %>%
+  distinct() %>%
+  ungroup()
+
+# need to use recalculateResiduals() function because we have multiple observations per location
+recalc.resid <- recalculateResiduals(resid, group = coords$Site)
+
+testSpatialAutocorrelation(recalc.resid, x = coords$Lon, y = coords$Lat)
+## I tested for spatial autocorrelation both including and excluding Spain,
+## in case the distance between our single Spain site and the rest of the sites in Germany
+## were giving us a biased result
+
+# DHARMa Moran's I test for distance-based autocorrelation
+# (INCLUDING SPAIN OBSERVATIONS)
+# data:  recalc.resid
+# observed = 0.050168, expected = -0.028571, sd = 0.062917, p-value = 0.2108
+# alternative hypothesis: Distance-based autocorrelation
+
+# DHARMa Moran's I test for distance-based autocorrelation -- Germany data only
+# (GERMANY ONLY)
+# data:  recalc.resid
+# observed = -0.015942, expected = -0.029412, sd = 0.064805, p-value = 0.8353
+# alternative hypothesis: Distance-based autocorrelation
+
+## No spatial autocorrelation! cool.
+
+rm(resid, recalc.resid, coords)
+
+###### > Tables ----------------------------------------------------------------
+m3_noFS_tbl <- noFS_lr.3 %>%
+  broom::tidy() %>%
+  filter(!row_number() %in% c(1, 8:9)) %>%
+  mutate(OR = exp(estimate)) %>%
+  relocate(OR, .before = p.value) %>%
+  left_join(., (Anova(noFS_lr.3) %>%
+                  rownames_to_column(., "term")), by = "term") %>%
+  dplyr::select(-c(effect, component, group, estimate, std.error, statistic, p.value,
+                   Df)) %>%
+  rename(Terms = term,
+         pval = `Pr(>Chisq)`) %>%
+  mutate(signif = gtools::stars.pval(pval),
+         Terms = case_when(Terms == "locality_rich" ~ "Locality richness",
+                           Terms == "logsiteAbun" ~ "log(Site abundance)",
+                           Terms == "temp_d" ~ paste0("Temperature (\u00b0C)"),
+                           Terms == "sMoist_d" ~ paste0("Soil moisture (kg\u00b7m\u00b2)"),
+                           Terms == "locality_rich:logsiteAbun" ~ "Locality richness:log(Site abundance)",
+                           Terms == "temp_d:sMoist_d" ~ "Temperature:Soil moisture")) %>%
+  flextable(theme_fun = theme(booktabs)) %>%
+  set_header_labels(., Chisq = chisqlab,
+                    pval = "p-value",
+                    signif = "") %>%
+  add_header_lines(., values = "cbind Model - No fire salamanders") %>%
+  footnote(., i = 2, j = 2,
+           value = as_paragraph("OR = Odds Ratio"),
+           ref_symbols = "1",
+           part = "header") %>%
+  footnote(., i = 2, j = 4,
+           value = as_paragraph("*p<0.05; **p<0.01; ***p<0.001"),
+           ref_symbols = "2",
+           part = "header") %>%
+  set_formatter_type(fmt_double = "%#.3f") %>%
+  flextable::align(j = c("OR", "Chisq"), align = "center", part = "all") %>%
+  flextable::align(j = c("Terms", "pval"), align = "right", part = "all") %>%
+  flextable::align(j = "signif", align = "left") %>%
+  flextable::align(i = 1, j = NULL, align = "center", part = "header") %>%
+  flextable::align(., align = "left", part = "footer") %>%
+  padding(padding.right = 0, j = 'pval', part = "all") %>%
+  padding(padding.left = 0, j = "signif", part  = "all") %>%
+  autofit() %>%
+  bold(bold = TRUE, part = "header") %>%
+  color(i = ~ pval >= 0.05, j = c("Terms", "OR", "Chisq", "pval", "signif"),
+        color = "gray") %>%
+  bold(bold = T,
+       i = ~ pval < 0.05,
+       j = c("Terms", "OR", "Chisq", "pval", "signif"))
 
 
-#### Clean model outputs
-## ABUNDANCE x RICHNESS
-tab_model(m_FS, show.obs = T, collapse.ci = T,
-          show.icc = F, show.ngroups = F, show.re.var = F,
-          rm.terms = c("temp_d", "sMoist_d", "temp_d:sMoist_d"),
-          dv.labels = "Fire salamander model",
-          string.pred = "Terms",
-          string.p = "P-Value",
-          show.p = T,
-          pred.labels = nicelabs,
-          file = file.path(dir, figpath, "m_FS.html"))
-
-
-# take html file and make .png file
-# webshot2::webshot(file.path(dir, figpath, "m_FS.html"),
-#                   file.path(dir, figpath, "m_FS.png"),
-#                   vwidth = 365, vheight = 500)
-
-
-
-# # take html file and make .png file
-# webshot(file.path(dir, figpath, "m_FS_weather.html"),file.path(dir, figpath, "m_FS_weather.png"))
-
-
-##      Prevalence by Abundance & Richness Plots for 'fire salamander' model
-m_FS_predict <- ggpredict(m_FS,  terms = c("richness", "logsiteAbun")) %>%
-  dplyr::rename("richness" = "x",
-         "logsiteAbun" = "group") %>%
-  plyr::mutate(richness = as.numeric(as.character(richness)),
+m3_noFS_tbl
+###### > Plot ------------------------------------------------------------------
+m3_noFS_predict <- ggpredict(noFS_lr.3,  terms = c("locality_rich", "logsiteAbun")) %>%
+  # m3b_noFS_predict <- ggpredict(noFS_lr.3,  terms = c("locality_rich", "logsiteAbun [1.9459, 2.8332, 3.6376]")) %>% # 1st quartile, median, 3rd quartile
+  # m3b_noFS_predict <- ggpredict(noFS_lr.3,  terms = c("locality_rich", "logsiteAbun [0.6931, 2.7482, 4.8040]")) %>% # min, mean, max
+  dplyr::rename("locality_rich" = "x",
+                "logsiteAbun" = "group") %>%
+  plyr::mutate(locality_rich = as.numeric(as.character(locality_rich)),
                logsiteAbun = as.numeric(as.character(logsiteAbun)),
                # Convert scaled prediction to original data scale:
-               siteAbun = as.factor(round(exp(as.numeric(logsiteAbun)), 0)))
+               siteAbun = as.factor(round(exp(as.numeric(logsiteAbun - 1)), 0)))
 
-m_FS_plot <- ggplot(m_FS_predict, aes(x = richness , y = predicted, colour = siteAbun, linetype = siteAbun)) +
+
+
+m3a_noFS <- ggplot(m3_noFS_predict, aes(x = locality_rich, y = predicted, linetype = siteAbun, colour = siteAbun)) +
   geom_line(aes(linetype = siteAbun, colour = siteAbun), linewidth = 1) +
-  geom_rug(data = FSdata, aes(x = richness, y = 0), sides = "b", alpha = 0.5,
-           position = position_jitter(width = 0.4, height = 0.1), inherit.aes = F, na.rm = T) +
-  labs(linetype = "Site-level abundance",
-       # title =  "Fire salamander model",
-       y = "Bsal prevalence (%)",
-       x = "Species richness") +
-  # geom_ribbon(aes(x = richness, ymin = conf.low, ymax = conf.high, fill = sppAbun), alpha = 0.2, colour = NA, show.legend = F) +
+  # geom_ribbon(aes(ymin = conf.low, ymax = conf.high,
+  #                 colour = siteAbun,
+  #                 linetype = siteAbun), outline.type = "both", alpha = 0.1, show.legend = F) +
+  geom_rug(data = dcbind_pos, aes(x = locality_rich, y = 0), sides = "b",
+           alpha = 0.5, position = position_jitter(width = 0.4, height = 0.1),
+           inherit.aes = F, na.rm = T) +
+  labs(x = "Locality richness",
+       y = "Bsal prevalence (%)") +
+  geom_label(label = "Europe", size = 8, colour = "gray20", label.padding = unit(0.25, "lines"),
+             x = 9, y = 0.055, alpha = 0.75) +
   scale_linetype_manual(values = c("solid", "longdash", "twodash")) +
   scale_color_grey(start = 0.8, end = 0.2) +
-  scale_x_continuous(labels = seq(0, 10, 1),
-                     breaks = seq(0, 10, 1)) +
+  scale_x_continuous(labels = seq(0, 6, 1),
+                     breaks = seq(0, 6, 1)) +
   scale_y_continuous(labels = scales::percent_format(accuracy = 1),
-                     breaks = seq(0, 0.12, 0.04),
-                     limits = c(0, 0.12),
-                     minor_breaks = seq(0, 0.12, 0.01)) +
+                     breaks = seq(0, .5, 0.1),
+                     limits = c(0, .5),
+                     minor_breaks = seq(0, 0.5, 0.05)) +
   ak_theme + theme(plot.tag.position = c(0.96, 0.9),
                    axis.text.y = element_text(face = "plain")) +
   guides(colour = guide_legend("Site-level abundance", title.position = "top", title.hjust = 0.5),
          linetype = guide_legend("Site-level abundance", title.position = "top", title.hjust = 0.5))
 
-
-m_FS_plot
-# ggsave("m_FS_plot.pdf", m_FS_plot, device = cairo_pdf, path = file.path(dir, figpath),
+m3a_noFS
+# ggsave("m3a_noFS.pdf", m3a_noFS, device = cairo_pdf, path = figpath,
 #        width = 1250, height = 1500, scale = 2, units = "px", dpi = 300, limitsize = F)
 
-# ggsave("m_FS_plot.pdf", m_FS_plot, device = cairo_pdf, scale = 2, width = 1920, height = 1080, units = "px",
-#        path = file.path(dir, figpath), dpi = 300)
+rm(m3a_predict, m3_noFS_predict, noFS, noFS_lr.3)
+#### iii. 'Fire salamanders only' ----------------------------------------------
+##### > Locality richness (From collaborators) ---------------------------------
+###### > Model selection -------------------------------------------------------
+# FS_lr <- glmmTMB(cbind(nPos_FS, nNeg_FS) ~ locality_rich*logsiteAbun +
+#                       temp_d*sMoist_d + (1|country) + (1|scientific) + (1|associatedReferences),
+#                        data = dcbind_pos,
+#                        family = "binomial", na.action = "na.fail",
+#                        control = glmmTMBControl(optimizer = optim,
+#                                                 optArgs = list(method = "BFGS")))
+#
+#
+# FS_lr.2 <- glmmTMB(cbind(nPos_FS, nNeg_FS) ~ locality_rich*logsiteAbun +
+#                       temp_d*sMoist_d + (1|country) + (1|scientific),
+#                     data = dcbind_pos,
+#                     family = "binomial", na.action = "na.fail",
+#                     control = glmmTMBControl(optimizer = optim,
+#                                              optArgs = list(method = "BFGS")))
+#
+# FS_lr.3 <- glmmTMB(cbind(nPos_FS, nNeg_FS) ~ locality_rich*logsiteAbun +
+#                      temp_d*sMoist_d + (1|country) + (1|associatedReferences),
+#                    data = dcbind_pos,
+#                    family = "binomial", na.action = "na.fail",
+#                    control = glmmTMBControl(optimizer = optim,
+#                                             optArgs = list(method = "BFGS")))
+#
+# FS_lr.4 <- glmmTMB(cbind(nPos_FS, nNeg_FS) ~ locality_rich*logsiteAbun +
+#                      temp_d*sMoist_d + (1|scientific) + (1|associatedReferences),
+#                    data = dcbind_pos,
+#                    family = "binomial", na.action = "na.fail",
+#                    control = glmmTMBControl(optimizer = optim,
+#                                             optArgs = list(method = "BFGS")))
+#
+# FS_lr.5 <- glmmTMB(cbind(nPos_FS, nNeg_FS) ~ locality_rich*logsiteAbun +
+#                      temp_d*sMoist_d + (1|associatedReferences),
+#                    data = dcbind_pos,
+#                    family = "binomial", na.action = "na.fail",
+#                    control = glmmTMBControl(optimizer = optim,
+#                                             optArgs = list(method = "BFGS")))
+#
+# FS_lr.6 <- glmmTMB(cbind(nPos_FS, nNeg_FS) ~ locality_rich*logsiteAbun +
+#                       temp_d*sMoist_d + (1|scientific/country) + (1|associatedReferences),
+#                     data = dcbind_pos,
+#                     family = "binomial", na.action = "na.fail",
+#                     control = glmmTMBControl(optimizer = optim,
+#                                              optArgs = list(method = "BFGS")))
+#
+# FS_lr.7 <- glmmTMB(cbind(nPos_FS, nNeg_FS) ~ locality_rich*logsiteAbun +
+#                       temp_d*sMoist_d + (1|scientific/country),
+#                     data = dcbind_pos,
+#                     family = "binomial", na.action = "na.fail",
+#                     control = glmmTMBControl(optimizer = optim,
+#                                              optArgs = list(method = "BFGS")))
+#
+#
+# model.sel(FS_lr, FS_lr.2, FS_lr.3, FS_lr.4, FS_lr.5, FS_lr.6, FS_lr.7)
+# rm(FS_lr, FS_lr.2, FS_lr.3, FS_lr.4, FS_lr.5, FS_lr.6, FS_lr.7)
+###### > Model Checking/Diagnostics --------------------------------------------
+FS_lr.5 <- glmmTMB(cbind(nPos_FS, nNeg_FS) ~ locality_rich*logsiteAbun +
+                     temp_d*sMoist_d + (1|associatedReferences),
+                   data = dcbind_pos,
+                   family = "binomial", na.action = "na.fail",
+                   control = glmmTMBControl(optimizer = optim,
+                                            optArgs = list(method = "BFGS")))
+summary(FS_lr.5)
+Anova(FS_lr.5) # locality_rich:logsiteAbun and soil moisture are n.s.
+# main effects of locality_rich, logsiteAbun, and sMoist_d are very significant
+
+resid <- simulateResiduals(FS_lr.5)
+testResiduals(resid)
+# plotResiduals(resid)
+# testOutliers(resid, type = "bootstrap") # n.s.
+# testDispersion(resid) # n.s.
+# testQuantiles(resid) # very wonky.
+# testZeroInflation(resid) # n.s.
 
 
+## Need to subset unique lat/lon vals to test for spatial autocorrelation
+coords <- dcbind_pos %>%
+  # filter(scientific == "Salamandra salamandra") %>%
+  filter(scientific == "Salamandra salamandra" & country == "Germany") %>%
+  subset(., select = c(Site, Lat, Lon)) %>%
+  distinct(Site, Lat, Lon, .keep_all = T) %>%
+  group_by(Site) %>%
+  mutate(Lat = mean(Lat), Lon = mean(Lon)) %>%
+  distinct() %>%
+  ungroup()
+
+# need to use recalculateResiduals() function because we have multiple observations per location
+recalc.resid <- recalculateResiduals(resid, group = coords$Site)
+
+testSpatialAutocorrelation(recalc.resid, x = coords$Lon, y = coords$Lat)
+## I tested for spatial autocorrelation both including and excluding Spain,
+## in case the distance between our single Spain site and the rest of the sites in Germany
+## were giving us a biased result
+
+# DHARMa Moran's I test for distance-based autocorrelation
+# (INCLUDING SPAIN OBSERVATIONS)
+# data:  recalc.resid
+# observed = -0.061161, expected = -0.034483, sd = 0.062787, p-value = 0.6709
+# alternative hypothesis: Distance-based autocorrelation
+
+# DHARMa Moran's I test for distance-based autocorrelation -- Germany data only
+# (GERMANY ONLY)
+# data:  recalc.resid
+# observed = 0.0064057, expected = -0.0357143, sd = 0.0648070, p-value = 0.5157
+# alternative hypothesis: Distance-based autocorrelation
+
+## No spatial autocorrelation! cool.
+
+rm(resid, recalc.resid, coords)
+
+###### > Tables ----------------------------------------------------------------
+## Table for model output
+m3_FS_tbl <- FS_lr.5 %>%
+  broom::tidy() %>%
+  filter(!row_number() %in% c(1, 8)) %>%
+  mutate(OR = exp(estimate)) %>%
+  relocate(OR, .before = p.value) %>%
+  left_join(., (Anova(FS_lr.5) %>%
+                  rownames_to_column(., "term")), by = "term") %>%
+  dplyr::select(-c(effect, component, group, estimate, std.error, statistic, p.value,
+                   Df)) %>%
+  rename(Terms = term,
+         pval = `Pr(>Chisq)`) %>%
+  mutate(signif = gtools::stars.pval(pval),
+         Terms = case_when(Terms == "locality_rich" ~ "Locality richness",
+                           Terms == "logsiteAbun" ~ "log(Site abundance)",
+                           Terms == "temp_d" ~ paste0("Temperature (\u00b0C)"),
+                           Terms == "sMoist_d" ~ paste0("Soil moisture (kg\u00b7m\u00b2)"),
+                           Terms == "locality_rich:logsiteAbun" ~ "Locality richness:log(Site abundance)",
+                           Terms == "temp_d:sMoist_d" ~ "Temperature:Soil moisture")) %>%
+  flextable(theme_fun = theme(booktabs)) %>%
+  set_header_labels(., Chisq = chisqlab,
+                    pval = "p-value",
+                    signif = "") %>%
+  add_header_lines(., values = "cbind Model - Fire salamanders only") %>%
+  footnote(., i = 2, j = 2,
+           value = as_paragraph("OR = Odds Ratio"),
+           ref_symbols = "1",
+           part = "header") %>%
+  footnote(., i = 2, j = 4,
+           value = as_paragraph("*p<0.05; **p<0.01; ***p<0.001"),
+           ref_symbols = "2",
+           part = "header") %>%
+  set_formatter_type(fmt_double = "%#.3f") %>%
+  flextable::align(j = c("OR", "Chisq"), align = "center", part = "all") %>%
+  flextable::align(j = c("Terms", "pval"), align = "right", part = "all") %>%
+  flextable::align(j = "signif", align = "left") %>%
+  flextable::align(i = 1, j = NULL, align = "center", part = "header") %>%
+  flextable::align(., align = "left", part = "footer") %>%
+  padding(padding.right = 0, j = 'pval', part = "all") %>%
+  padding(padding.left = 0, j = "signif", part  = "all") %>%
+  autofit() %>%
+  bold(bold = TRUE, part = "header") %>%
+  color(i = ~ pval >= 0.05, j = c("Terms", "OR", "Chisq", "pval", "signif"),
+        color = "gray") %>%
+  bold(bold = T,
+       i = ~ pval < 0.05,
+       j = c("Terms", "OR", "Chisq", "pval", "signif"))
+
+
+m3_FS_tbl
+
+## Combine cbind model tables
+save_as_docx(
+  "Model 3a - All species" = m3_all_tbl,
+  "Model 3b - No fire salamanders" = m3_noFS_tbl,
+  "Model 3c - Fire salamanders only" = m3_FS_tbl,
+  path = file.path(tblpath, "/cbind_models.docx")
+)
+
+rm(m3_all_tbl, m3_noFS_tbl, m3_FS_tbl)
+
+###### > Plot ------------------------------------------------------------------
+m_FS_predict <- ggpredict(FS_lr.5,  terms = c("locality_rich", "logsiteAbun")) %>%
+  # m_FS_predict <- ggpredict(FS_lr.5,  terms = c("locality_rich", "logsiteAbun [1.9459, 2.8332, 3.6376]")) %>% # 1st quartile, median, 3rd quartile
+  # m_FS_predict <- ggpredict(FS_lr.5,  terms = c("locality_rich", "logsiteAbun [0.6931, 2.7482, 4.8040]")) %>% # min, mean, max
+  dplyr::rename("locality_rich" = "x",
+                "logsiteAbun" = "group") %>%
+  plyr::mutate(locality_rich = as.numeric(as.character(locality_rich)),
+               logsiteAbun = as.numeric(as.character(logsiteAbun)),
+               # Convert scaled prediction to original data scale:
+               siteAbun = as.factor(round(exp(as.numeric(logsiteAbun - 1)), 0)))
+
+
+m3b_FS <- ggplot(m_FS_predict, aes(x = locality_rich, y = predicted, linetype = siteAbun, colour = siteAbun)) +
+  geom_line(aes(linetype = siteAbun, colour = siteAbun), linewidth = 1) +
+  # geom_ribbon(aes(ymin = conf.low, ymax = conf.high,
+  #                 colour = siteAbun,
+  #                 linetype = siteAbun), outline.type = "both", alpha = 0.1, show.legend = F) +
+  geom_rug(data = subset(dcbind_pos, scientific == "Salamandra salamandra"), aes(x = locality_rich, y = 0), sides = "b",
+           alpha = 0.5, position = position_jitter(width = 0.4, height = 0.1),
+           inherit.aes = F, na.rm = T) +
+  labs(x = "Locality richness",
+       y = "Bsal prevalence (%)") +
+  geom_label(label = "Europe", size = 8, colour = "gray20", label.padding = unit(0.25, "lines"),
+             x = 9, y = 0.055, alpha = 0.75) +
+  scale_linetype_manual(values = c("solid", "longdash", "twodash")) +
+  scale_color_grey(start = 0.8, end = 0.2) +
+  scale_x_continuous(labels = seq(0, 6, 1),
+                     breaks = seq(0, 6, 1)) +
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1),
+                     breaks = seq(0, 1, 0.2),
+                     limits = c(0, 1),
+                     minor_breaks = seq(0, 1, 0.1)) +
+  ak_theme + theme(plot.tag.position = c(0.96, 0.9),
+                   axis.text.y = element_text(face = "plain")) +
+  guides(colour = guide_legend("Site-level abundance", title.position = "top", title.hjust = 0.5),
+         linetype = guide_legend("Site-level abundance", title.position = "top", title.hjust = 0.5))
+
+m3b_FS
+
+# ggsave("m3b_FS.pdf", m3b_FS, device = cairo_pdf, path = figpath,
+#        width = 1250, height = 1500, scale = 2, units = "px", dpi = 300, limitsize = F)
+
+rm(nicelabs, m_FS_predict, FS_lr.5)
+## Figure 3. ------------------------------------------------------------------
 ## Create combined plot for manuscript
-fig3a <- m_all_plot + labs(caption = NULL, y = NULL, x = NULL) +
+fig3a <- m3a + labs(caption = NULL, y = NULL, x = NULL) +
   theme(plot.tag.position = c(0.95, 0.95),
         plot.margin = margin(.5, .75, .5, .5, "cm"),
         legend.position = c(0.5, 0.9),
@@ -1334,20 +1749,32 @@ fig3a <- m_all_plot + labs(caption = NULL, y = NULL, x = NULL) +
         legend.box = "horizontal",
         legend.key.size = unit(1,"cm"),
         legend.text = element_text(margin = margin(r = 1, unit = "cm"), size = 24),
-        legend.title = element_text(face = "plain")) +
+        legend.title = element_text(face = "plain",  size = 28),
+        axis.title.y = element_text(size = 42, hjust = 0.5,
+                                    margin = margin(t = 0, r = 15, b = 0, l = 5),
+                                    face = "plain"),
+        axis.title.x = element_text(size = 38, hjust = 0.5,
+                                    margin = margin(t = 0.1, r = 0, b = 0, l = 5),
+                                    face = "plain")) +
   guides(linetype = guide_legend(nrow = 1, "Site-level abundance", title.position = "top", title.hjust = 0.5))
 
 fig3a
 
-fig3b <- m_FS_plot + labs(caption = NULL, y = NULL) +
+fig3b <- m3b_FS + labs(caption = NULL, y = NULL) +
   theme(plot.tag.position = c(0.95, 0.95),
         plot.margin = margin(.5, .75, .5, .5, "cm"),
         legend.position = c(0.5, 0.9),
         legend.background = element_rect(fill = alpha ("white", 0.75), color = NA),
         legend.box = "horizontal",
         legend.key.size = unit(1,"cm"),
-        legend.title = element_text(face = "plain"),
-        legend.text = element_text(margin = margin(r = 1, unit = "cm"), size = 24)) +
+        legend.title = element_text(face = "plain", size = 28),
+        legend.text = element_text(margin = margin(r = 1, unit = "cm"), size = 24),
+        axis.title.y = element_text(size = 42, hjust = 0.5,
+                                    margin = margin(t = 0, r = 15, b = 0, l = 5),
+                                    face = "plain"),
+        axis.title.x = element_text(size = 38, hjust = 0.5,
+                                    margin = margin(t = 0.1, r = 0, b = 0, l = 5),
+                                    face = "plain")) +
   guides(linetype = guide_legend(nrow = 1, "Site-level abundance", title.position = "top", title.hjust = 0.5))
 fig3b
 
@@ -1358,159 +1785,45 @@ fig3b
 
 fs_img <- image_read("firesalamander.png") # add image to 3b
 
-fig3ab_v <- (fig3a / fig3b) + plot_annotation(tag_levels = "A")
+fig3ab_v <- (fig3a / fig3b) +
+  plot_annotation(tag_levels = "A")
 
-fig3ab_v_combined <- ggdraw(fig3ab_v) +
-  draw_label("Bsal prevalence (%)", x = 0, y = 0.5, angle = 90,
-             size = 34, fontfamily = "Arial") +
-  draw_image(image = fs_img, x = 0.35, y = -0.15, scale = 0.25) +
-  ak_theme + theme(axis.line = element_blank())
+fig3ab_v
+
+fig3ab_v_combined <- ggdraw(fig3ab_v, xlim = c(-0.15, 1)) +
+  draw_label("Bsal prevalence (%)", x = -0.11, y = 0.55, angle = 90,
+             size = 44, fontfamily = "Segoe UI Light") +
+  draw_image(image = fs_img, x = 0.35, y = -0.12, scale = 0.17) +
+  ak_theme + theme(plot.margin = margin(0.5, 0.5, 0.5, 0.5, "cm"))
+
+
 fig3ab_v_combined
 
 
 ggsave("modelPlots_vertical.pdf", fig3ab_v_combined, device = cairo_pdf, scale = 2,
        width = 2000, height = 2400, units = "px",
-       path = file.path(dir, figpath), dpi = 300)
+       path = figpath, dpi = 300)
 
 
 ## Horizontal plots
 
 
-fig3ab_h <- (fig3a | fig3b) + plot_annotation(tag_levels = "A")
-
-fig3ab_h_combined <- ggdraw(fig3ab_h) +
-  draw_label("Species richness", x = 0.5, y = 0, angle = 0,
-             size = 34, fontfamily = "Arial") +
-  draw_image(image = FS_imgpath, x = 0.4, y = 0.22, scale = 0.25) +
-  ak_theme + theme(axis.line = element_blank())
-fig3ab_h_combined
-
-
-ggsave("modelPlots_horizontal.pdf", fig3ab_h_combined, device = cairo_pdf, scale = 2,
-       width = 2400, height = 1250, units = "px",
-       path = file.path(dir, figpath), dpi = 300)
-
-
-# ##      3c. Prevalence by Temperature & Soil Moisture Plots for T0, T-1, T-2 (Fire Salamanders Only)
-# # T0
-# m3_t0_weather <- ggpredict(m3_t0, terms = c("temp_d [all]", "sMoist_d"))%>%
-#   rename("temp_d" = "x",
-#          "sMoist_d" = "group") %>%
-#   mutate(temp_d = as.numeric(as.character(temp_d)),
-#          sMoist_d = as.numeric(as.character(sMoist_d)),
-#          # Convert scaled prediction to original data scale:
-#          temp_dUnscaled = (temp_d * as.numeric(attr(dcbindScaled$temp_d, "scaled:scale")) +
-#                                 as.numeric(attr(dcbindScaled$temp_d, "scaled:center"))),
-#          sMoistUnscaled = as.factor((round(sMoist_d * as.numeric(attr(dcbindScaled$sMoist_d, "scaled:scale")) +
-#                                                    as.numeric(attr(dcbindScaled$sMoist_d, "scaled:center")), 2))))
-# # Create dummy column for soil moisture labels
-# m3_t0_weather <- create_dummy_col(m3_t0_weather)
+# fig3ab_h <- (fig3a | fig3b) + plot_annotation(tag_levels = "A")
+#
+# fig3ab_h_combined <- ggdraw(fig3ab_h) +
+#   draw_label("Species richness", x = 0.5, y = 0, angle = 0,
+#              size = 34, fontfamily = "Arial") +
+#   draw_image(image = fs_img, x = 0.4, y = 0.22, scale = 0.25) +
+#   ak_theme + theme(axis.line = element_blank())
+# fig3ab_h_combined
 #
 #
-# m3_t0_p2 <- ggplot(m3_t0_weather, aes(x = temp_dUnscaled , y = predicted, colour = dummy)) +
-#   geom_line(aes(linetype = factor(dummy, levels  = c("Low", "Med", "High"))), linewidth = 1) +
-#   geom_rug(data = subset(dcbindScaled, scientific =="Salamandra salamandra"), aes(x = temp_d, y = 0), sides = "b", alpha = 0.5,
-#            position = position_jitter(width = 0.4, height = 0.1), inherit.aes = F, na.rm = T) +
-#   #  geom_ribbon(aes(x = temp_dUnscaled, ymin = conf.low, ymax = conf.high, fill = dummy), alpha = 0.2, colour = NA, show.legend = F) +
-#   labs(title =  bquote(paste(italic(t))[(0~days)]), linetype = "Soil moisture") +
-#   ylab("Fire salamander Bsal prevalence (%)") +
-#   xlab(expression("Temperature (°C)")) +
-#   scale_linetype_manual(values = c("solid", "longdash", "twodash")) +
-#   scale_color_viridis(option = "G", discrete = T, begin = 0.8, end = 0.3) +
-#   scale_x_continuous(labels = seq(-10, 30, 10), breaks = seq(-10, 30, 10), limits = c(-10, 30)) +
-#   scale_y_continuous(labels = scales::percent_format(accuracy = 1), limits = c(0, 0.3)) +
-#   ak_theme + theme(plot.tag.position = c(0.96, 0.9)) + guides(colour = guide_legend("Soil moisture"))
-#
-# m3_t0_p2
-# ggsave("m3_t0_weather.tif", m3_t0_p2, device = "tiff", scale = 2, width = 1920, height = 1080, units = "px",
+# ggsave("modelPlots_horizontal.pdf", fig3ab_h_combined, device = cairo_pdf, scale = 2,
+#        width = 2400, height = 1250, units = "px",
 #        path = file.path(dir, figpath), dpi = 300)
-#
-# # T-1
-# m3_t1_weather <- ggpredict(m3_t1, terms = c("temp_m_t1 [all]", "sMoist_m_t1"))%>%
-#   rename("temp_m_t1" = "x",
-#          "sMoist_m_t1" = "group") %>%
-#   mutate(temp_m_t1 = as.numeric(as.character(temp_m_t1)),
-#          sMoist_m_t1 = as.numeric(as.character(sMoist_m_t1)),
-#          # Convert scaled prediction to original data scale:
-#          temp_m_t1Unscaled = (temp_m_t1 * as.numeric(attr(dcbindScaled$temp_m_t1, "scaled:scale")) +
-#                                    as.numeric(attr(dcbindScaled$temp_m_t1, "scaled:center"))),
-#          sMoistUnscaled = as.factor((round(sMoist_m_t1 * as.numeric(attr(dcbindScaled$sMoist_m_t1, "scaled:scale")) +
-#                                                    as.numeric(attr(dcbindScaled$sMoist_m_t1, "scaled:center")), 2))))
-# # Create dummy column for soil moisture labels
-# m3_t1_weather <- create_dummy_col(m3_t1_weather)
-#
-#
-# m3_t1_p2 <- ggplot(m3_t1_weather, aes(x = temp_m_t1Unscaled , y = predicted, colour = dummy)) +
-#   geom_line(aes(linetype = factor(dummy, levels  = c("Low", "Med", "High"))), linewidth = 1) +
-#   geom_rug(data = subset(dcbindScaled, scientific =="Salamandra salamandra"), aes(x = temp_m_t1, y = 0), sides = "b", alpha = 0.5,
-#            position = position_jitter(width = 0.4, height = 0.1), inherit.aes = F, na.rm = T) +
-#   #  geom_ribbon(aes(x = temp_m_t1Unscaled, ymin = conf.low, ymax = conf.high, fill = dummy), alpha = 0.2, colour = NA, show.legend = F) +
-#   labs(title =  bquote(paste(italic(t))[(-30~days)]), linetype = "Soil moisture") +
-#   ylab("Fire salamander Bsal prevalence (%)") +
-#   xlab(expression("Temperature (°C)")) +
-#   scale_linetype_manual(values = c("solid", "longdash", "twodash")) +
-#   scale_color_viridis(option = "G", discrete = T, begin = 0.8, end = 0.3) +
-#   scale_x_continuous(labels = seq(-10, 30, 10), breaks = seq(-10, 30, 10), limits = c(-10, 30)) +
-#   scale_y_continuous(labels = scales::percent_format(accuracy = 1), limits = c(0, 0.3)) +
-#   ak_theme + theme(plot.tag.position = c(0.96, 0.9)) + guides(colour = guide_legend("Soil moisture"))
-#
-# m3_t1_p2
-# ggsave("m3_t1_weather.tif", m3_t1_p2, device = "tiff", scale = 2, width = 1920, height = 1080, units = "px",
-#        path = file.path(dir, figpath), dpi = 300)
-#
-#
-# # T-2
-# m3_t2_weather <- ggpredict(m3_t2, terms = c("temp_m_t2 [all]", "sMoist_m_t2"))%>%
-#   rename("temp_m_t2" = "x",
-#          "sMoist_m_t2" = "group") %>%
-#   mutate(temp_m_t2 = as.numeric(as.character(temp_m_t2)),
-#          sMoist_m_t2 = as.numeric(as.character(sMoist_m_t2)),
-#          # Convert scaled prediction to original data scale:
-#          temp_m_t2Unscaled = (temp_m_t2 * as.numeric(attr(dcbindScaled$temp_m_t2, "scaled:scale")) +
-#                                    as.numeric(attr(dcbindScaled$temp_m_t2, "scaled:center"))),
-#          sMoistUnscaled = as.factor((round(sMoist_m_t2 * as.numeric(attr(dcbindScaled$sMoist_m_t2, "scaled:scale")) +
-#                                                    as.numeric(attr(dcbindScaled$sMoist_m_t2, "scaled:center")), 2))))
-# # Create dummy column for soil moisture labels
-# m3_t2_weather <- create_dummy_col(m3_t2_weather)
-#
-#
-# m3_t2_p2 <- ggplot(m3_t2_weather, aes(x = temp_m_t2Unscaled , y = predicted, colour = dummy)) +
-#   geom_line(aes(linetype = factor(dummy, levels  = c("Low", "Med", "High"))), linewidth = 1) +
-#   geom_rug(data = subset(dcbindScaled, scientific =="Salamandra salamandra"), aes(x = temp_m_t2, y = 0), sides = "b", alpha = 0.5,
-#            position = position_jitter(width = 0.4, height = 0.1), inherit.aes = F, na.rm = T) +
-#   #  geom_ribbon(aes(x = temp_d_t2Unscaled, ymin = conf.low, ymax = conf.high, fill = dummy), alpha = 0.2, colour = NA, show.legend = F) +
-#   labs(title =  bquote(paste(italic(t))[(-60~days)]), linetype = "Soil moisture") +
-#   ylab("Fire salamander Bsal prevalence (%)") +
-#   xlab(expression("Temperature (°C)")) +
-#   scale_linetype_manual(values = c("solid", "longdash", "twodash")) +
-#   scale_color_viridis(option = "G", discrete = T, begin = 0.8, end = 0.3) +
-#   scale_x_continuous(labels = seq(-10, 30, 10), breaks = seq(-10, 30, 10), limits = c(-10, 30)) +
-#   scale_y_continuous(labels = scales::percent_format(accuracy = 1), limits = c(0, 0.3)) +
-#   ak_theme + theme(plot.tag.position = c(0.96, 0.9)) + guides(colour = guide_legend("Soil moisture"))
-#
-# m3_t2_p2
-# ggsave("m3_t2_weather.tif", m3_t2_p2, device = "tiff", scale = 2, width = 1920, height = 1080, units = "px",
-#        path = file.path(dir, figpath), dpi = 300)
-#
-# # 3 Panel Graph
-# m3_p2_combined <- m2_p2_combined <- ((m3_t2_p2 + labs(caption = NULL, x = NULL) + theme(legend.position = "none")) |
-#                                      (m3_t1_p2 + labs(caption = NULL, y = NULL)) |
-#                                      (m3_t0_p2 + labs(caption = NULL, y = NULL, x = NULL) + theme(legend.position = "none"))) +
-#                                       plot_annotation(tag_levels = "A",
-#                                       caption = "Soil moisture ranged from 5.42-5.52 (kg/m"^2~"), 6.16-6.22 (kg/m"^2~"), and 6.89-6.92 (kg/m"^2~") for the Low, Medium, and High categories respectively. Timepoints above each graph indicate the time from the initial observation.",
-#                                       theme = theme(plot.caption = element_text(size = 12, hjust = 0)))
-#
-# m3_p2_combined
-# ggsave("m3_weather_combined.tif", m3_p2_combined, device = "tiff", scale = 2, width = 2600, height = 1500, units = "px",
-#        path = file.path(dir, figpath), dpi = 300)
-#
-#
-# # Remove saved objects from the global environment to speed up processing
-# rm(m3_p2_combined, m3_t0_p1, m3_t0_p2, m3_t0_rich, m3_t0_weather, m3_t1_p2,
-#    m3_t1_weather,m3_t2_p2, m3_t2_weather)
-#
-#
-#
+
+
+
 
 ## IV. Cbind models with other measures of richness ----------------------------
 ### i. Including fire salamanders ----------------------------------------------
@@ -1704,126 +2017,3 @@ ggsave("modelPlots_horizontal.pdf", fig3ab_h_combined, device = cairo_pdf, scale
 # # Test for spatial autocorrelation
 # recalc.resid_iucnR_noFS <- recalculateResiduals(resid_iucnR_noFS, group = coords$Site)
 # testSpatialAutocorrelation(recalc.resid_iucnR_noFS, x = coords$Lon, y = coords$Lat)
-#
-#
-#
-#
-#
-#
-#
-#
-#
-#
-#
-# #### Clean model outputs
-# ## ABUNDANCE x RICHNESS
-# tab_model(m_all, show.obs = T, collapse.ci = T,
-#           show.icc = F, show.ngroups = F, show.re.var = F,
-#           rm.terms = c("temp_d", "sMoist_d", "temp_d:sMoist_d"),
-#           dv.labels = "All species model",
-#           string.pred = "Terms",
-#           string.p = "P-Value",
-#           show.p = T,
-#           pred.labels = nicelabs,
-#           file = file.path(dir, figpath, "m_all.html"))
-#
-#
-# # take html file and make .png file
-# # webshot2::webshot(file.path(dir, figpath, "m_all.html"),
-# #         file.path(dir, figpath, "m_all.png"),
-# #         vwidth = 365, vheight = 500)
-#
-#
-#
-#
-#
-#
-# # ggsave("m_all_plot.tif", m_all_plot, device = "tiff", scale = 2,
-# #        width = 1500, height = 1000, units = "px",
-# #        path = file.path(dir, figpath), dpi = 300)
-#
-#
-#
-#
-
-
-
-
-
-# ## V. Fatality model ---------------------------------------------------------
-# # Remove any instances of NA within the fatal column & weather vars columns, as well as I. alpestris
-# d_fatal <- d %>%
-#   tidyr::drop_na(any_of(c(31, 40:45))) %>%
-#   subset(scientific != "Ichthyosaura alpestris") %>%
-# # Scale relevant vars
-#   mutate_at(c("tavg_wc", "tmin_wc", "tmax_wc", "prec_wc", "bio1_wc", "bio12_wc", "bio1_wc"),
-#             ~(scale(., center = T, scale = T %>% as.numeric)))
-# # bio1 == annual mean temp
-# # bio12 == annual precip
-#
-# ## Fatality of fire salamanders given an interaction between average monthly temperature (tavg) and if Bsal has ever been detected at a site.
-# m4 <- glmmTMB(fatal ~ bio1_wc*prev_above_0 + (1|Site),
-#                  family = "binomial",
-#                  data = filter(d, scientific == "Salamandra salamandra"),
-#                  control = glmmTMBControl(optimizer = optim,
-#                                           optArgs = list(method = "BFGS")))
-#
-# summary(m4)
-# Anova(m4)
-#
-#
-# ##      4b. Plots
-# # bio1 - all data
-# m4_predict <- ggpredict(m4, terms = c("bio1_wc [all]", "prev_above_0")) %>%
-#   rename("bio1_wc" = "x",
-#          "BsalDetected" = "group") %>%
-#   mutate(bio1_wc = as.numeric(as.character(bio1_wc)),
-#          BsalDetected = as.factor(ifelse(BsalDetected == 0, "Bsal ( - )", "Bsal ( + )")),
-#          # Convert scaled prediction to original data scale
-#          bio1_wcUnscaled = (bio1_wc * as.numeric(attr(d_fatal$bio1_wc, "scaled:scale")) + as.numeric(attr(d_fatal$bio1_wc, "scaled:center"))))
-#
-#
-# m4_plot <- ggplot(m4_predict, aes(x = sMoist_dUnscaled , y = predicted, colour = BsalDetected)) +
-#   geom_line(aes(linetype = BsalDetected), linewidth = 1) +
-# #  geom_rug(data = dcbindScaled, aes(x = richness, y = 0), sides = "b", alpha = 0.5,
-# #           position = position_jitter(width = 0.4, height = 0.1), inherit.aes = F, na.rm = T) +
-#   labs(linetype = "Status") +
-# #  geom_ribbon(aes(x = tavgUnscaled, ymin = conf.low, ymax = conf.high, fill = dummy), alpha = 0.2, colour = NA, show.legend = F) +
-#   ylab("Fire salamander mortality (%)") +
-#   xlab(expression("Mean annual temperature (°C)")) +
-#   scale_linetype_manual(values = c("solid", "longdash")) +
-#   scale_color_manual(values = c("black", "#C23113")) +
-#   scale_x_continuous(labels = seq(17, 23, 2), breaks = seq(17, 23, 2), limits = c(17, 23)) +
-#   scale_y_continuous(labels = scales::percent, limits = c(0, .5)) +
-#   ak_theme + theme(plot.tag.position = c(0.96, 0.9)) + guides(colour = guide_legend("Status"))
-#
-# m4_plot
-#
-# ggsave("m4_fatality.tif", m4_plot, device = "tiff", scale = 2, width = 1920, height = 1080, units = "px",
-#        path = file.path(dir, figpath), dpi = 300)
-#
-
-
-################# Extra code
-# is slightly spatially autocorrelated -- tried to correct but it made the model significantly worse
-# dcbindScaled$pos <- numFactor(dcbindScaled$Lon, dcbindScaled$Lat)
-# dcbindScaled$group <- factor(rep(1, nrow(dcbindScaled))) # dummy grouping var
-#
-# # model is fit by adding the pos term in
-# all_RR2 <- glmmTMB(cbind(nPos_all, nNeg_all) ~ richness*logsiteAbun +
-#                     temp_d*sMoist_d + (1|scientific) + mat(pos + 0 | group),
-#                   data = dcbindScaled, family = "binomial", na.action = "na.fail",
-#                   control = glmmTMBControl(optimizer = optim,
-#                                            optArgs = list(method = "BFGS")))
-#
-#
-# summary(all_RR2)
-# Anova(all_RR2)
-#
-# resid2 <- simulateResiduals(all_RR2)
-# testResiduals(resid2)
-# testQuantiles(resid2)
-# testZeroInflation(resid2)
-#
-# recalc.resid2 <- recalculateResiduals(resid2, group = dcbindScaled$Site)
-# testSpatialAutocorrelation(recalc.resid2, x = dcbindScaled$Lon, y = dcbindScaled$Lat)
