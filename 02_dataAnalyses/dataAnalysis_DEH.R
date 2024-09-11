@@ -376,7 +376,6 @@ sampSize <- d_subset %>%
                           TRUE ~ nPos),
          nNeg = case_when(is.na(nNeg) ~ 0,
                           TRUE ~ nNeg)) %>%
-
   group_by(country, scientific, Site) %>%
   mutate(sppTotal = sum(nPos, nNeg)) %>%
   ungroup() %>%

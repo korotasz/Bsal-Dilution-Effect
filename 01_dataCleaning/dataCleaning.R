@@ -467,14 +467,15 @@ df <- df %>%
                                 scientific %in% "Cynops orientalis" ~ "Hypselotriton orientalis",
                                 scientific %in% "Cynops orphicus" ~ "Hypselotriton orphicus",
                                 scientific %in% "Paramesotriton guanxiensis" ~ "Paramesotriton guangxiensis",
-                                scientific %in% "Paramesotriton sp" ~ "Paramesotriton sp.",
-                                scientific %in% "Tylototriton sp" ~ "Tylototriton sp.",
+                                scientific %in% "Paramesotriton sp" ~ "Paramesotriton spp.",
+                                scientific %in% "Tylototriton sp" ~ "Tylototriton spp.",
+                                scientific %in% "Pelophylax sp." ~ "Pelophylax spp.",
                                 TRUE ~ scientific),
          genus = trimws(case_when(genus %in% "Cynops" ~ "Hypselotriton",
                                   TRUE ~ genus),
                         which = "right"),
          species = trimws(case_when(species %in% "guanxiensis" ~ "guangxiensis",
-                             species %in% c("sp", "sp ") ~ "sp.",
+                             species %in% c("sp", "sp ", "sp.") ~ "spp.",
                              TRUE ~ species), which = "right"))
 
 
@@ -703,7 +704,7 @@ rm(missing_coords, i)
 ## Add relative abundance ------------------------------------------------------
 ##**CHANGE HERE FOR CONF VS NON-CONF CBIND DATA --------------------------------
 df <- df %>%
-  filter(occurrenceRemarks == "OK") %>%
+  filter(occurrenceRemarks == "OK") %>% ## comment out this line for 'all data'
   rename(Site = locationID) %>%
   ## Relative species abundance (# individuals/spp at a site during each sampling event) -- calculated using ONLY our data
   group_by(scientific, Site, date) %>%
@@ -1439,7 +1440,7 @@ df %>%
 
 ## Double checking #s
 nBsalPos <- aggregate(individualCount ~ BsalDetected+country+scientific, data = df, sum) %>%
-  pivot_wider(names_from = BsalDetected, values_from = individualCount) %>%
+  pivot_wider(names_from = BsalDetected, values_from = individualCount)
 
 rm(nBsalPos, dateFirstPositive)
 # Add all data back into 'df' data frame, even sites that are negative
