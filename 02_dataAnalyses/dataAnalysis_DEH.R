@@ -462,8 +462,8 @@ fig2a <- ggplot(prev, aes(scientific, sapply(mean, FUN = function(x) ifelse(x ==
 
 fig2a
 
-# ggsave("fig2a_bayes.pdf", fig2a, device = cairo_pdf, path = figpath,
-#        width = 2700, height = 2000, scale = 1.5, units = "px", dpi = 300, limitsize = F)
+ggsave("fig2a_bayes.png", fig2a, device = png, path = figpath,
+       width = 2700, height = 2000, scale = 1.5, units = "px", dpi = 300, limitsize = F)
 #
 rm(bsal_bayesci, prev, sampSize, dummy)
 
@@ -629,7 +629,7 @@ fig2b <- ggplot(m2b_predict, aes(x = scientific, y = expectedAbun,
 
 fig2b
 
-# ggsave("fig2b_all.pdf", fig2b, device = cairo_pdf, path = figpath,
+# ggsave("fig2b_all.png", fig2b, device = png, path = figpath,
 #        width = 2700, height = 2000, scale = 1.5, units = "px", dpi = 300, limitsize = F)
 #
 rm(df1, df2, df3, obs_abun, m2b, m2b_predict, TeXlabl, xhat)
@@ -790,7 +790,7 @@ fig2b_noFS <- ggplot(m2b_noFS_predict, aes(x = scientific, y = expectedAbun,
 
 fig2b_noFS
 
-# ggsave("fig2b_noFS.pdf", fig2b_noFS, device = cairo_pdf, path = figpath,
+# ggsave("fig2b_noFS.png", fig2b_noFS, device = png, path = figpath,
 #        width = 2700, height = 2000, scale = 1.5, units = "px", dpi = 300, limitsize = F)
 
 rm(df1, df2, df3, obs_abun, m2b_noFS, fig2b_noFS, m2b_noFS_predict)
@@ -927,7 +927,7 @@ fig2c <- ggplot(m2c_predict, aes(susceptibility, predicted, color = susceptibili
 fig2c
 
 
-# ggsave("fig2c.pdf", fig2c, device = cairo_pdf, path = figpath,
+# ggsave("fig2c.png", fig2c, device = png, path = figpath,
 #           width = 2000, height = 1300, scale = 1.5, units = "px", dpi = 300, limitsize = F)
 
 rm(m2c, m2c_predict, mcLabs, n, post.hoc)
@@ -1072,7 +1072,7 @@ fig2c_noFS <- ggplot(m2c_noFS_predict, aes(susceptibility, predicted, color = su
 
 fig2c_noFS
 
-# ggsave("fig2c_noFS.pdf", fig2c_noFS, device = cairo_pdf, path = figpath,
+# ggsave("fig2c_noFS.png", fig2c_noFS, device = png, path = figpath,
 #           width = 2000, height = 1300, scale = 2, units = "px", dpi = 300, limitsize = F)
 
 rm(m2c, m2c_noFS, m2c_noFS_predict, fig2c_noFS, mcLabs, n, post.hoc)
@@ -1146,8 +1146,8 @@ fig2combined <- (fig2ab/plot_spacer()/fig2c_tag) +
 
 fig2combined
 
-ggsave("fig2_combined.pdf", fig2combined, device = cairo_pdf, path = figpath,
-       width = 2800, height = 2600, scale = 2, units = "px", dpi = 300, limitsize = F)
+# ggsave("fig2_combined.png", fig2combined, device = png, path = figpath,
+#        width = 2800, height = 2600, scale = 2, units = "px", dpi = 300, limitsize = F)
 
 rm(fig2a, fig2a_tag, fig2ab, fig2b, fig2b_tag, fig2c, fig2c_tag, fig2combined)
 ## III. Cbind models testing the dilution dffect hypothesis --------------------
@@ -1326,7 +1326,7 @@ m3a <- ggplot(m3a_predict, aes(x = locality_rich, y = predicted, linetype = site
          linetype = guide_legend("Site-level abundance", title.position = "top", title.hjust = 0.5))
 
 m3a
-# ggsave("m3a_all.pdf", m3a, device = cairo_pdf, path = figpath,
+# ggsave("m3a_all.png", m3a, device = png, path = figpath,
 #        width = 1250, height = 1500, scale = 2, units = "px", dpi = 300, limitsize = F)
 
 #### ii. 'All spp.' (Excluding fire salamanders) -------------------------------
@@ -1516,7 +1516,7 @@ m3a_noFS <- ggplot(m3_noFS_predict, aes(x = locality_rich, y = predicted, linety
          linetype = guide_legend("Site-level abundance", title.position = "top", title.hjust = 0.5))
 
 m3a_noFS
-# ggsave("m3a_noFS.pdf", m3a_noFS, device = cairo_pdf, path = figpath,
+# ggsave("m3a_noFS.png", m3a_noFS, device = png, path = figpath,
 #        width = 1250, height = 1500, scale = 2, units = "px", dpi = 300, limitsize = F)
 
 rm(m3a_predict, m3_noFS_predict, noFS, noFS_lr.3)
@@ -1744,7 +1744,7 @@ fig3a <- m3a + labs(caption = NULL, y = NULL, x = NULL) +
   theme(plot.tag.position = c(0.95, 0.95),
         plot.tag = element_text(face = "bold"),
         plot.margin = margin(.5, .75, .5, .5, "cm"),
-        legend.position = c(0.5, 0.9),
+        legend.position.inside = c(0.5, 0.9),
         legend.background = element_rect(fill = alpha ("white", 0.75), color = NA),
         legend.box = "horizontal",
         legend.key.size = unit(1,"cm"),
@@ -1764,7 +1764,7 @@ fig3b <- m3b_FS + labs(caption = NULL, y = NULL) +
   theme(plot.tag.position = c(0.95, 0.95),
         plot.tag = element_text(face = "bold"),
         plot.margin = margin(.5, .75, .5, .5, "cm"),
-        legend.position = c(0.5, 0.9),
+        legend.position.inside = c(0.5, 0.9),
         legend.background = element_rect(fill = alpha ("white", 0.75), color = NA),
         legend.box = "horizontal",
         legend.key.size = unit(1,"cm"),
@@ -1801,9 +1801,9 @@ fig3ab_v_combined <- ggdraw(fig3ab_v, xlim = c(-0.15, 1)) +
 fig3ab_v_combined
 
 
-ggsave("modelPlots_vertical.pdf", fig3ab_v_combined, device = cairo_pdf, scale = 2,
-       width = 2000, height = 2400, units = "px",
-       path = figpath, dpi = 300)
+# ggsave("modelPlots_vertical.png", fig3ab_v_combined, device = png, scale = 2,
+#        width = 2000, height = 2400, units = "px",
+#        path = figpath, dpi = 300)
 
 
 ## Horizontal plots
