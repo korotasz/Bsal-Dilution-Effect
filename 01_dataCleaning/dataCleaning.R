@@ -983,7 +983,7 @@ weather_d <- weather %>%
 ## Export to use in Python and PyQGIS to obtain weather data
 # write.csv(weather_d, file.path(weatherpath, "weather.csv"), row.names = F, fileEncoding = "UTF-8")
 # write.csv(weather_m, file.path(weatherpath, "weather_m.csv"), row.names = F, fileEncoding = "UTF-8")
-rm(weather)
+rm(weather, weather_d)
 
 ## Python v3.12.0 used to download .nc4 files from NASA's EarthData data repository for each date and location.
 ## PyQGIS Python v3.9.5 used to process data in QGIS v3.26.2 "Buenos Aires".

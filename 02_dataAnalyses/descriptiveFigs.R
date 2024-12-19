@@ -9,9 +9,6 @@ require(renv)
 ##    no issues have been found and that the project is in a consistent state.
 # renv::restore()
 
-## If step 3 does give an error, try running:
-# renv::init(repos = "https://packagemanager.posit.co/cran/2023-10-13") # (should install the correct versions of maptools, rgdal, and sp)
-
 ## Packages --------------------------------------------------------------------
 ## These packages need to be loaded first (commented out pckgs only need to be run once)
 # remotes::install_version("Rttf2pt1", version = "1.3.8") # install this version, latest ver. not compatible
@@ -22,7 +19,6 @@ require(renv)
 # remotes::install_github("tidyverse/ggplot2", ref = remotes::github_pull("5592"))
 
 require(pacman)
-extrafont::loadfonts("all", quiet = T)
 
 ### General Visualization Packages----------------------------------------------
 pckgs <- c("tidyverse", # data wrangling/manipulation
@@ -41,6 +37,7 @@ pckgs <- c("tidyverse", # data wrangling/manipulation
            "gtsummary", # better package for creating tables from glmmTMB objects
          "broom.mixed", # required to create flextable/gtsummary objects from mixed model outputs
        "broom.helpers", # required for gtsummary
+            "showtext", # for fonts
 ### Mapping Packages -----------------------------------------------------------
              "geodata", # obtain geographic data (world map)
        "rnaturalearth", # obtain spatial polygons that can be used with sf
@@ -54,11 +51,6 @@ pckgs <- c("tidyverse", # data wrangling/manipulation
 
 ## Load packages
 pacman::p_load(pckgs, character.only = T)
-#### IF RENV CANNOT INSTALL/LOAD PACKAGES, USE CODE BELOW TO NAVIGATE TO OTHER .libPaths() OUTSIDE OF PROJECT.
-## Home computer:
-# renv::hydrate(packages = c(pckgs, "pacman"), sources = c("C:/Users/alexi/AppData/Local/R/win-library/4.3", "C:/Program Files/R/R-4.3.1/library"))
-## Work computer
-# renv::hydrate(packages = c(pckgs, "pacman"), sources = c("C:/Users/Alexis/AppData/Local/R/win-library/4.3", "C:/Program Files/R/R-4.3.1/library"))
 
 
 ## Functions -------------------------------------------------------------------
@@ -126,35 +118,51 @@ dcbind <- read.csv("Bsal_cbind_OK.csv", header = T, encoding = "UTF-8") %>%
 
 
 ## Define general ggplot theme for plot uniformity -----------------------------
-## Load fonts from grDevices
-grDevices::pdfFonts()
+## Load fonts \
+sysfonts::font_add_google("Open Sans", regular.wt = 300, bold.wt = 400) # main text
+# sysfonts::font_add_google("Roboto", regular.wt = 400, bold.wt = 500) # plot tags
+showtext_auto()
 
-ak_theme <- hrbrthemes::theme_ipsum(base_family = "Segoe UI Light") +
-  theme(axis.text.x = element_text(size = 26),
-        axis.title.x = element_text(size = 34, hjust = 0.5,
+ak_theme <- hrbrthemes::theme_ipsum(base_family = "Open Sans") +
+  theme(axis.text.x = element_text(size = 36),
+        axis.title.x = element_text(size = 42, hjust = 0.5,
                                     margin = margin(t = 10, r = 0, b = 0, l = 0),
                                     face = "plain"),
-        axis.text.y = element_text(size = 26, face = "italic"),
-        axis.title.y = element_text(size = 34, hjust = 0.5,
+        axis.text.y = element_text(size = 36, face = "plain"),
+        axis.title.y = element_text(size = 42, hjust = 0.5,
                                     margin = margin(t = 0, r = 15, b = 0, l = 5),
                                     face = "plain"),
-        axis.ticks.length = unit(.25, "cm"),
         axis.ticks = element_blank(),
-        plot.tag = element_text(size = 36, face = "bold"),
-        plot.title = element_text(size = 42, hjust = 0.5, face = "plain"),
+        plot.tag = element_text(size = 54, face = "bold"),
+        plot.title = element_text(hjust = 0.5, face = "bold"),
         plot.subtitle = element_markdown(size = 12, face = "plain"),
         # plot.margin = margin(1, 1, 1.5, 1.2, "cm"),
-        plot.caption = element_markdown(hjust = 1, size = 14, face = "plain"),
+        # plot.caption = element_markdown(hjust = 1, size = 14, face = "plain"),
         plot.caption.position = "plot",
         legend.position = "top",
         legend.key.size = unit(2,"cm"),
-        legend.text = element_text(size = 28, hjust = -1),
-        legend.title = element_text(size = 28, face = "bold"),
+        legend.text = element_text(size = 32, face = "plain", hjust = -1),
+        legend.title = element_text(size = 38, face = "bold"),
         panel.border = element_blank(),
         panel.background = element_blank(),
         panel.spacing.y = unit(1.5,"cm"),
         strip.text = element_text(size = 14, face = "bold", hjust = 0.5),
         axis.line = element_line(color = 'black'))
+
+# set_flextable_defaults(
+#   font.family = "Open Sans",
+#   font.size = 11,
+#   font.color = "black",
+#   text.align = "center",
+#   line_spacing = 1,
+#   cs.family = "SegoeUI-Light",
+#   digits =3,
+#   pct_digits = 3,
+#   split = T,
+#   # keep_with_next = NULL,
+#   # tabcolsep = NULL,
+#   post_process_docx = T
+# )
 
 
 ## I. Generate maps ------------------------------------------------------------
@@ -233,31 +241,35 @@ map_bounds(-8, 15, 34, 56, crs = epsg27704)
 europe_map <- ggplot() +
   geom_sf(data = europe, col = "gray40", fill = "#ECECEC", show.legend = F) +
   geom_sf(data = countries, aes(fill = sovereignt), col = "gray40", fill = "#B2BEB5", show.legend = F) +
-  geom_sf(data = sites_transformed, aes(geometry = geometry,
+  geom_sf(data = filter(sites_transformed, country == "Germany"), aes(geometry = geometry,
                                         fill = posSite,
                                         shape = posSite),
           position = position_dodge(0.5, preserve = "total"), alpha = 0.3, size = 3, stroke = 1,
           color = "gray30", show.legend = "point") +
-  # geom_sf_text(data = countries, aes(label = name), position = "identity", size = 5) +
+  geom_sf(data = filter(sites_transformed, country == "Spain"), aes(geometry = geometry,
+                                        fill = posSite,
+                                        shape = posSite),
+          position = position_dodge(0.5, preserve = "total"), alpha = 1, size = 3, stroke = 1,
+          color = "gray30", show.legend = "point") +
+  geom_sf_text(data = countries, aes(label = name), position = "identity", size = 10) +
   scale_fill_manual(values = "#b30000", guide = "none") +
   scale_shape_manual(values = 23, guide = "none") +
   coord_sf(xlim = c(2903943, 5277030), # c(-9, 15)
            ylim = c(625595.8, 2491036)) + # c(34, 56)
-  annotation_scale(location = "br", width_hint = 0.5, text_cex = 2, text_face = "plain",
+  labs(x = "Longitude",
+       y = "Latitude") +
+  annotation_scale(location = "br", width_hint = 0.5, text_cex = 3, text_face = "plain",
                    pad_y = unit(0.5, "cm")) +
   annotation_north_arrow(location = "bl", which_north = "true",
                          height = unit(1.5, "cm"), width = unit(1.5, "cm"),
                          pad_x = unit(0, "cm"), pad_y = unit(0, "cm"),
-                         style = north_arrow_fancy_orienteering(line_width = 1.8, text_size = 18)) +
+                         style = north_arrow_fancy_orienteering(line_width = 1.8, text_size = 24)) +
   ak_theme + theme(legend.title = element_blank(),
                    legend.position = "top",
                    legend.spacing = unit(1, "cm"), # Space legend labels
                    legend.key.size = unit(1,"cm"),
-                   legend.text = element_text(size = 28, hjust = 0),
-                   axis.text.x = element_text(size = 28, angle = 45, hjust = 1),
-                   axis.title.x = element_blank(),
-                   axis.text.y = element_text(size = 28, face = "plain"),
-                   axis.title.y = element_blank()) +
+                   legend.text = element_text(hjust = 0),
+                   axis.text.x = element_text(angle = 45, hjust = 1)) +
   guides(fill = guide_legend(override.aes = list(fill = "#b30000",
                                                  color = "gray30",
                                                  shape = 23,
@@ -267,6 +279,9 @@ europe_map <- ggplot() +
 
 
 europe_map
+
+ggsave("Europe.png", europe_map, device = png, path = figpath,
+       width = 2900, height = 2500, scale = 0.75, units = "px", dpi = 300, limitsize = F)
 
 # ggsave("Europe.pdf", europe_map, device = cairo_pdf, path = file.path(figpath, "/maps"),
 #        width = 2900, height = 2500, scale = 2, units = "px", dpi = 300, limitsize = F)

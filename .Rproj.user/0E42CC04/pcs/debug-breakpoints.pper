@@ -1,21 +1,5 @@
 {
     "debugBreakpointsState": {
-        "breakpoints": [
-            {
-                "id": 3,
-                "path": "C:/Users/alexi/Development/Chapter-2-Analyses/01_dataCleaning/dataCleaning.R",
-                "line_number": 1390,
-                "function_steps": "",
-                "function_name": "toplevel",
-                "state": 1,
-                "editor_state": 1,
-                "editor_line_number": 1390,
-                "is_pending_debug_completion": false,
-                "needs_updated_steps": true,
-                "type": 1,
-                "is_package_breakpoint": false,
-                "package_name": ""
-            }
-        ]
+        "breakpoints": []
     }
 }
