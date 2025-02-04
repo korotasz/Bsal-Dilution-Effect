@@ -761,7 +761,7 @@ df <- df %>%
   # species richness at a site on the date of sampling
   left_join(., locality_spr, by = c("Site", "date", "locationRemarks")) %>%
   # If local species pool was not specified, 'locality_rich' = 'richness,'
-  # (i.e., #spp at the time of the sampling event)
+  # (i.e., #spp at a site during a given sampling event)
   mutate(locality_rich = case_when(is.na(locality_rich) ~ richness,
                                             TRUE ~ locality_rich))
 
@@ -882,6 +882,7 @@ levels(df$fatal) <- c(0,1) #0 = F, 1 = T
 ## Obtain unique lat/long/date combinations to extract weather data ------------
 Sys.setenv(TZ = "UTC")
 weather <- df %>%
+  ungroup() %>%
   dplyr::select(Lat, Lon, year, month, day, date) %>%
   unite(Lat, Lon, sep = ", ", col = "LatLon", remove = F) %>%
   relocate(LatLon, .after = Lon) %>%
