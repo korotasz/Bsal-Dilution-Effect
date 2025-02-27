@@ -103,7 +103,7 @@ shppath <- file.path(dir, path.expand("01_dataCleaning/shapefiles"))
 ## Load fonts
 showtext_auto(enable = TRUE, record = TRUE)
 extrafont::loadfonts("all", quiet = T)
-sysfonts::font_add_google("Open Sans", regular.wt = 300, bold.wt = 400) # main text
+sysfonts::font_add_google("Open Sans", regular.wt = 300, bold.wt = 450) # main text
 # sysfonts::font_add_google("Roboto", regular.wt = 400, bold.wt = 500) # plot tags
 
 
@@ -111,11 +111,11 @@ ak_theme <- hrbrthemes::theme_ipsum(base_family = "Open Sans") +
   theme(axis.text.x = element_text(size = 36),
         axis.title.x = element_text(size = 42, hjust = 0.5,
                                     margin = margin(t = 10, r = 0, b = 0, l = 0),
-                                    face = "plain"),
+                                    face = "bold"),
         axis.text.y = element_text(size = 36, face = "plain"),
         axis.title.y = element_text(size = 42, hjust = 0.5,
                                     margin = margin(t = 0, r = 15, b = 0, l = 5),
-                                    face = "plain"),
+                                    face = "bold"),
         axis.ticks = element_blank(),
         plot.tag = element_text(size = 54, face = "bold"),
         plot.title = element_text(hjust = 0.5, face = "bold"),
@@ -125,8 +125,8 @@ ak_theme <- hrbrthemes::theme_ipsum(base_family = "Open Sans") +
         plot.caption.position = "plot",
         legend.position = "top",
         legend.key.size = unit(2,"cm"),
-        legend.text = element_text(size = 32, face = "plain", hjust = -1),
-        legend.title = element_text(size = 38, face = "bold"),
+        legend.text = element_text(size = 30, face = "plain", hjust = -1),
+        legend.title = element_text(size = 36, face = "bold"),
         panel.border = element_blank(),
         panel.background = element_blank(),
         panel.spacing.y = unit(1.5,"cm"),
@@ -1350,7 +1350,7 @@ save_as_docx(
   "Model 2c Tukey's HSD - All species" = m2c_post.hoc,
   "Model 2c Tukey's HSD - No fire salamanders" = m2c_noFS_post.hoc,
   "Model 2c Tukey's HSD - No marbled newts" = m2c_noTM_post.hoc,
-  path = file.path(tblpath, "/model2c_TukeyHSD.docx")
+  path = file.path(tblpath, "model2c_TukeyHSD.docx")
 )
 
 rm(m2c_noFS_post.hoc, m2c_noFS_tbl, m2c_post.hoc, m2c_tbl, model2ctbls, m2c_noTM_post.hoc, m2c_noTM_tbl)
@@ -1589,7 +1589,7 @@ fig2ab
 ###### > Model Checking/Diagnostics --------------------------------------------
 all_lr.3 <- glmmTMB(cbind(nPos_all, nNeg_all) ~ locality_rich*logsiteAbun +
                       temp_d*sMoist_d + (1|scientific) + (1|associatedReferences),
-                    data = dcbind_pos,
+                    data = dcbind_subset,
                     family = "binomial", na.action = "na.fail",
                     control = glmmTMBControl(optimizer = optim,
                                              optArgs = list(method = "BFGS")))
@@ -1695,14 +1695,14 @@ m3a_predict <- ggpredict(all_lr.3,  terms = c("locality_rich", "logsiteAbun")) %
 
 
 m3a <- ggplot(m3a_predict, aes(x = locality_rich, y = predicted, linetype = siteAbun, colour = siteAbun)) +
-  geom_line(aes(linetype = siteAbun, colour = siteAbun), linewidth = 1) +
+  geom_line(aes(linetype = siteAbun, colour = siteAbun), linewidth = 0.8) +
   # geom_ribbon(aes(ymin = conf.low, ymax = conf.high,
   #                 colour = siteAbun,
   #                 linetype = siteAbun), outline.type = "both", alpha = 0.1, show.legend = F) +
   geom_rug(data = dcbind_pos, aes(x = locality_rich, y = 0), sides = "b",
            alpha = 0.5, position = position_jitter(width = 0.4, height = 0.1),
            inherit.aes = F, na.rm = T) +
-  labs(x = "Locality richness",
+  labs(x = "Richness",
        y = "Bsal prevalence (%)") +
   geom_label(label = "Europe", size = 8, colour = "gray20", label.padding = unit(0.25, "lines"),
              x = 9, y = 0.055, alpha = 0.75) +
@@ -1711,17 +1711,21 @@ m3a <- ggplot(m3a_predict, aes(x = locality_rich, y = predicted, linetype = site
   scale_x_continuous(labels = seq(0, 6, 1),
                      breaks = seq(0, 6, 1)) +
   scale_y_continuous(labels = scales::percent_format(accuracy = 1),
-                     breaks = seq(0, .6, 0.2),
-                     limits = c(0, .65),
+                     breaks = seq(0, .5, 0.1),
+                     limits = c(0, .5),
                      minor_breaks = seq(0, 0.6, 0.1)) +
   ak_theme + theme(plot.tag.position = c(0.96, 0.9),
+                   legend.title = element_text(size = 32, face = "bold"),
                    axis.text.y = element_text(face = "plain")) +
   guides(colour = guide_legend("Site-level abundance", title.position = "top", title.hjust = 0.5),
          linetype = guide_legend("Site-level abundance", title.position = "top", title.hjust = 0.5))
 
 m3a
-# ggsave("m3a_all.png", m3a, device = png, path = figpath,
-#        width = 1250, height = 1500, scale = 2, units = "px", dpi = 300, limitsize = F)
+
+ggsave("m3a_all.png", m3a, device = png, path = figpath,
+       width = 1700, height = 1500, scale = 1, units = "px", dpi = 300, limitsize = F)
+
+
 
 #### ii. 'All spp.' (Excluding fire salamanders) -------------------------------
 ##### > Locality richness (From collaborators) ---------------------------------
@@ -1885,14 +1889,14 @@ m3_noFS_predict <- ggpredict(noFS_lr.3,  terms = c("locality_rich", "logsiteAbun
 
 
 m3a_noFS <- ggplot(m3_noFS_predict, aes(x = locality_rich, y = predicted, linetype = siteAbun, colour = siteAbun)) +
-  geom_line(aes(linetype = siteAbun, colour = siteAbun), linewidth = 1) +
+  geom_line(aes(linetype = siteAbun, colour = siteAbun), linewidth = 0.8) +
   # geom_ribbon(aes(ymin = conf.low, ymax = conf.high,
   #                 colour = siteAbun,
   #                 linetype = siteAbun), outline.type = "both", alpha = 0.1, show.legend = F) +
   geom_rug(data = dcbind_pos, aes(x = locality_rich, y = 0), sides = "b",
            alpha = 0.5, position = position_jitter(width = 0.4, height = 0.1),
            inherit.aes = F, na.rm = T) +
-  labs(x = "Locality richness",
+  labs(x = "Richness",
        y = "Bsal prevalence (%)") +
   geom_label(label = "Europe", size = 8, colour = "gray20", label.padding = unit(0.25, "lines"),
              x = 9, y = 0.055, alpha = 0.75) +
@@ -1905,15 +1909,17 @@ m3a_noFS <- ggplot(m3_noFS_predict, aes(x = locality_rich, y = predicted, linety
                      limits = c(0, .5),
                      minor_breaks = seq(0, 0.5, 0.05)) +
   ak_theme + theme(plot.tag.position = c(0.96, 0.9),
+                   legend.title = element_text(size = 32, face = "bold"),
                    axis.text.y = element_text(face = "plain")) +
   guides(colour = guide_legend("Site-level abundance", title.position = "top", title.hjust = 0.5),
          linetype = guide_legend("Site-level abundance", title.position = "top", title.hjust = 0.5))
 
 m3a_noFS
-# ggsave("m3a_noFS.png", m3a_noFS, device = png, path = figpath,
-#        width = 1250, height = 1500, scale = 2, units = "px", dpi = 300, limitsize = F)
 
-rm(m3a_predict, m3_noFS_predict, noFS, noFS_lr.3)
+ggsave("m3a_noFS.png", m3a_noFS, device = png, path = figpath,
+       width = 1700, height = 1500, scale = 1, units = "px", dpi = 300, limitsize = F)
+
+rm(m3a_predict, m3_noFS_predict, noFS_lr.3)
 #### iii. 'Fire salamanders only' ----------------------------------------------
 ##### > Locality richness (From collaborators) ---------------------------------
 ###### > Model selection -------------------------------------------------------
@@ -2102,14 +2108,14 @@ m_FS_predict <- ggpredict(FS_lr.5,  terms = c("locality_rich", "logsiteAbun")) %
 
 
 m3b_FS <- ggplot(m_FS_predict, aes(x = locality_rich, y = predicted, linetype = siteAbun, colour = siteAbun)) +
-  geom_line(aes(linetype = siteAbun, colour = siteAbun), linewidth = 1) +
+  geom_line(aes(linetype = siteAbun, colour = siteAbun), linewidth = 0.8) +
   # geom_ribbon(aes(ymin = conf.low, ymax = conf.high,
   #                 colour = siteAbun,
   #                 linetype = siteAbun), outline.type = "both", alpha = 0.1, show.legend = F) +
   geom_rug(data = subset(dcbind_pos, scientific == "Salamandra salamandra"), aes(x = locality_rich, y = 0), sides = "b",
            alpha = 0.5, position = position_jitter(width = 0.4, height = 0.1),
            inherit.aes = F, na.rm = T) +
-  labs(x = "Locality richness",
+  labs(x = "Richness",
        y = "Bsal prevalence (%)") +
   geom_label(label = "Europe", size = 8, colour = "gray20", label.padding = unit(0.25, "lines"),
              x = 9, y = 0.055, alpha = 0.75) +
@@ -2122,14 +2128,20 @@ m3b_FS <- ggplot(m_FS_predict, aes(x = locality_rich, y = predicted, linetype = 
                      limits = c(0, 1),
                      minor_breaks = seq(0, 1, 0.1)) +
   ak_theme + theme(plot.tag.position = c(0.96, 0.9),
+                   legend.title = element_text(size = 32, face = "bold"),
                    axis.text.y = element_text(face = "plain")) +
   guides(colour = guide_legend("Site-level abundance", title.position = "top", title.hjust = 0.5),
          linetype = guide_legend("Site-level abundance", title.position = "top", title.hjust = 0.5))
 
+m3a_noFS
+
+ggsave("m3a_noFS.png", m3a_noFS, device = png, path = figpath,
+       width = 1700, height = 1500, scale = 1, units = "px", dpi = 300, limitsize = F)
+
 m3b_FS
 
-# ggsave("m3b_FS.pdf", m3b_FS, device = cairo_pdf, path = figpath,
-#        width = 1250, height = 1500, scale = 2, units = "px", dpi = 300, limitsize = F)
+ggsave("m3b_FS.png", m3b_FS, device = png, path = figpath,
+       width = 1700, height = 1500, scale = 1, units = "px", dpi = 300, limitsize = F)
 
 rm(nicelabs, m_FS_predict, FS_lr.5)
 ## Figure 3. ------------------------------------------------------------------
@@ -2187,7 +2199,7 @@ fig3ab_v
 
 fig3ab_v_combined <- ggdraw(fig3ab_v, xlim = c(-0.15, 1)) +
   draw_label("Bsal prevalence (%)", x = -0.11, y = 0.55, angle = 90,
-             size = 44, fontfamily = "Segoe UI Light") +
+             size = 44, fontfamily = "Open Sans") +
   draw_image(image = fs_img, x = 0.32, y = -0.05, scale = 0.17) +
   ak_theme + theme(plot.margin = margin(0.5, 0.5, 0.5, 0.5, "cm"))
 
@@ -2195,9 +2207,9 @@ fig3ab_v_combined <- ggdraw(fig3ab_v, xlim = c(-0.15, 1)) +
 fig3ab_v_combined
 
 
-# ggsave("modelPlots_vertical.png", fig3ab_v_combined, device = png, scale = 2,
-#        width = 2000, height = 2400, units = "px",
-#        path = figpath, dpi = 300)
+ggsave("modelPlots_vertical.png", fig3ab_v_combined, device = png, scale = 0.5,
+       width = 2000, height = 2400, units = "px",
+       path = figpath, dpi = 300)
 
 
 ## Horizontal plots
@@ -2225,86 +2237,13 @@ fig3ab_v_combined
 #### > Relative richness (derived from dataset) -------------------------------
 all_EU_RR <- glmmTMB(cbind(nPos_all, nNeg_all) ~ richness*logsiteAbun +
                        temp_d*sMoist_d + (1|scientific) + (1|associatedReferences),
-                     data = dcbind_pos,
+                     data = dcbind_subset,
                      family = "binomial", na.action = "na.fail",
                      control = glmmTMBControl(optimizer = optim,
                                               optArgs = list(method = "BFGS")))
 
 summary(all_EU_RR)
 Anova(all_EU_RR) # richness:logsiteAbun and soil moisture are highly significant
-#
-# resid <- simulateResiduals(all_EU_RR)
-# testResiduals(resid) # Outlier test significant (p = 0.01716)
-# testOutliers(resid, type = "bootstrap")
-# testQuantiles(resid)
-# testZeroInflation(resid)
-#
-# ## Need to subset unique lat/lon vals to test for spatial autocorrelation
-# coords <- dcbindScaled %>%
-#   filter(continent == "Europe") %>%
-#   distinct(Site, Lat, Lon, .keep_all = T) %>%
-#   group_by(Site) %>%
-#   mutate(Lat = mean(Lat), Lon = mean(Lon)) %>%
-#   distinct() %>%
-#   ungroup()
-#
-# recalc.resid <- recalculateResiduals(resid, group = coords$Site)
-#
-# testSpatialAutocorrelation(recalc.resid, x = coords$Lon, y = coords$Lat)
-# DHARMa Moran's I test for distance-based autocorrelation
-#
-# data:  recalc.resid
-# observed = 0.0697829, expected = -0.0034247, sd = 0.0216687, p-value = 0.0007289
-# alternative hypothesis: Distance-based autocorrelation
-
-###### *Data are spatially autocorrelated -- trying to correct
-## -> Tried running all Europe data in spatial-autocorrelation corrected model.
-#     Not only did it make the model worse, but it also did not correct the spatial-
-#     Autocorrelation issue.
-## -> Then tried separating data by country, but Spain only had 9 distinct sites,
-#     which was not enough for a robust model.
-## -> I then created a model using only the Germany data, initially not correcting
-#     for spatial-autocorrelation to see if we still have a spatial-autocorrelation
-#     issue if it's just one country (284 distinct sites).
-#
-#
-# ## Create dummy df with only Germany data.
-# tmp <- dcbindScaled %>%
-#   filter(country == "Germany")
-#
-# ## model is fit by adding the pos term in
-# all_EU_RR2 <- glmmTMB(cbind(nPos_all, nNeg_all) ~ richness*logsiteAbun +
-#                         temp_d*sMoist_d + (1|scientific),
-#                       data = tmp, family = "binomial", na.action = "na.fail",
-#                       control = glmmTMBControl(optimizer = optim,
-#                                                optArgs = list(method = "BFGS")))
-#
-#
-# summary(all_EU_RR2)
-# Anova(all_EU_RR2) # Soil moisture and logsppAbun are significant
-#
-# resid2 <- simulateResiduals(all_EU_RR2)
-# testResiduals(all_EU_RR2)
-# testQuantiles(all_EU_RR2)
-# testZeroInflation(all_EU_RR2)
-#
-# ## Need to subset unique lat/lon vals to test for spatial autocorrelation
-# coords <- tmp %>%
-#   distinct(Site, Lat, Lon, .keep_all = T) %>%
-#   group_by(Site) %>%
-#   mutate(Lat = mean(Lat), Lon = mean(Lon)) %>%
-#   distinct() %>%
-#   ungroup()
-#
-# recalc.resid2 <- recalculateResiduals(resid2, group = coords$Site)
-# testSpatialAutocorrelation(recalc.resid2, x = coords$Lon, y = coords$Lat)
-#
-# DHARMa Moran's I test for distance-based autocorrelation
-#
-# data:  recalc.resid2
-
-# observed = 0.0204701, expected = -0.0035336, sd = 0.0211485, p-value = 0.2564
-# alternative hypothesis: Distance-based autocorrelation
 
 rr_all_tbl <- all_EU_RR %>%
   broom::tidy() %>%
@@ -2355,72 +2294,92 @@ rr_all_tbl <- all_EU_RR %>%
 
 rr_all_tbl
 
+rr_predict <- ggpredict(all_EU_RR,  terms = c("richness", "logsiteAbun")) %>%
+  # rr_predict <- ggpredict(all_lr.3,  terms = c("richness", "logsiteAbun [1.6094, 2.7726, 3.5835]")) %>% # 1st quartile, median, 3rd quartile
+  # rr_predict <- ggpredict(all_lr.3,  terms = c("richness", "logsiteAbun [0.6931, 2.5935, 4.8040]")) %>% # min, mean, max
+  dplyr::rename("richness" = "x",
+                "logsiteAbun" = "group") %>%
+  plyr::mutate(richness = as.numeric(as.character(richness)),
+               logsiteAbun = as.numeric(as.character(logsiteAbun)),
+               # Convert scaled prediction to original data scale:
+               siteAbun = as.factor(round(exp(as.numeric(logsiteAbun - 1)), 0)))
+
+
+
+rr_plot <- ggplot(rr_predict, aes(x = richness, y = predicted, linetype = siteAbun, colour = siteAbun)) +
+  geom_line(aes(linetype = siteAbun, colour = siteAbun), linewidth = 1) +
+  # geom_ribbon(aes(ymin = conf.low, ymax = conf.high,
+  #                 colour = siteAbun,
+  #                 linetype = siteAbun), outline.type = "both", alpha = 0.1, show.legend = F) +
+  geom_rug(data = dcbind_pos, aes(x = richness, y = 0), sides = "b",
+           alpha = 0.5, position = position_jitter(width = 0.4, height = 0.1),
+           inherit.aes = F, na.rm = T) +
+  labs(x = "Relative richness",
+       y = "Bsal prevalence (%)") +
+  geom_label(label = "Europe", size = 8, colour = "gray20", label.padding = unit(0.25, "lines"),
+             x = 9, y = 0.055, alpha = 0.75) +
+  scale_linetype_manual(values = c("solid", "longdash", "twodash")) +
+  scale_color_grey(start = 0.8, end = 0.2) +
+  scale_x_continuous(labels = seq(0, 6, 1),
+                     breaks = seq(0, 6, 1)) +
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1),
+                     breaks = seq(0, .15, 0.05),
+                     limits = c(0, .15),
+                     minor_breaks = seq(0, 0.6, 0.1)) +
+  ak_theme + theme(plot.tag.position = c(0.96, 0.9),
+                   axis.text.y = element_text(face = "plain")) +
+  guides(colour = guide_legend("Site-level abundance", title.position = "top", title.hjust = 0.5),
+         linetype = guide_legend("Site-level abundance", title.position = "top", title.hjust = 0.5))
+
+rr_plot
+
+
+
 #### > IUCN Richness estimate --------------------------------------------------
 EU_iucnR <- glmmTMB(cbind(nPos_all, nNeg_all) ~ iucn_rich*logsiteAbun +
                        temp_d*sMoist_d + (1|scientific) + (1|associatedReferences),
-                     data = dcbind_pos,
+                     data = dcbind_subset,
                     family = "binomial", na.action = "na.fail",
                     control = glmmTMBControl(optimizer = optim,
                                              optArgs = list(method = "BFGS")))
 
 summary(EU_iucnR)
 Anova(EU_iucnR)
-#
-# resid <- simulateResiduals(EU_iucnR)
-# testResiduals(resid) # Outlier test significant (p = 0.01716)
-# testOutliers(resid, type = "bootstrap")
-# testQuantiles(resid)
-# testZeroInflation(resid)
-#
-# ## Need to subset unique lat/lon vals to test for spatial autocorrelation
-# coords <- dcbindScaled %>%
-#   filter(continent == "Europe") %>%
-#   distinct(Site, Lat, Lon, .keep_all = T) %>%
-#   group_by(Site) %>%
-#   mutate(Lat = mean(Lat), Lon = mean(Lon)) %>%
-#   distinct() %>%
-#   ungroup()
-#
-# recalc.resid <- recalculateResiduals(resid, group = coords$Site)
-#
-# testSpatialAutocorrelation(recalc.resid, x = coords$Lon, y = coords$Lat)
-#
-# ##  Prevalence by Abundance & Richness Plots for 'All spp.' model
-# EU_iucnR_pred <- ggpredict(EU_iucnR,  terms = c("iucn_rich", "logsiteAbun")) %>%
-#   dplyr::rename("richness" = "x",
-#                 "logsiteAbun" = "group") %>%
-#   plyr::mutate(richness = as.numeric(as.character(richness)),
-#                logsiteAbun = as.numeric(as.character(logsiteAbun)),
-#                # Convert scaled prediction to original data scale:
-#                siteAbun = as.factor(round(exp(as.numeric(logsiteAbun)), 0)))
-#
-#
-# EU_iucnR_plot <- ggplot(EU_iucnR_pred, aes(x = richness, y = predicted, linetype = siteAbun, colour = siteAbun)) +
-#   geom_line(aes(linetype = siteAbun, colour = siteAbun), linewidth = 1) +
-#   geom_rug(data = dcbindScaled, aes(x = iucn_rich, y = 0), sides = "b",
-#            alpha = 0.5, position = position_jitter(width = 0.4, height = 0.1),
-#            inherit.aes = F, na.rm = T) +
-#   labs(x = "IUCN Richness est.",
-#        y = "Bsal prevalence (%)") +
-#   # geom_ribbon(aes(x = richness, ymin = conf.low, ymax = conf.high,
-#   #             fill = siteAbun), alpha = 0.2, colour = NA, show.legend = F) +
-#   geom_label(label = "Europe", size = 8, colour = "gray20", label.padding = unit(0.25, "lines"),
-#              x = 9, y = 0.055, alpha = 0.75) +
-#   scale_linetype_manual(values = c("solid", "longdash", "twodash")) +
-#   scale_color_grey(start = 0.8, end = 0.2) +
-#   scale_x_continuous(limits = c(0, 17),
-#                      labels = seq(0, 15, 1),
-#                      breaks = seq(0, 15, 1)) +
-#   scale_y_continuous(labels = scales::percent_format(accuracy = 1),
-#                      breaks = seq(0, .10, 0.02),
-#                      limits = c(0, 0.10),
-#                      minor_breaks = seq(0, 0.10, 0.02)) +
-#   ak_theme + theme(plot.tag.position = c(0.96, 0.9),
-#                    axis.text.y = element_text(face = "plain")) +
-#   guides(colour = guide_legend("Site-level abundance", title.position = "top", title.hjust = 0.5),
-#          linetype = guide_legend("Site-level abundance", title.position = "top", title.hjust = 0.5))
-#
-# EU_iucnR_plot
+
+
+EU_iucnR_pred <- ggpredict(EU_iucnR,  terms = c("iucn_rich", "logsiteAbun")) %>%
+  dplyr::rename("richness" = "x",
+                "logsiteAbun" = "group") %>%
+  plyr::mutate(richness = as.numeric(as.character(richness)),
+               logsiteAbun = as.numeric(as.character(logsiteAbun)),
+               # Convert scaled prediction to original data scale:
+               siteAbun = as.factor(round(exp(as.numeric(logsiteAbun)), 0)))
+
+
+EU_iucnR_plot <- ggplot(EU_iucnR_pred, aes(x = richness, y = predicted, linetype = siteAbun, colour = siteAbun)) +
+  geom_line(aes(linetype = siteAbun, colour = siteAbun), linewidth = 1) +
+  geom_rug(data = dcbind_pos, aes(x = iucn_rich, y = 0), sides = "b",
+           alpha = 0.5, position = position_jitter(width = 0.4, height = 0.1),
+           inherit.aes = F, na.rm = T) +
+  labs(x = "IUCN Richness est.",
+       y = "Bsal prevalence (%)") +
+  # geom_ribbon(aes(x = richness, ymin = conf.low, ymax = conf.high,
+  #             fill = siteAbun), alpha = 0.2, colour = NA, show.legend = F) +
+  scale_linetype_manual(values = c("solid", "longdash", "twodash")) +
+  scale_color_grey(start = 0.8, end = 0.2) +
+  # scale_x_continuous(limits = c(0, 17),
+  #                    labels = seq(0, 15, 1),
+  #                    breaks = seq(0, 15, 1)) +
+  # scale_y_continuous(labels = scales::percent_format(accuracy = 1),
+  #                    breaks = seq(0, .10, 0.02),
+  #                    limits = c(0, 0.10),
+  #                    minor_breaks = seq(0, 0.10, 0.02)) +
+  ak_theme + theme(plot.tag.position = c(0.96, 0.9),
+                   axis.text.y = element_text(face = "plain")) +
+  guides(colour = guide_legend("Site-level abundance", title.position = "top", title.hjust = 0.5),
+         linetype = guide_legend("Site-level abundance", title.position = "top", title.hjust = 0.5))
+
+EU_iucnR_plot
 
 iucn_all_tbl <- EU_iucnR %>%
   broom::tidy() %>%
