@@ -1,6 +1,9 @@
 .Rhistory
 .RData
 .Rprofile
+.Rproj.user/0E42CC04/pcs/debug-breakpoints.pper
+.Rproj.user/0E42CC04/pcs/source-pane.pper
+.Rproj.user/0E42CC04/pcs/windowlayoutstate.pper
 
 01_dataCleaning/shapefiles/*
 01_dataCleaning/weatherSampling/weatherProcessing_monthly.R
