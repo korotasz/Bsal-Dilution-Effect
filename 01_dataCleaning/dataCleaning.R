@@ -668,6 +668,22 @@ adminlvls <- adminlvls %>%
          Lon = as.numeric(Lon)) %>%
   glimpse()
 
+tmp2 <- df %>%
+  subset(., select = c(country, Lat, Lon, BsalDetected)) %>%
+  filter(country == "Spain" | country == "Germany"  | country == "Belgium" ) %>%
+  mutate(Lat = as.numeric(Lat),
+         Lon = as.numeric(Lon)) %>%
+  # unite("date", c(year, month, day),  sep = '-', remove = T) %>%
+  left_join(., adminlvls) %>%
+  distinct(.) %>%
+  filter(BsalDetected == 1) %>%
+  anti_join(., tmp) %>%
+  sf::st_as_sf(x = ., coords = c("Lon", "Lat"), crs = 4326, na.fail = F) %>%
+  # mutate(L1 = row_number(),
+  #        Lon = sf::st_coordinates(.)[,1],
+  #        Lat = sf::st_coordinates(.)[,2]) %>%
+  # glimpse() %>%
+  st_write(., file.path(shppath, "Sites.gpkg"), layer = "pos_Sites_notUsed", append = F, delete_layer = T)
 
 
 ## Assign site #s by distinct localities ---------------------------------------
