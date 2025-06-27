@@ -9,7 +9,7 @@
 01_dataCleaning/weatherSampling/weatherProcessing_monthly.R
 01_dataCleaning/gbif_amphibs.csv
 
-03_outputs/figures/*
+
 01_dataCleaning/_extensions/*
 01_dataCleaning/DEH_analyses_files/*
 01_dataCleaning/DEH_analyses.html
