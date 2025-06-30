@@ -4,9 +4,8 @@
 This chapter of my dissertation leveraged publicly available data, supplemented with unpublished records provided by collaborators, to test the dilution effect hypothesis in the amphibian-Bsal system. This GitHub repository is where all files included in data collection, processing, and analysis can be found. Included R files correspond with data cleaning and data analyses for this chapter. Details on program and package versions can be found below in the **Project Requirements** section of this document. 
 
 ## Project Requirements 
-   This project primarily uses R within the RStudio IDE. Version control within the R project is maintained using the *renv* package. The versions of R, RStudio, and *renv* are listed below, with links to their respective sources. These versions are **absolutely necessary** to effectively run both the *dataCleaning.R* and *dataAnalysis_DEH.R* scripts.
+   This project primarily uses R within the RStudio IDE. Version control within the R project is maintained using the *renv* package. The versions of R and *renv* are listed below, with links to their respective sources. These versions are **absolutely necessary** to effectively run both the *dataCleaning.R* and *dataAnalysis_DEH.R* scripts.
    
-   <a href="https://dailies.rstudio.com/version/2024.04.2+764.pro1"><img src="https://img.shields.io/badge/_RStudio-v.2024.06.05%2B764-%23fbfbfb?style=plastic&logo=RStudio%20IDE&logoColor=%23e9e9e9&logoSize=auto&labelColor=%23246ABE"/></a> 
    <a href="https://cran.r-project.org/bin/windows/base/old/4.3.3/"><img src="https://img.shields.io/badge/_R-v.4.3.3-%23fbfbfb?style=plastic&logo=R&logoColor=%23e9e9e9&logoSize=auto&labelColor=%23246ABE"/></a>
    <a href="https://rstudio.github.io/renv/articles/renv.html"><img src="https://img.shields.io/badge/renv-v.1.0.5-%23fbfbfb?style=plastic&logoSize=auto&labelColor=%23a8deb5"/></a>
 
