@@ -1938,18 +1938,18 @@ testResiduals(resid)
 
 
 ## Need to subset unique lat/lon vals to test for spatial autocorrelation
-coords <- dcbind_pos %>%
-  subset(., select = c(Site, Lat, Lon)) %>%
-  distinct(Site, Lat, Lon, .keep_all = T) %>%
-  group_by(Site) %>%
-  mutate(Lat = mean(Lat), Lon = mean(Lon)) %>%
-  distinct() %>%
-  ungroup()
+# coords <- dcbind_pos %>%
+#   subset(., select = c(Site, Lat, Lon)) %>%
+#   distinct(Site, Lat, Lon, .keep_all = T) %>%
+#   group_by(Site) %>%
+#   mutate(Lat = mean(Lat), Lon = mean(Lon)) %>%
+#   distinct() %>%
+#   ungroup()
 
-# need to use recalculateResiduals() function because we have multiple observations per location
-recalc.resid <- recalculateResiduals(resid, group = coords$Site)
+## need to use recalculateResiduals() function because we have multiple observations per location
+# recalc.resid <- recalculateResiduals(resid, group = coords$Site)
 
-testSpatialAutocorrelation(recalc.resid, x = coords$Lon, y = coords$Lat)
+# testSpatialAutocorrelation(recalc.resid, x = coords$Lon, y = coords$Lat)
 # DHARMa Moran's I test for distance-based autocorrelation
 #
 # data:  recalc.resid
@@ -2120,20 +2120,20 @@ testResiduals(resid)
 
 
 ## Need to subset unique lat/lon vals to test for spatial autocorrelation
-coords <- dcbind_pos %>%
-  filter(scientific != "Salamandra salamandra") %>%
-  # filter(scientific != "Salamandra salamandra" & country == "Germany") %>%
-  subset(., select = c(Site, Lat, Lon)) %>%
-  distinct(Site, Lat, Lon, .keep_all = T) %>%
-  group_by(Site) %>%
-  mutate(Lat = mean(Lat), Lon = mean(Lon)) %>%
-  distinct() %>%
-  ungroup()
+# coords <- dcbind_pos %>%
+#   filter(scientific != "Salamandra salamandra") %>%
+#   # filter(scientific != "Salamandra salamandra" & country == "Germany") %>%
+#   subset(., select = c(Site, Lat, Lon)) %>%
+#   distinct(Site, Lat, Lon, .keep_all = T) %>%
+#   group_by(Site) %>%
+#   mutate(Lat = mean(Lat), Lon = mean(Lon)) %>%
+#   distinct() %>%
+#   ungroup()
 
-# need to use recalculateResiduals() function because we have multiple observations per location
-recalc.resid <- recalculateResiduals(resid, group = coords$Site)
-
-testSpatialAutocorrelation(recalc.resid, x = coords$Lon, y = coords$Lat)
+## need to use recalculateResiduals() function because we have multiple observations per location
+# recalc.resid <- recalculateResiduals(resid, group = coords$Site)
+#
+# testSpatialAutocorrelation(recalc.resid, x = coords$Lon, y = coords$Lat)
 ## I tested for spatial autocorrelation both including and excluding Spain,
 ## in case the distance between our single Spain site and the rest of the sites in Germany
 ## were giving us a biased result
@@ -2152,7 +2152,7 @@ testSpatialAutocorrelation(recalc.resid, x = coords$Lon, y = coords$Lat)
 
 ## No spatial autocorrelation! cool.
 
-rm(resid, recalc.resid, coords)
+# rm(resid, recalc.resid, coords)
 
 ###### > Tables ----------------------------------------------------------------
 m3_noFS_tbl <- noFS_lr.3 %>%
@@ -2328,20 +2328,20 @@ testResiduals(resid)
 
 
 ## Need to subset unique lat/lon vals to test for spatial autocorrelation
-coords <- dcbind_pos %>%
-  filter(scientific == "Salamandra salamandra") %>%
-  # filter(scientific == "Salamandra salamandra" & country == "Germany") %>%
-  subset(., select = c(Site, Lat, Lon)) %>%
-  distinct(Site, Lat, Lon, .keep_all = T) %>%
-  group_by(Site) %>%
-  mutate(Lat = mean(Lat), Lon = mean(Lon)) %>%
-  distinct() %>%
-  ungroup()
+# coords <- dcbind_pos %>%
+#   filter(scientific == "Salamandra salamandra") %>%
+#   # filter(scientific == "Salamandra salamandra" & country == "Germany") %>%
+#   subset(., select = c(Site, Lat, Lon)) %>%
+#   distinct(Site, Lat, Lon, .keep_all = T) %>%
+#   group_by(Site) %>%
+#   mutate(Lat = mean(Lat), Lon = mean(Lon)) %>%
+#   distinct() %>%
+#   ungroup()
 
-# need to use recalculateResiduals() function because we have multiple observations per location
-recalc.resid <- recalculateResiduals(resid, group = coords$Site)
-
-testSpatialAutocorrelation(recalc.resid, x = coords$Lon, y = coords$Lat)
+## need to use recalculateResiduals() function because we have multiple observations per location
+# recalc.resid <- recalculateResiduals(resid, group = coords$Site)
+#
+# testSpatialAutocorrelation(recalc.resid, x = coords$Lon, y = coords$Lat)
 ## I tested for spatial autocorrelation both including and excluding Spain,
 ## in case the distance between our single Spain site and the rest of the sites in Germany
 ## were giving us a biased result
@@ -2360,7 +2360,7 @@ testSpatialAutocorrelation(recalc.resid, x = coords$Lon, y = coords$Lat)
 
 ## No spatial autocorrelation! cool.
 
-rm(resid, recalc.resid, coords)
+# rm(resid, recalc.resid, coords)
 
 ###### > Tables ----------------------------------------------------------------
 ## Table for model output

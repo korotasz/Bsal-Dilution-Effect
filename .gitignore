@@ -1,17 +1,7 @@
 .Rhistory
 .RData
 .Rprofile
-.Rproj.user/0E42CC04/pcs/debug-breakpoints.pper
-.Rproj.user/0E42CC04/pcs/source-pane.pper
-.Rproj.user/0E42CC04/pcs/windowlayoutstate.pper
+
 
 01_dataCleaning/shapefiles/*
-01_dataCleaning/weatherSampling/weatherProcessing_monthly.R
-01_dataCleaning/gbif_amphibs.csv
-
-
-01_dataCleaning/_extensions/*
-01_dataCleaning/DEH_analyses_files/*
-01_dataCleaning/DEH_analyses.html
-01_dataCleaning/quarto.css
 .Rproj.user
