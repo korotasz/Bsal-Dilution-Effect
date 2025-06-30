@@ -30,7 +30,7 @@ This chapter of my dissertation leveraged publicly available data, supplemented 
    3. In R, navigate to the folder containing the cloned repository and open the [Chapter-2-Analyses.Rproj](https://github.com/korotasz/Chapter-2-Analyses/blob/main/Chapter-2-Analyses.Rproj) file.
       - This project file will organize the R environment so that all relevant scripts, files, and sub-folders are structured how they need to be to efficiently run the R scripts. Click [here](https://r4ds.had.co.nz/workflow-projects.html#rstudio-projects) to learn more about R projects.
    
-   4. Within the opened project, open the [dataAnalysis_DEH](https://github.com/korotasz/Chapter-2-Analyses/blob/main/02_dataAnalyses/dataAnalysis.RData) R script.
+   4. Within the opened project, open the [dataAnalysis_DEH](https://github.com/korotasz/Chapter-2-Analyses/blob/main/02_dataAnalyses/dataAnalysis.R) R script.
    
    5. **Before running any part of the script**, make sure the ***renv*** package is installed and loaded:
       ```
@@ -41,6 +41,12 @@ This chapter of my dissertation leveraged publicly available data, supplemented 
    6. You will then need to call ```renv::restore()``` to reinstall the specific package versions used in this project.
    
    7. Once the required package versions have been installed, you are ready to run the R script. Happy coding! 🎊
+
+**Notes:**
+- All specific location data (i.e., Lat and Lon) have been removed from .csv files out of consideration for sensitive populations. All data may be available upon request, with permission from the co-authors.
+  
+- The [data cleaning file](https://github.com/korotasz/Chapter-2-Analyses/blob/main/01_dataCleaning/dataCleaning.R) may still be run from line 1495 onward by loading the [dataCleaning.Rdata](https://github.com/korotasz/CHapter-2-Analyses/blob/main/01_dataCleaning/dataCleaning.RData) file in the R Global Environment and loading the required packages (lines 1-43).
+
 
 ## Maintainers
 [@korotasz](https://github.com/korotasz)
