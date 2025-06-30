@@ -30,7 +30,7 @@ This chapter of my dissertation leveraged publicly available data, supplemented 
    3. In R, navigate to the folder containing the cloned repository and open the [Chapter-2-Analyses.Rproj](https://github.com/korotasz/Chapter-2-Analyses/blob/main/Chapter-2-Analyses.Rproj) file.
       - This project file will organize the R environment so that all relevant scripts, files, and sub-folders are structured how they need to be to efficiently run the R scripts. Click [here](https://r4ds.had.co.nz/workflow-projects.html#rstudio-projects) to learn more about R projects.
    
-   4. Within the opened project, open the [dataAnalysis_DEH](https://github.com/korotasz/Chapter-2-Analyses/blob/main/02_dataAnalyses/dataAnalysis.R) R script.
+   4. Within the opened project, open the [dataAnalysis_DEH](https://github.com/korotasz/Chapter-2-Analyses/blob/main/02_dataAnalyses/dataAnalysis_DEH.R) R script.
    
    5. **Before running any part of the script**, make sure the ***renv*** package is installed and loaded:
       ```
