@@ -44,7 +44,7 @@ This chapter of my dissertation leveraged publicly available data, supplemented 
 **Notes:**
 - All specific location data (i.e., Lat and Lon) have been removed from .csv files out of consideration for sensitive populations. All data may be available upon request, with permission from the co-authors.
   
-- The [data cleaning file](https://github.com/korotasz/Chapter-2-Analyses/blob/main/01_dataCleaning/dataCleaning.R) may still be run from line 1495 onward by loading the [dataCleaning.Rdata](https://github.com/korotasz/CHapter-2-Analyses/blob/main/01_dataCleaning/dataCleaning.RData) file in the R Global Environment and loading the required packages (lines 1-43).
+- The [data cleaning file](https://github.com/korotasz/Chapter-2-Analyses/blob/main/01_dataCleaning/dataCleaning.R) may still be run from line 1495 onward by opening the [dataCleaning.Rdata](https://github.com/korotasz/CHapter-2-Analyses/blob/main/01_dataCleaning/dataCleaning.RData) file in the R Global Environment and loading the required packages (lines 1-43).
 
 
 ## Maintainers
